@@ -112,7 +112,8 @@ src/test/engine.test.ts (+ app-routing.test.tsx) — 23 passing tests
 - [x] Phase 5 — Skill-based combat & AI (checkpoint `phase-5`)
 - [x] Phase 6 — Equipment, inventory & endgame (checkpoint `phase-6`)
 - [x] Phase 7 — God Engine foundations (full) (checkpoint `phase-7`)
-- [ ] Phase 8 — GOD ENGINE interface & command center  ← **NEXT**
+- [x] Phase 8 — GOD ENGINE interface & command center (checkpoint `phase-8`)
+- [ ] Phase 9 — Visual & audio polish  ← **NEXT**
 - [ ] Phase 7 — God Engine foundations (full)
 - [ ] Phase 8 — God Engine interface & command center
 - [ ] Phase 9 — Visual & audio polish
@@ -138,6 +139,15 @@ src/test/engine.test.ts (+ app-routing.test.tsx) — 23 passing tests
 4. **phase-5**: skill-based combat depth (tag `phase-5`), 87 tests pass, build OK.
 5. **phase-6**: equipment, technique mastery, endless survival, raid bosses (tag `phase-6`), 110 tests pass, build OK.
 6. **phase-7**: God Engine foundations — typed admin API, console parser, simulator, infinite Ki, custom techniques (tag `phase-7`), 139 tests pass, build OK.
+7. **phase-8**: GOD ENGINE command center (tag `phase-8`), 150 tests pass, build OK.
+
+### Phase 8 — completed work (checkpoint `phase-8`)
+- **Full command center** in `src/game/godEngine.tsx` (replacing the old 5-tab AdminPanel): Overview · Player Lab · Transformation Lab (form comparison + custom creator + force lock/unlock) · Battle Control (roster/custom boss spawn + live battle overrides incl. new 1%/50% HP and refill) · Enemy & Boss Lab (endless waves with modifiers, raids, tournament rounds, defeat flags) · Progression (power-level scaling, Dragon Balls, Survival best) · Quest & Saga control · World (gated-bypass teleport) · **Technique Creator** (real custom techniques on the combat pipeline, with estimated damage preview) · **Scenario Creator** (capture/apply/duplicate/import/export build+boss configurations, custom forms carried inline) · **Command Console** (parser-backed, autocomplete, history, confirm-gated destructive commands, persistent output) · **Live State Inspector** (full sheet + clipboard export, save size, battle-bus status, form ownership) · **Snapshots** (schema-versioned named create/restore/delete, capped 50) · **Automated Battle Tester** (deterministic simulation with God-Build comparison) · **Event Log** (filterable, clearable) · **Settings & Recovery** (slot switching, backup restore, exports, wipe with confirmation).
+- Custom techniques now castable in battle via a new "Custom" row under the action bar (cooldown-aware).
+- `bossLibrary.ts` + `scenarios.ts` — testable boss-id resolution (roster/endless/raid/tournament) and schema-validated scenario persistence; harness covers capture/apply/duplicate/import/export/foreign-save re-registration of custom forms.
+- Direct UI mutations now audit into the admin event log (`recordAdminEvent` wired into technique/form creation+deletion).
+- Hydration clamps + canonical save paths preserved; 150 tests pass (8 new in `god-engine-ui.test.ts`).
+- Verified in-browser end-to-end: console `player.inspect` executed; snapshot created; battle tester returned WIN/S-grade; custom technique created, persisted, cast-ready in battle HUD; God Engine opens via Ctrl+Shift+A and title-taps.
 
 ### Phase 7 — completed work (checkpoint `phase-7`)
 - **Typed admin API** (`src/game/admin.ts`): every privileged operation funnels through `executeAdminAction` — SET/ADD stats, mastery, level/XP (cross-synced), Zeni/TP/Stamina/Gravity/Dragon Balls, form lock/unlock (admin-force), quest force-complete/reset (never refunds), god-mode / infinite-ki / infinite-zeni overrides, TELEPORT validation, Endless best, spawn routing. All writes clamped to extreme-number bounds; every action logged to a new persisted **admin event log** (`adminEvents`, capped 100) with previous/new values, actor outcome and detail; destructive verbs (unlock-all/lock-all/quest-reset/complete) flagged `confirmRequired`.

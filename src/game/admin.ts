@@ -64,6 +64,11 @@ export function adminActionRequiresConfirmation(action: AdminAction): boolean {
   }
 }
 
+/** Appends a single admin event row (capped at 100). Exported so direct UI mutations can still be audited. */
+export function recordAdminEvent(d: GameState, action: string, target: string, previousValue: unknown, newValue: unknown, outcome: AdminOutcome, at = Date.now(), detail?: string): void {
+  record(d, action, target, previousValue, newValue, outcome, at, detail);
+}
+
 function record(d: GameState, action: string, target: string, previousValue: unknown, newValue: unknown, outcome: AdminOutcome, at: number, detail?: string): void {
   d.adminEvents.push({
     id: `${at}-${d.adminEvents.length}`, at, action, target: String(target).slice(0, 120),

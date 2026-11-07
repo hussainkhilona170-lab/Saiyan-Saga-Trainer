@@ -3,7 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import { FORMS, LOCATIONS, fmt, type Boss } from "@/game/data";
 import { allForms } from "@/game/engine";
 import { GameProvider, powerLevel, useGame } from "@/game/store";
-import { AdminPanel, BattleTab, EndgameTab, FormsTab, InventoryTab, QuestsTab, ShopTab, TournamentTab, TrainTab, Bar } from "@/game/ui";
+import { BattleTab, EndgameTab, FormsTab, InventoryTab, QuestsTab, ShopTab, TournamentTab, TrainTab, Bar } from "@/game/ui";
+import { AdminPanel } from "@/game/godEngine";
 
 export const Route = createFileRoute("/")({
   head: () => ({

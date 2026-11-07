@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { BOSSES, FORMS, LOCATIONS, PASSES, QUESTS, SAGA_ORDER, TOURNAMENT, TRAININGS, WISHES, EQUIPMENT, CONSUMABLES, TECHNIQUES, TECHNIQUE_RANKS, RAID_BOSSES, ENDLESS_MODIFIERS, fmt, type Boss, type StatKey, type EndlessModifierId } from "./data";
-import { allForms, applyAction, applyBattleRewards, applyShadowRewards, applyTournamentRewards, applySurvivalRewards, applyRaidRewards, endlessBoss, equipmentBonus, techniqueRank, bumpTechniqueUse, consumeItem, battleGrade, CUSTOM_FORM_MAX_MULT, findForm, battleClashDelay, battleClashPressure, canUnlockForm, formMult, gravMult, openSave, initialBattleState, levelForXp, powerLevel, questSummary, sagaQuests, sagaStatus, rankForLevel, resolveBattleAction, shadowDummyBoss, SHADOW_REWARD_MULT, SHADOW_ZENKAI_HP_FRACTION, SHADOW_ZENKAI_MULT, xpRequiredForLevel, type BattleState } from "./engine";
-import { exportSlotText } from "./persistence";
-import { registerBattleHandler, sendBattleCommand, type BattleCommand } from "./battleBus";
+import { allForms, applyAction, applyBattleRewards, applyShadowRewards, applyTournamentRewards, applySurvivalRewards, applyRaidRewards, endlessBoss, equipmentBonus, techniqueRank, bumpTechniqueUse, consumeItem, battleGrade, CUSTOM_FORM_MAX_MULT, findForm, battleClashDelay, battleClashPressure, canUnlockForm, formMult, gravMult, initialBattleState, levelForXp, powerLevel, questSummary, sagaQuests, sagaStatus, rankForLevel, resolveBattleAction, shadowDummyBoss, SHADOW_REWARD_MULT, SHADOW_ZENKAI_HP_FRACTION, SHADOW_ZENKAI_MULT, xpRequiredForLevel, type BattleState } from "./engine";
+import { registerBattleHandler, type BattleCommand } from "./battleBus";
 import { useBattleControls } from "./controls";
 import { useGame } from "./store";
 import { playBattleSound, StickmanArena, type BattleAction, type BattleSound } from "./arena";
@@ -524,6 +523,28 @@ export function BattleTab({ customBoss }: { customBoss: Boss | null }) {
         <button type="button" onClick={() => runUseConsumable("tonic")} disabled={(s.inventory["energy-tonic"] ?? 0) <= 0 || clashActive || battle.phase !== "active" || ki >= 100} title="Energy Tonic — full Ki" className="rounded border border-border px-3 py-2 text-sm disabled:opacity-40">🧪 Tonic ×{s.inventory["energy-tonic"] ?? 0}</button>
         <span className="ml-auto text-xs text-muted-foreground" title="Technique mastery ranks">Mastery: 👊{techniqueRank(s, "punch")} 🥊{techniqueRank(s, "heavy")} 💥{techniqueRank(s, "blast")} 🌊{techniqueRank(s, "ultimate")} 💨{techniqueRank(s, "vanish")} ⚡{techniqueRank(s, "charge")} 🛡️{techniqueRank(s, "parry")}</span>
       </div>
+      {s.customTechniques.length > 0 && battle.phase === "active" && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs text-muted-foreground">Custom:</span>
+          {s.customTechniques.slice(0, 4).map((tech) => {
+            const cooling = Date.now() < (battle.cooldowns[tech.id] ?? 0);
+            const blocked = clashActive || cooling || (!s.infiniteKi && ki < tech.kiCost);
+            return (
+              <button
+                key={tech.id}
+                disabled={blocked}
+                onClick={() => dispatchBattle({ type: "CUSTOM_TECHNIQUE", techniqueId: tech.id, now: Date.now() })}
+                title={`${tech.desc} · ${Math.round(tech.cooldownMs / 100) / 10}s cooldown`}
+                className="select-none rounded border-2 bg-secondary px-3 py-2 text-sm font-display active:scale-95 disabled:opacity-40"
+                style={{ borderColor: tech.aura }}
+              >
+                <span className="mr-1 inline-block h-3 w-3 rounded-full align-middle" style={{ background: tech.aura }} />
+                {tech.name} ·{tech.kiCost}
+              </button>
+            );
+          })}
+        </div>
+      )}
       <p className="font-display text-xs text-muted-foreground">KEYS: J / SPACE punch · H heavy strike · F perfect guard · K ki blast · L Kamehameha · C charge · SHIFT vanish · click punch · right-click vanish</p>
       {combo > 1 && <div className="font-display text-sm text-primary" role="status">{combo} HIT COMBO</div>}
       {log && <p className="font-display text-lg text-primary" role="status">{log}</p>}
@@ -832,258 +853,3 @@ export function EndgameTab({ onFight }: { onFight: (boss: EndgameBoss) => void }
   );
 }
 
-type GodTab = "player" | "forms" | "battle" | "world" | "system";
-const GOD_TABS: { id: GodTab; label: string }[] = [
-  { id: "player", label: "Player Lab" },
-  { id: "forms", label: "Forms & Passes" },
-  { id: "battle", label: "Battle & Bosses" },
-  { id: "world", label: "World & Quests" },
-  { id: "system", label: "System" },
-];
-
-export function AdminPanel({ onClose, onSpawn }: { onClose: () => void; onSpawn: (b: Boss) => void }) {
-  const { s, update, reset, slot, switchSlot, restore } = useGame();
-  const [tab, setTab] = useState<GodTab>("player");
-  const [snapshot, setSnapshot] = useState("");
-  const [importText, setImportText] = useState("");
-  const [importError, setImportError] = useState("");
-  const [name, setName] = useState("Broly");
-  const [hp, setHp] = useState("1000000");
-  const [atk, setAtk] = useState("5000");
-  const row = "flex items-center justify-between gap-2 border-b border-border py-2";
-  const field = "w-32 rounded bg-input px-2 py-1 text-right text-foreground";
-  const grid = "grid grid-cols-2 gap-2";
-  const mode = s.godMode ? "GOD MODE" : slot === "sandbox" ? "SANDBOX MODE" : "REALITY MODE";
-  const modeClass = s.godMode ? "border-destructive text-destructive" : slot === "sandbox" ? "border-chart-1 text-chart-1" : "border-border text-muted-foreground";
-  const statRows: [string, StatKey][] = [["Strength", "strength"], ["Agility", "agility"], ["Ki", "ki"], ["Defense", "defense"]];
-  const exportSave = () => {
-    const blob = new Blob([exportSlotText(s)], { type: "application/json" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `god-engine-save-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-  };
-
-  // Esc closes the panel (except while typing in a field).
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !(e.target instanceof HTMLElement && (e.target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(e.target.tagName)))) onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/85 p-4 backdrop-blur-sm" onClick={onClose}>
-      <div className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border-2 border-primary/60 bg-card shadow-[0_0_45px_rgba(124,88,255,0.28)]" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between border-b border-border p-4">
-          <div className="flex items-center gap-3">
-            <span className="font-display text-2xl text-primary">⚙ GOD ENGINE</span>
-            <span className={`rounded border px-2 py-0.5 font-display text-xs ${modeClass}`}>{mode}</span>
-          </div>
-          <button aria-label="Close God Engine" onClick={onClose} className="px-2 text-lg">✕</button>
-        </div>
-        <nav className="flex gap-1 overflow-x-auto border-b border-border p-2">
-          {GOD_TABS.map((t) => (
-            <button key={t.id} onClick={() => setTab(t.id)} className={`whitespace-nowrap rounded px-3 py-1.5 font-display text-sm ${tab === t.id ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground"}`}>{t.label}</button>
-          ))}
-        </nav>
-
-        <div className="min-h-0 flex-1 overflow-y-auto p-4 text-sm">
-          {tab === "player" && (
-            <div className="space-y-1">
-              <div className="flex justify-between font-display text-lg"><span>Power Level</span><span className="text-primary">{fmt(powerLevel(s))}</span></div>
-              {statRows.map(([label, k]) => (
-                <div key={k} className={row}>
-                  <span>{label}</span>
-                  <input type="number" min={0} aria-label={label} value={Math.round(s.stats[k] * 100) / 100} onChange={(e) => update((d) => { d.stats[k] = Math.max(0, +e.target.value || 0); })} className={field} />
-                </div>
-              ))}
-              <div className={row}>
-                <span>Level</span>
-                <input type="number" min={1} max={100} aria-label="Level" value={s.level} onChange={(e) => update((d) => { const lv = Math.max(1, Math.min(100, Math.floor(+e.target.value || 1))); d.level = lv; d.xp = xpRequiredForLevel(lv); })} className={field} />
-              </div>
-              <div className={row}>
-                <span>XP</span>
-                <input type="number" min={0} aria-label="XP" value={Math.floor(s.xp)} onChange={(e) => update((d) => { d.xp = Math.max(0, Math.floor(+e.target.value || 0)); d.level = levelForXp(d.xp); })} className={field} />
-              </div>
-              {statRows.map(([label, k]) => (
-                <div key={k} className={row}>
-                  <span>Mastery · {label}</span>
-                  <input type="number" min={0} max={100} aria-label={`${label} mastery`} value={Math.round(s.mastery[k])} onChange={(e) => update((d) => { d.mastery[k] = Math.max(0, Math.min(100, +e.target.value || 0)); })} className={field} />
-                </div>
-              ))}
-              <div className={row}>
-                <span>Stamina</span>
-                <div className="flex gap-2">
-                  <input type="number" min={0} aria-label="Stamina" value={Math.floor(s.stamina)} onChange={(e) => update((d) => { d.stamina = Math.max(0, +e.target.value || 0); })} className={field} />
-                  <Btn onClick={() => update((d) => { d.stamina = d.maxStamina; })}>Max</Btn>
-                </div>
-              </div>
-              <div className={row}>
-                <span>Zeni</span>
-                <input type="number" min={0} aria-label="Zeni" value={Math.floor(s.zeni)} onChange={(e) => update((d) => { d.zeni = Math.max(0, Math.floor(+e.target.value || 0)); })} className={field} />
-              </div>
-              <div className={row}>
-                <span>TP Medals</span>
-                <input type="number" min={0} aria-label="TP Medals" value={Math.floor(s.tp)} onChange={(e) => update((d) => { d.tp = Math.max(0, Math.floor(+e.target.value || 0)); })} className={field} />
-              </div>
-              <div className={row}>
-                <span>Gravity</span>
-                <input type="number" min={1} max={1000} aria-label="Gravity" value={s.gravity} onChange={(e) => update((d) => { d.gravity = Math.max(1, Math.floor(+e.target.value || 1)); d.gravityProgress = 0; })} className={field} />
-              </div>
-              <div className={`${grid} pt-3`}>
-                <Btn onClick={() => update((d) => (Object.keys(d.stats) as StatKey[]).forEach((k) => { d.stats[k] = d.stats[k] * 10 + 100; }))}>Stats ×10</Btn>
-                <Btn onClick={() => update((d) => (Object.keys(d.mastery) as StatKey[]).forEach((k) => { d.mastery[k] = 100; }))}>Max Mastery</Btn>
-                <Btn onClick={() => update((d) => { d.zeni += 1e9; d.tp += 1000; })}>+1B Zeni · +1000 TP</Btn>
-                <Btn onClick={() => update((d) => { d.stamina = d.maxStamina; })}>Refill Stamina</Btn>
-              </div>
-            </div>
-          )}
-
-          {tab === "forms" && (
-            <div className="space-y-1">
-              <div className={`${grid} pb-2`}>
-                <Btn onClick={() => update((d) => { d.forms = [...FORMS.map((f) => f.id), ...d.customForms.map((f) => f.id)]; })}>Unlock all forms</Btn>
-                <Btn onClick={() => update((d) => { d.forms = ["base"]; d.activeForm = "base"; })}>Lock all → Base</Btn>
-              </div>
-              {allForms(s).map((f) => {
-                const owned = s.forms.includes(f.id);
-                return (
-                  <div key={f.id} className={row}>
-                    <div className="flex items-center gap-2">
-                      <span className="h-4 w-4 rounded-full" style={{ background: f.aura }} />
-                      <span>{f.name}</span>
-                      <span className="text-muted-foreground">×{fmt(f.mult)}</span>
-                    </div>
-                    <div className="flex gap-1">
-                      {owned ? (
-                        <>
-                          <Btn disabled={s.activeForm === f.id} onClick={() => update((d) => { d.activeForm = f.id; })}>{s.activeForm === f.id ? "Active" : "Set active"}</Btn>
-                          {f.id !== "base" && <Btn onClick={() => update((d) => { d.forms = d.forms.filter((x) => x !== f.id); if (d.activeForm === f.id) d.activeForm = "base"; })}>Lock</Btn>}
-                        </>
-                      ) : (
-                        <Btn onClick={() => update((d) => { d.forms.push(f.id); })}>Unlock</Btn>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-              <h4 className="pt-3 font-display text-lg">Game Passes</h4>
-              {PASSES.map((p) => {
-                const owned = s.passes.includes(p.id);
-                return (
-                  <div key={p.id} className={row}>
-                    <span>{p.name}</span>
-                    <Btn onClick={() => update((d) => { if (owned) d.passes = d.passes.filter((x) => x !== p.id); else d.passes.push(p.id); })}>{owned ? "Owned ✓ (remove)" : "Grant"}</Btn>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {tab === "battle" && (
-            <div className="space-y-3">
-              <h4 className="font-display text-lg">Boss roster — spawn instantly</h4>
-              <div className={grid}>
-                {BOSSES.map((b) => <Btn key={b.id} onClick={() => onSpawn(b)}>{b.emoji} {b.name}</Btn>)}
-              </div>
-              <div className="rounded-lg border border-border p-3">
-                <div className="mb-2 font-display">Custom boss creator</div>
-                <div className="grid grid-cols-3 gap-2">
-                  <input value={name} onChange={(e) => setName(e.target.value)} className="rounded bg-input px-2 py-1 text-foreground" placeholder="Name" aria-label="Boss name" />
-                  <input value={hp} onChange={(e) => setHp(e.target.value)} className="rounded bg-input px-2 py-1 text-foreground" placeholder="HP" aria-label="Boss HP" />
-                  <input value={atk} onChange={(e) => setAtk(e.target.value)} className="rounded bg-input px-2 py-1 text-foreground" placeholder="ATK" aria-label="Boss ATK" />
-                </div>
-                <Btn className="mt-2 w-full" onClick={() => onSpawn({ id: "custom-" + Date.now(), name: name || "Mystery Foe", hp: +hp || 1, atk: +atk || 0, zeni: (+hp || 1) / 4, tp: 10, req: 0, emoji: "😈" })}>Spawn & Fight</Btn>
-              </div>
-              <div className="rounded-lg border border-primary/40 p-3">
-                <div className="font-display">Live battle overrides</div>
-                <p className="mb-2 text-xs text-muted-foreground">Apply to the fight currently running in the Battle tab.</p>
-                <div className={grid}>
-                  <Btn onClick={() => sendBattleCommand({ type: "FORCE_WIN" })}>Instant Kill Boss</Btn>
-                  <Btn onClick={() => sendBattleCommand({ type: "HEAL_PLAYER" })}>Heal Player</Btn>
-                  <Btn onClick={() => sendBattleCommand({ type: "SET_BOSS_HP", pct: 0.01 })}>Boss → 1% HP</Btn>
-                  <Btn onClick={() => sendBattleCommand({ type: "REFILL_KI" })}>Refill Ki</Btn>
-                  <Btn onClick={() => sendBattleCommand({ type: "FORCE_CLASH" })}>Force Beam Clash</Btn>
-                  <Btn onClick={() => sendBattleCommand({ type: "FORCE_FLEE" })}>Force Flee</Btn>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {tab === "world" && (
-            <div className="space-y-3">
-              <h4 className="font-display text-lg">Teleport to any location</h4>
-              <div className={grid}>
-                {LOCATIONS.map((l) => (
-                  <Btn key={l.id} onClick={() => update((d) => { d.location = l.id; })}>{s.location === l.id ? `${l.name} ✓` : l.name}</Btn>
-                ))}
-              </div>
-              <h4 className="pt-2 font-display text-lg">Saga quests</h4>
-              <div className={grid}>
-                <Btn onClick={() => update((d) => { QUESTS.forEach((q) => applyAction(d, { type: "FORCE_CLAIM_QUEST", questId: q.id })); })}>Complete & Claim All</Btn>
-                <Btn onClick={() => update((d) => { d.quests = []; })}>Reset all quests</Btn>
-              </div>
-              {QUESTS.map((q) => {
-                const claimed = s.quests.includes(q.id);
-                return (
-                  <div key={q.id} className={row}>
-                    <span>{q.saga} · {q.title}</span>
-                    <Btn onClick={() => update((d) => { if (claimed) d.quests = d.quests.filter((x) => x !== q.id); else applyAction(d, { type: "FORCE_CLAIM_QUEST", questId: q.id }); })}>{claimed ? "Claimed ✓ (reset)" : "Force claim"}</Btn>
-                  </div>
-                );
-              })}
-              <h4 className="pt-2 font-display text-lg">Dragon Balls</h4>
-              <div className="flex flex-wrap items-center gap-2">
-                <span>{s.dragonBalls}/7 collected</span>
-                <Btn onClick={() => update((d) => { d.dragonBalls = Math.min(7, d.dragonBalls + 1); })}>+1</Btn>
-                <Btn onClick={() => update((d) => { d.dragonBalls = Math.max(0, d.dragonBalls - 1); })}>−1</Btn>
-                <Btn onClick={() => update((d) => { d.dragonBalls = 7; })}>Set 7</Btn>
-                <Btn onClick={() => update((d) => { d.dragonBalls = 0; })}>Set 0</Btn>
-              </div>
-              <h4 className="pt-2 font-display text-lg">Boss defeat flags</h4>
-              {BOSSES.map((b) => {
-                const done = s.defeated.includes(b.id);
-                return (
-                  <div key={b.id} className={row}>
-                    <span>{b.emoji} {b.name}</span>
-                    <Btn onClick={() => update((d) => { if (done) d.defeated = d.defeated.filter((x) => x !== b.id); else d.defeated.push(b.id); })}>{done ? "Defeated ✓ (reset)" : "Mark defeated"}</Btn>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {tab === "system" && (
-            <div className="space-y-3">
-              <div className={row}><span>God Mode — no damage taken, no stamina cost</span><Btn onClick={() => update((d) => { d.godMode = !d.godMode; })}>{s.godMode ? "ON" : "OFF"}</Btn></div>
-              <div className={row}><span>Unlimited Zeni</span><Btn onClick={() => update((d) => { d.infiniteZeni = !d.infiniteZeni; if (!d.infiniteZeni) d.zeni = 0; })}>{s.infiniteZeni ? "ON" : "OFF"}</Btn></div>
-              <h4 className="pt-2 font-display text-lg">Operating mode</h4>
-              <p className="text-xs text-muted-foreground">Sandbox keeps experiments in a separate save file — main progress stays untouched. A fresh sandbox starts as a clone of your main save.</p>
-              <div className={grid}>
-                <Btn disabled={slot === "main"} onClick={() => switchSlot("main")}>{slot === "main" ? "REALITY (active)" : "Switch to REALITY"}</Btn>
-                <Btn disabled={slot === "sandbox"} onClick={() => switchSlot("sandbox")}>{slot === "sandbox" ? "SANDBOX (active)" : "Switch to SANDBOX"}</Btn>
-              </div>
-              <h4 className="pt-2 font-display text-lg">Snapshot</h4>
-              <div className={grid}>
-                <Btn onClick={() => setSnapshot(exportSlotText(s))}>Take snapshot</Btn>
-                <Btn disabled={!snapshot} onClick={() => { const st = openSave(snapshot); if (st) { restore(st); setSnapshot(""); } else setImportError("Snapshot failed to validate — discarded."); }}>Restore snapshot</Btn>
-              </div>
-              <h4 className="pt-2 font-display text-lg">Save management</h4>
-              <div className={grid}>
-                <Btn onClick={exportSave}>Export versioned JSON</Btn>
-                <Btn onClick={() => { setImportText(exportSlotText(s)); setImportError(""); }}>Load current into box</Btn>
-              </div>
-              <textarea value={importText} onChange={(e) => { setImportText(e.target.value); setImportError(""); }} rows={4} placeholder="Paste save JSON here, then Import" aria-label="Save JSON import" className="w-full rounded bg-input p-2 font-mono text-xs text-foreground" />
-              {importError && <p className="text-xs text-destructive" role="alert">{importError}</p>}
-              <Btn className="w-full" onClick={() => { const st = openSave(importText); if (st) { restore(st); setImportText(""); } else setImportError("Not a valid save file — imported data failed validation and was rejected."); }}>Import save</Btn>
-              <Btn className="w-full" onClick={() => { if (confirm(`Wipe this ${slot === "main" ? "main" : "sandbox"} save completely?`)) reset(); }}>Wipe save (factory reset)</Btn>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
