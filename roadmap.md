@@ -1,0 +1,16 @@
+- [x] Add an animated stickman battle arena with form-aware aura and attack visuals.
+- [x] Add timed, tap/hold beam clashes with saga-scaled boss pressure and outcomes.
+- [x] Add optional synthesized battle sound effects.
+- [x] Rebuild the battle arena around the uploaded anime-fighter reference: richer character silhouettes, cinematic stage, impact VFX, and layered sound.
+- [x] Add PC-first keyboard and mouse controls for melee combos, ki volleys, vanish movement, charging, and Kamehameha-style blasts.
+- [ ] Verify battle controls and visuals in the live preview, including keyboard and mouse interactions.
+- [x] Phase 1 — Engine foundations (pure rules module, action dispatcher, safe save loading, tests)
+- [ ] Phase 2 — Progression overhaul
+- [ ] Phase 3 — Save/data integrity
+- [ ] Phase 4 — Sagas & missions
+- [ ] Phase 5 — Skill-based combat
+- [ ] Phase 6 — Equipment & endgame
+- [ ] Phase 7 — Visual/audio polish
+- [ ] Phase 8 — Final audit
+- [x] Build the God Engine admin console (Player Lab / Forms & Passes / Battle & Bosses / World & Quests / System) with live battle overrides and sandbox saves
+- [x] Verify the God Engine panel in the live preview (overrides, sandbox switch, spawn)
