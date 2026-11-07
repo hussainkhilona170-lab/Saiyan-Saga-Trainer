@@ -40,7 +40,7 @@ function Game() {
   useEffect(() => { if (!shake) return; setShaking(true); const t = setTimeout(() => setShaking(false), 500); return () => clearTimeout(t); }, [shake]);
 
   return (
-    <div className={`min-h-screen ${shaking ? "screen-shake" : ""}`} style={{ background: `radial-gradient(ellipse at top, ${loc.bg}, var(--background) 70%)` }}>
+    <main className={`min-h-screen ${shaking ? "screen-shake" : ""}`} style={{ background: `radial-gradient(ellipse at top, ${loc.bg}, var(--background) 70%)` }}>
       <div className="mx-auto max-w-6xl p-4">
         <header className="mb-4 flex flex-wrap items-center gap-4">
           <h1 className="cursor-default select-none font-display text-4xl text-primary drop-shadow" onClick={() => { const now = Date.now(); tapsRef.current = now - tapTimeRef.current < 1500 ? tapsRef.current + 1 : 1; tapTimeRef.current = now; if (tapsRef.current >= 5) { tapsRef.current = 0; setAdmin(true); } }}>
@@ -91,6 +91,6 @@ function Game() {
         {tab === "Endgame" && <EndgameTab onFight={(b) => { setCustomBoss({ ...b }); setTab("Battle"); }} />}
       </div>
       {admin && <AdminPanel onClose={() => setAdmin(false)} onSpawn={(b) => { setCustomBoss({ ...b }); setTab("Battle"); }} />}
-    </div>
+    </main>
   );
 }

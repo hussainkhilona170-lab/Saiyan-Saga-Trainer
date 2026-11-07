@@ -74,6 +74,13 @@ All 8 tabs (Train · Battle · Forms · Quests · Shop · Tournament · Inventor
 - Annotated 6 silent `catch {}` blocks in godEngine.tsx; added unmount cleanup for the toast timer.
 - Removed 8 unused imports; ESLint clean on touched modules.
 
+## 10. Post-audit verification (2026-11-07, same session)
+
+- **Lighthouse (live)**: Accessibility **1.00**, Best Practices **1.00**, SEO **1.00** — the two initial a11y failures (heading order, missing `main` landmark) were fixed for real (h3→h2 restructure of tab headings, `<main>` wrapper) and re-scored to 100/100/100.
+- **Performance trace during active Raditz combat**: ~88 fps frame cadence (248 frames / 2.83 s), **one 96 ms long task** (Battle tab mount), no layout thrash (6 Layout calls), largest Paint 0.68 ms, MajorGC 2.6 ms. Canvas render path is healthy; no changes needed — measured, not guessed.
+- **Balance audit probe** (`src/test/balance-audit.test.ts`): fresh player loses to Raditz (documented — training is mandatory), trainee (Lv 5 / 500 / Kaioken) wins, mid-game (Lv 15 / 2000 / SSJ3 / 3× gravity) beats Frieza, late-game (Lv 24 / 400K / Blue / 10× gravity) beats Beerus. Determinism check pinned.
+- Test suite: **9 files / 154 passed**. Build: OK.
+
 ## 9. Checkpoint map
 
 `baseline` (23 tests) → `phase-3` (46) → `phase-4` (65) → `phase-5` (87) → `phase-6` (110) → `phase-7` (139) → `phase-8` (150) → `phase-9` → `phase-10`

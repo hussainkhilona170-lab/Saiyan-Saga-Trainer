@@ -144,6 +144,11 @@ src/test/engine.test.ts (+ app-routing.test.tsx) — 23 passing tests
 8. **phase-9**: visual & audio polish (tag `phase-9`), 150 tests pass, build OK.
 9. **phase-10**: final project audit (tag `phase-10`), see AUDIT.md — 150 tests pass, 0 console errors across all tabs.
 
+### Post-audit verification (checkpoint `phase-10-verified`)
+- Lighthouse 1.00 / 1.00 / 1.00 (a11y fixed: sequential h2 headings, `<main>` landmark)
+- Performance trace during live combat: ~88 fps, one 96 ms long task (battle mount), no layout thrash, no GC pressure
+- Balance probe `balance-audit.test.ts` (trainee beats Raditz; mid-game beats Frieza; endgame beats Beerus) — 154 tests pass
+
 ### Phase 10 — audit summary (checkpoint `phase-10`, full detail in `AUDIT.md`)
 - Dead code eliminated (`questProgressFraction`, unused locals/imports); silent catches commented; toast timer cleanup on unmount; ESLint clean on touched modules.
 - All 10 phases verified: 150 tests, production build OK, 8-tab browser pass with zero console errors, save-integrity and sandbox isolation confirmed.

@@ -94,7 +94,7 @@ export function TrainTab() {
         </Card>
       )}
       <ScoutCard />
-      <h3 className="font-display text-2xl">Training Locations</h3>
+      <h2 className="font-display text-2xl">Training Locations</h2>
       <div className="grid gap-2 md:grid-cols-5">
         {LOCATIONS.map((l) => {
           const ok = pl >= l.req;
@@ -564,7 +564,7 @@ export function QuestsTab() {
         return (
           <div key={saga} className="space-y-2">
             <div className="flex items-baseline justify-between gap-2">
-              <h3 className="font-display text-2xl text-primary">{saga}</h3>
+              <h2 className="font-display text-2xl text-primary">{saga}</h2>
               <span className="text-sm text-muted-foreground">{status.claimed}/{status.total} quests</span>
             </div>
             {status.complete && !status.bonusClaimed && (
@@ -613,7 +613,7 @@ export function ShopTab() {
   const [wishing, setWishing] = useState(false);
   return (
     <div className="space-y-4">
-      <h3 className="font-display text-2xl">Game Passes (TP Medals)</h3>
+      <h2 className="font-display text-2xl">Game Passes (TP Medals)</h2>
       <div className="grid gap-3 md:grid-cols-3">
         {PASSES.map((p) => {
           const owned = s.passes.includes(p.id);
@@ -626,7 +626,7 @@ export function ShopTab() {
           );
         })}
       </div>
-      <h3 className="font-display text-2xl">Dragon Balls</h3>
+      <h2 className="font-display text-2xl">Dragon Balls</h2>
       <Card>
         <div className="flex gap-2 text-3xl">{Array.from({ length: 7 }, (_, i) => <span key={i} className={i < s.dragonBalls ? "" : "opacity-20 grayscale"}>🟠</span>)}</div>
         <p className="mt-2 text-sm text-muted-foreground">Found from bosses and rare training drops. Gather all 7 to summon Shenron.</p>
@@ -645,7 +645,7 @@ export function ShopTab() {
           </div>
         )}
       </Card>
-      <h3 className="font-display text-2xl">Transaction History</h3>
+      <h2 className="font-display text-2xl">Transaction History</h2>
       <Card>
         {s.transactions.length === 0 ? (
           <p className="text-sm text-muted-foreground">No transactions yet — boss victories, quest payouts, wishes and gear purchases will appear here.</p>
@@ -730,7 +730,7 @@ export function InventoryTab() {
   const equip = equipmentBonus(s);
   return (
     <div className="space-y-4">
-      <h3 className="font-display text-2xl">Equipment <span className="text-sm text-muted-foreground">(paid in Zeni)</span></h3>
+      <h2 className="font-display text-2xl">Equipment <span className="text-sm text-muted-foreground">(paid in Zeni)</span></h2>
       <div className="grid gap-3 md:grid-cols-2">
         {EQUIPMENT.map((item) => {
           const ownedQty = s.inventory[item.id] ?? 0;
@@ -765,7 +765,7 @@ export function InventoryTab() {
         </div>
         {s.equipped.length === 0 && <p className="mt-1 text-xs text-muted-foreground">Nothing equipped — try the Turtle Shell first (+25% effective Defense).</p>}
       </Card>
-      <h3 className="font-display text-2xl">Consumables</h3>
+      <h2 className="font-display text-2xl">Consumables</h2>
       <div className="grid gap-3 md:grid-cols-2">
         {CONSUMABLES.map((item) => {
           const ownedQty = s.inventory[item.id] ?? 0;
@@ -781,7 +781,7 @@ export function InventoryTab() {
           );
         })}
       </div>
-      <h3 className="font-display text-2xl">Technique Mastery</h3>
+      <h2 className="font-display text-2xl">Technique Mastery</h2>
       <p className="text-sm text-muted-foreground">Techniques level up with real use. Ranks unlock concrete tactical bonuses — not just bigger numbers.</p>
       <div className="space-y-2">
         {TECHNIQUES.map((t) => {
@@ -833,7 +833,7 @@ export function EndgameTab({ onFight }: { onFight: (boss: EndgameBoss) => void }
           <Btn onClick={() => onFight(preview)}>Fight Wave {wave}</Btn>
         </div>
       </Card>
-      <h3 className="font-display text-2xl">🐉 Raid Bosses</h3>
+      <h2 className="font-display text-2xl">🐉 Raid Bosses</h2>
       <div className="grid gap-3 md:grid-cols-2">
         {RAID_BOSSES.map((raid) => {
           const cleared = s.defeated.includes(raid.base.id);
