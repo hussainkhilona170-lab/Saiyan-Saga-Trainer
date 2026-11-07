@@ -71,7 +71,7 @@ function Game() {
 
         <nav className="mb-4 flex gap-2 overflow-x-auto">
           {TABS.map((t) => (
-            <button key={t} onClick={() => setTab(t)} className={`rounded-lg px-4 py-2 font-display text-lg ${tab === t ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground"}`}>{t}</button>
+            <button key={t} onClick={() => setTab(t)} aria-pressed={tab === t} className={`rounded-lg px-4 py-2 font-display text-lg ${tab === t ? "tab-active bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground hover:bg-secondary/70"}`}>{t}</button>
           ))}
         </nav>
 

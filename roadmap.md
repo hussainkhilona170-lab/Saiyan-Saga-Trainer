@@ -5,12 +5,14 @@
 - [x] Add PC-first keyboard and mouse controls for melee combos, ki volleys, vanish movement, charging, and Kamehameha-style blasts.
 - [ ] Verify battle controls and visuals in the live preview, including keyboard and mouse interactions.
 - [x] Phase 1 — Engine foundations (pure rules module, action dispatcher, safe save loading, tests)
-- [ ] Phase 2 — Progression overhaul
-- [ ] Phase 3 — Save/data integrity
-- [ ] Phase 4 — Sagas & missions
-- [ ] Phase 5 — Skill-based combat
-- [ ] Phase 6 — Equipment & endgame
-- [ ] Phase 7 — Visual/audio polish
-- [ ] Phase 8 — Final audit
+- [x] Phase 2 — Progression overhaul
+- [x] Phase 3 — Save/data integrity
+- [x] Phase 4 — Sagas & missions & exploration & tournament
+- [x] Phase 5 — Skill-based combat (phases, signatures, parry, combo branches, grades)
+- [x] Phase 6 — Equipment, inventory & endgame
+- [x] Phase 7 — God Engine foundations (typed admin API, infinite Ki, custom techniques, simulator)
+- [x] Phase 8 — GOD ENGINE command center (console, snapshots, scenarios, tester, event log)
+- [x] Phase 9 — Visual/audio polish
+- [ ] Phase 10 — Final audit
 - [x] Build the God Engine admin console (Player Lab / Forms & Passes / Battle & Bosses / World & Quests / System) with live battle overrides and sandbox saves
 - [x] Verify the God Engine panel in the live preview (overrides, sandbox switch, spawn)

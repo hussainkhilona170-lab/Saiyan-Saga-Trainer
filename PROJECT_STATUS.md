@@ -113,7 +113,8 @@ src/test/engine.test.ts (+ app-routing.test.tsx) — 23 passing tests
 - [x] Phase 6 — Equipment, inventory & endgame (checkpoint `phase-6`)
 - [x] Phase 7 — God Engine foundations (full) (checkpoint `phase-7`)
 - [x] Phase 8 — GOD ENGINE interface & command center (checkpoint `phase-8`)
-- [ ] Phase 9 — Visual & audio polish  ← **NEXT**
+- [x] Phase 9 — Visual & audio polish (checkpoint `phase-9`)
+- [ ] Phase 10 — Final project audit  ← **NEXT**
 - [ ] Phase 7 — God Engine foundations (full)
 - [ ] Phase 8 — God Engine interface & command center
 - [ ] Phase 9 — Visual & audio polish
@@ -140,6 +141,13 @@ src/test/engine.test.ts (+ app-routing.test.tsx) — 23 passing tests
 5. **phase-6**: equipment, technique mastery, endless survival, raid bosses (tag `phase-6`), 110 tests pass, build OK.
 6. **phase-7**: God Engine foundations — typed admin API, console parser, simulator, infinite Ki, custom techniques (tag `phase-7`), 139 tests pass, build OK.
 7. **phase-8**: GOD ENGINE command center (tag `phase-8`), 150 tests pass, build OK.
+8. **phase-9**: visual & audio polish (tag `phase-9`), 150 tests pass, build OK.
+
+### Phase 9 — completed work (checkpoint `phase-9`)
+- **CSS system** (`styles.css`): unified transitions on all interactive elements, `:focus-visible` rings everywhere, custom selection color, thin themed scrollbars, `.card-hover` lift (boss cards, form cards), `.tab-active` glow, `.bar-animated` sheen on stat bars, `prefers-reduced-motion` respected, touch-action none on the arena, number-input spinners hidden.
+- **Audio** (`arena.tsx`): pitch jitter on hit sounds (±10–20%), plus four new synthesized SFX — `transform` (power-up sweep, wired to Forms transform), `levelup` (quest claim + saga claim + Shenron wish), `tick` (training click), `parry` (reserved). Martial-arts feedback loop now covers training → battle → reward.
+- **Tabs** marked `aria-pressed` for screen readers.
+- Verified in-browser: 0 console errors on full reload; arena untouched.
 
 ### Phase 8 — completed work (checkpoint `phase-8`)
 - **Full command center** in `src/game/godEngine.tsx` (replacing the old 5-tab AdminPanel): Overview · Player Lab · Transformation Lab (form comparison + custom creator + force lock/unlock) · Battle Control (roster/custom boss spawn + live battle overrides incl. new 1%/50% HP and refill) · Enemy & Boss Lab (endless waves with modifiers, raids, tournament rounds, defeat flags) · Progression (power-level scaling, Dragon Balls, Survival best) · Quest & Saga control · World (gated-bypass teleport) · **Technique Creator** (real custom techniques on the combat pipeline, with estimated damage preview) · **Scenario Creator** (capture/apply/duplicate/import/export build+boss configurations, custom forms carried inline) · **Command Console** (parser-backed, autocomplete, history, confirm-gated destructive commands, persistent output) · **Live State Inspector** (full sheet + clipboard export, save size, battle-bus status, form ownership) · **Snapshots** (schema-versioned named create/restore/delete, capped 50) · **Automated Battle Tester** (deterministic simulation with God-Build comparison) · **Event Log** (filterable, clearable) · **Settings & Recovery** (slot switching, backup restore, exports, wipe with confirmation).

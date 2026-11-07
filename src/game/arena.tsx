@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import type { Boss } from "./data";
 
 export type BattleAction = "idle" | "punch" | "blast" | "clash" | "vanish" | "kamehameha";
-export type BattleSound = "punch" | "blast" | "charge" | "clash" | "win" | "lose" | "vanish" | "ultimate";
+export type BattleSound = "punch" | "blast" | "charge" | "clash" | "win" | "lose" | "vanish" | "ultimate" | "transform" | "levelup" | "tick" | "parry";
 
 type ArenaProps = {
   boss: Boss;
@@ -617,12 +617,18 @@ export function playBattleSound(effect: BattleSound) {
     lose: { from: 260, to: 48, duration: 0.5, gain: 0.13, type: "sawtooth" },
     vanish: { from: 720, to: 115, duration: 0.22, gain: 0.12, type: "sine" },
     ultimate: { from: 55, to: 540, duration: 0.9, gain: 0.16, type: "sawtooth" },
+    transform: { from: 180, to: 880, duration: 1.0, gain: 0.17, type: "triangle" },
+    levelup: { from: 523, to: 784, duration: 0.28, gain: 0.11, type: "triangle" },
+    tick: { from: 950, to: 620, duration: 0.07, gain: 0.05, type: "square" },
+    parry: { from: 2400, to: 950, duration: 0.12, gain: 0.14, type: "square" },
   };
   const setting = settings[effect];
+  // Slight pitch jitter on hit sounds keeps rapid attacks from sounding robotic.
+  const jitter = ["punch", "blast", "tick", "parry", "clash"].includes(effect) ? 0.9 + Math.random() * 0.22 : 1;
   const osc = context.createOscillator();
   const gain = context.createGain();
   osc.type = setting.type;
-  osc.frequency.setValueAtTime(setting.from, now);
+  osc.frequency.setValueAtTime(setting.from * jitter, now);
   osc.frequency.exponentialRampToValueAtTime(Math.max(1, setting.to), now + setting.duration);
   gain.gain.setValueAtTime(setting.gain, now);
   gain.gain.exponentialRampToValueAtTime(0.001, now + setting.duration);

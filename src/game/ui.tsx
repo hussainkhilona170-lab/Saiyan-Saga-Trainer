@@ -49,7 +49,7 @@ function TrainButton({ t }: { t: (typeof TRAININGS)[number] }) {
     <button
       {...hold}
       onPointerDown={(e) => { last.current = { clientX: e.clientX, clientY: e.clientY, currentTarget: e.currentTarget }; hold.onPointerDown(); }}
-      onClick={(e) => add(e, "+" + fmt(train(t.stat)))}
+      onClick={(e) => { playBattleSound("tick"); add(e, "+" + fmt(train(t.stat))); }}
       className="relative select-none overflow-visible rounded-xl border-2 border-primary/40 bg-secondary p-4 text-left transition active:scale-95 hover:border-primary"
     >
       <div className="text-3xl">{t.icon}</div>
@@ -131,7 +131,7 @@ function ScoutCard() {
 }
 
 export function Bar({ value, max, className = "bg-primary" }: { value: number; max: number; className?: string }) {
-  return <div className="h-3 w-full overflow-hidden rounded-full bg-muted"><div className={`h-full transition-all ${className}`} style={{ width: `${Math.max(0, Math.min(100, (value / max) * 100))}%` }} /></div>;
+  return <div className="h-3 w-full overflow-hidden rounded-full bg-muted"><div className={`h-full transition-all bar-animated ${className}`} style={{ width: `${Math.max(0, Math.min(100, (value / max) * 100))}%` }} /></div>;
 }
 
 export function FormsTab() {
@@ -146,7 +146,7 @@ export function FormsTab() {
         const needPass = f.pass && !s.passes.includes(f.pass);
         const can = canUnlockForm(s, f.id);
         return (
-          <Card key={f.id} className={s.activeForm === f.id ? "ring-2 ring-primary" : ""}>
+          <Card key={f.id} className={`card-hover ${s.activeForm === f.id ? "ring-2 ring-primary" : ""}`}>
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-full" style={{ background: f.aura, boxShadow: `0 0 20px ${f.aura}` }} />
               <div className="flex-1"><div className="font-display text-xl">{f.name}</div><div className="text-sm text-muted-foreground">×{fmt(f.mult)} power · {f.custom ? "Custom form" : `Level ${f.levelReq}`}</div></div>
@@ -154,7 +154,7 @@ export function FormsTab() {
             </div>
             <div className="mt-3">
               {owned ? (
-                <Btn className="w-full" disabled={s.activeForm === f.id} onClick={() => { update((d) => applyAction(d, { type: "TRANSFORM", formId: f.id })); if (f.id !== "base") triggerShake(); }}>
+                <Btn className="w-full" disabled={s.activeForm === f.id} onClick={() => { update((d) => applyAction(d, { type: "TRANSFORM", formId: f.id })); if (f.id !== "base") { triggerShake(); playBattleSound("transform"); } }}>
                   {s.activeForm === f.id ? "Active" : "Transform!"}
                 </Btn>
               ) : (
@@ -479,7 +479,7 @@ export function BattleTab({ customBoss }: { customBoss: Boss | null }) {
           {BOSSES.map((b) => {
             const ok = pl >= b.req;
             return (
-              <Card key={b.id}>
+              <Card key={b.id} className="card-hover">
                 <div className="text-5xl">{b.emoji}</div>
                 <div className="font-display text-2xl">{b.name} {s.defeated.includes(b.id) && "✅"} {s.bestGrades?.[b.id] && <span className="font-display text-lg text-chart-2" title="Best combat grade">({s.bestGrades[b.id]})</span>}</div>
                 <div className="text-sm text-muted-foreground">HP {fmt(b.hp)} • ATK {fmt(b.atk)}/s • Reward {fmt(b.zeni)} Zeni</div>
@@ -571,7 +571,7 @@ export function QuestsTab() {
               <Card className="border-chart-1">
                 <div className="font-display text-lg text-chart-1">Saga complete!</div>
                 <p className="text-sm text-muted-foreground">Claim the saga bonus: {fmt(status.bonus.zeni)} Zeni · {status.bonus.tp} TP</p>
-                <Btn className="mt-2" onClick={() => update((d) => applyAction(d, { type: "CLAIM_SAGA", saga }))}>Claim saga bonus</Btn>
+                <Btn className="mt-2" onClick={() => { playBattleSound("win"); update((d) => applyAction(d, { type: "CLAIM_SAGA", saga })); }}>Claim saga bonus</Btn>
               </Card>
             )}
             {status.bonusClaimed && <p className="text-xs text-chart-2">✓ Saga bonus claimed</p>}
@@ -596,7 +596,7 @@ export function QuestsTab() {
                   ) : summary.locked ? (
                     <span className="max-w-40 text-right text-xs text-muted-foreground">🔒 Requires: {summary.prereqs.filter((p) => !s.quests.includes(p)).map((p) => QUESTS.find((x) => x.id === p)?.title ?? p).join(", ")}</span>
                   ) : (
-                    <Btn disabled={!summary.done} onClick={() => update((d) => applyAction(d, { type: "CLAIM_QUEST", questId: q.id }))}>{summary.done ? "Claim" : "In progress"}</Btn>
+                    <Btn disabled={!summary.done} onClick={() => { playBattleSound("levelup"); update((d) => applyAction(d, { type: "CLAIM_QUEST", questId: q.id })); }}>{summary.done ? "Claim" : "In progress"}</Btn>
                   )}
                 </Card>
               );
@@ -637,6 +637,7 @@ export function ShopTab() {
             <p className="font-display text-xl text-chart-2">"State your wish. I will grant one."</p>
             {WISHES.map((w) => (
               <Btn key={w.id} className="mr-2" onClick={() => {
+                playBattleSound("levelup");
                 update((d) => applyAction(d, { type: "MAKE_WISH", wishId: w.id }));
                 setWishing(false);
               }}>{w.name} — {w.desc}{w.id === "zeni" ? ` (≈ ${fmt(powerLevel(s) * 100)})` : ""}</Btn>
