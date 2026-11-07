@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { BOSSES, FORMS, LOCATIONS, PASSES, QUESTS, SAGA_ORDER, TOURNAMENT, TRAININGS, WISHES, fmt, type Boss, type StatKey } from "./data";
-import { allForms, applyAction, applyBattleRewards, applyShadowRewards, applyTournamentRewards, battleGrade, CUSTOM_FORM_MAX_MULT, findForm, battleClashDelay, battleClashPressure, canUnlockForm, formMult, gravMult, openSave, initialBattleState, levelForXp, powerLevel, questSummary, sagaQuests, sagaStatus, rankForLevel, resolveBattleAction, shadowDummyBoss, SHADOW_REWARD_MULT, SHADOW_ZENKAI_HP_FRACTION, SHADOW_ZENKAI_MULT, xpRequiredForLevel, type BattleState } from "./engine";
+import { BOSSES, FORMS, LOCATIONS, PASSES, QUESTS, SAGA_ORDER, TOURNAMENT, TRAININGS, WISHES, EQUIPMENT, CONSUMABLES, TECHNIQUES, TECHNIQUE_RANKS, RAID_BOSSES, ENDLESS_MODIFIERS, fmt, type Boss, type StatKey, type EndlessModifierId } from "./data";
+import { allForms, applyAction, applyBattleRewards, applyShadowRewards, applyTournamentRewards, applySurvivalRewards, applyRaidRewards, endlessBoss, equipmentBonus, techniqueRank, bumpTechniqueUse, consumeItem, battleGrade, CUSTOM_FORM_MAX_MULT, findForm, battleClashDelay, battleClashPressure, canUnlockForm, formMult, gravMult, openSave, initialBattleState, levelForXp, powerLevel, questSummary, sagaQuests, sagaStatus, rankForLevel, resolveBattleAction, shadowDummyBoss, SHADOW_REWARD_MULT, SHADOW_ZENKAI_HP_FRACTION, SHADOW_ZENKAI_MULT, xpRequiredForLevel, type BattleState } from "./engine";
 import { exportSlotText } from "./persistence";
 import { registerBattleHandler, sendBattleCommand, type BattleCommand } from "./battleBus";
 import { useBattleControls } from "./controls";
 import { useGame } from "./store";
 import { playBattleSound, StickmanArena, type BattleAction, type BattleSound } from "./arena";
+
+const waveOf = (b: Boss) => Math.max(1, Math.floor(Number(b.id.split("-")[1]) || 1));
 
 type Float = { id: number; x: number; y: number; text: string };
 function useFloats() {
@@ -353,7 +355,15 @@ export function BattleTab({ customBoss }: { customBoss: Boss | null }) {
         setBattle((current) => ({ ...current, boss: null, phase: "idle", message: `Shadow Self conquered! All stats ×${factor}${zenkai ? " — ZENKAI BOOST! Stamina fully restored." : ""}` }));
       } else {
         const tournamentRound = wonBoss.tournament;
-        if (tournamentRound !== undefined) {
+        if (wonBoss.id.startsWith("endless-")) {
+          update((d) => applySurvivalRewards(d, wonBoss));
+          setBattle((current) => ({ ...current, boss: null, phase: "idle", message: `Endless wave ${wonBoss.id.split("-")[1]} cleared! Best streak: wave ${Math.max(waveOf(wonBoss), sRef.current.survivalBest)}. Grade: ${grade}` }));
+        } else if (wonBoss.id.startsWith("raid-")) {
+          const raidId = wonBoss.id.replace(/^raid-/, "");
+          const first = !sRef.current.defeated.includes(wonBoss.id);
+          update((d) => applyRaidRewards(d, raidId));
+          setBattle((current) => ({ ...current, boss: null, phase: "idle", message: `Raid cleared: ${wonBoss.name}! ${first ? "First clear — a Dragon Ball trembles…" : ""}` }));
+        } else if (tournamentRound !== undefined) {
           const firstClear = sRef.current.tournamentRound === tournamentRound;
           const round = TOURNAMENT[tournamentRound];
           update((d) => applyTournamentRewards(d, tournamentRound));
@@ -386,6 +396,7 @@ export function BattleTab({ customBoss }: { customBoss: Boss | null }) {
   const runPunch = (event?: React.MouseEvent) => {
     if (!boss || clashActive) return;
     dispatchBattle({ type: "PUNCH", now: Date.now() });
+    update((d) => bumpTechniqueUse(d, "punch"));
     if (event) add(event, `${battle.combo > 0 ? `${battle.combo + 1} HIT · ` : "👊 "}`);
     setAction("punch"); setActionTick((n) => n + 1);
     if (soundOn) playBattleSound("punch");
@@ -393,37 +404,61 @@ export function BattleTab({ customBoss }: { customBoss: Boss | null }) {
     comboTimerRef.current = setTimeout(() => dispatchBattle({ type: "RESET_COMBO", now: Date.now() }), 1100);
   };
   const runBlast = () => {
-    if (!boss || clashActive || ki < 20) return;
+    const cost = techniqueRank(sRef.current, "blast") >= 2 ? 15 : 20;
+    if (!boss || clashActive || ki < cost) return;
     dispatchBattle({ type: "BLAST", now: Date.now() });
+    update((d) => bumpTechniqueUse(d, "blast"));
     setAction("blast"); setActionTick((n) => n + 1);
     if (soundOn) playBattleSound("blast");
   };
   const runUltimate = () => {
     if (!boss || clashActive || ki < 100) return;
     dispatchBattle({ type: "ULTIMATE", now: Date.now() });
+    update((d) => bumpTechniqueUse(d, "ultimate"));
     setAction("kamehameha"); setActionTick((n) => n + 1); triggerShake();
     if (soundOn) playBattleSound("ultimate");
   };
   const runVanish = () => {
-    if (!boss || clashActive || ki < 15) return;
+    const cost = techniqueRank(sRef.current, "vanish") >= 2 ? 12 : 15;
+    if (!boss || clashActive || ki < cost) return;
     dispatchBattle({ type: "VANISH", now: Date.now() });
+    update((d) => bumpTechniqueUse(d, "vanish"));
     setAction("vanish"); setActionTick((n) => n + 1);
     if (soundOn) playBattleSound("vanish");
   };
   const runHeavy = () => {
     if (!boss || clashActive) return;
     dispatchBattle({ type: "HEAVY", now: Date.now() });
+    update((d) => bumpTechniqueUse(d, "heavy"));
     setAction("punch"); setActionTick((n) => n + 1); triggerShake();
     if (soundOn) playBattleSound("punch");
   };
   const runParry = () => {
     if (!boss || clashActive) return;
     dispatchBattle({ type: "PERFECT_GUARD", now: Date.now(), uiForm: sRef.current.activeForm === "ui" });
+    update((d) => bumpTechniqueUse(d, "parry"));
     if (soundOn) playBattleSound("charge");
   };
-  const runCharge = () => dispatchBattle({ type: "CHARGE", amount: 2.5 });
+  const runUseConsumable = (consumable: "senzu" | "tonic") => {
+    if (!boss || clashActive) return;
+    const itemId = consumable === "senzu" ? "senzu" : "energy-tonic";
+    if (consumable === "senzu" && battle.playerHp >= battle.maxPlayerHp) return;
+    if (consumable === "tonic" && ki >= 100) return;
+    const have = sRef.current.inventory[itemId] ?? 0;
+    if (have <= 0) return;
+    update((d) => { consumeItem(d, itemId); });
+    dispatchBattle({ type: "USE_CONSUMABLE", consumable });
+    if (soundOn) playBattleSound("charge");
+  };
+  const runCharge = () => {
+    if (!boss || clashActive) return;
+    dispatchBattle({ type: "CHARGE", amount: 2.5 });
+    update((d) => bumpTechniqueUse(d, "charge"));
+  };
   useBattleControls({ punch: () => runPunch(), blast: runBlast, ultimate: runUltimate, vanish: runVanish, charge: runCharge, parry: runParry, heavy: runHeavy });
   const charge = useHold(() => dispatchBattle({ type: "CHARGE", amount: 4 }));
+  const blastCost = techniqueRank(s, "blast") >= 2 ? 15 : 20;
+  const vanishCost = techniqueRank(s, "vanish") >= 2 ? 12 : 15;
 
   if (!boss)
     return (
@@ -476,13 +511,18 @@ export function BattleTab({ customBoss }: { customBoss: Boss | null }) {
       <Bar value={ki} max={100} className="bg-chart-1" />
       <div className="relative grid grid-cols-2 gap-2 md:grid-cols-4">
         <Btn className="py-5 text-lg" disabled={clashActive} onClick={(e) => { runPunch(e); dispatchBattle({ type: "CHARGE", amount: 2 }); }}>👊 Punch <kbd className="ml-1 text-sm">J</kbd></Btn>
-        <Btn className="py-5 text-lg" disabled={ki < 20 || clashActive} onClick={() => runBlast()}>💥 Ki Blast <kbd className="ml-1 text-sm">K</kbd></Btn>
+        <Btn className="py-5 text-lg" disabled={ki < blastCost || clashActive} onClick={() => runBlast()}>💥 Ki Blast ·{blastCost} <kbd className="ml-1 text-sm">K</kbd></Btn>
         <Btn className="py-5 text-lg" disabled={ki < 100 || clashActive} onClick={() => runUltimate()}>🌊 Kamehameha <kbd className="ml-1 text-sm">L</kbd></Btn>
         <Btn className="py-5 text-lg" disabled={clashActive} onClick={() => runHeavy()}>🥊 Heavy Strike <kbd className="ml-1 text-sm">H</kbd></Btn>
         <button {...charge} disabled={clashActive} className="select-none rounded-lg bg-chart-1 py-5 font-display text-lg text-primary-foreground active:scale-95 disabled:opacity-40">⚡ Charge <kbd className="ml-1 text-sm">C</kbd></button>
         <Btn className="py-5 text-lg" disabled={clashActive || Date.now() < battle.guardCdUntil} onClick={() => runParry()}>🛡️ Perfect Guard <kbd className="ml-1 text-sm">F</kbd></Btn>
-        <Btn className="col-span-2 py-4 text-lg md:col-span-4" disabled={ki < 15 || clashActive} onClick={() => runVanish()}>💨 Vanish Strike <kbd className="ml-2 text-sm">Shift · right-click arena</kbd></Btn>
+        <Btn className="col-span-2 py-4 text-lg md:col-span-4" disabled={ki < vanishCost || clashActive} onClick={() => runVanish()}>💨 Vanish Strike ·{vanishCost} <kbd className="ml-2 text-sm">Shift · right-click arena</kbd></Btn>
         {layer}
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" onClick={() => runUseConsumable("senzu")} disabled={(s.inventory["senzu"] ?? 0) <= 0 || clashActive || battle.phase !== "active" || php >= maxP} title="Senzu Bean — full HP" className="rounded border border-border px-3 py-2 text-sm disabled:opacity-40">🫘 Senzu ×{s.inventory["senzu"] ?? 0}</button>
+        <button type="button" onClick={() => runUseConsumable("tonic")} disabled={(s.inventory["energy-tonic"] ?? 0) <= 0 || clashActive || battle.phase !== "active" || ki >= 100} title="Energy Tonic — full Ki" className="rounded border border-border px-3 py-2 text-sm disabled:opacity-40">🧪 Tonic ×{s.inventory["energy-tonic"] ?? 0}</button>
+        <span className="ml-auto text-xs text-muted-foreground" title="Technique mastery ranks">Mastery: 👊{techniqueRank(s, "punch")} 🥊{techniqueRank(s, "heavy")} 💥{techniqueRank(s, "blast")} 🌊{techniqueRank(s, "ultimate")} 💨{techniqueRank(s, "vanish")} ⚡{techniqueRank(s, "charge")} 🛡️{techniqueRank(s, "parry")}</span>
       </div>
       <p className="font-display text-xs text-muted-foreground">KEYS: J / SPACE punch · H heavy strike · F perfect guard · K ki blast · L Kamehameha · C charge · SHIFT vanish · click punch · right-click vanish</p>
       {combo > 1 && <div className="font-display text-sm text-primary" role="status">{combo} HIT COMBO</div>}
@@ -658,6 +698,136 @@ export function TournamentTab({ onFight }: { onFight: (boss: TournamentBoss) => 
           );
         })}
       </ol>
+    </div>
+  );
+}
+
+type EndgameBoss = Boss;
+export function InventoryTab() {
+  const { s, update } = useGame();
+  const equip = equipmentBonus(s);
+  return (
+    <div className="space-y-4">
+      <h3 className="font-display text-2xl">Equipment <span className="text-sm text-muted-foreground">(paid in Zeni)</span></h3>
+      <div className="grid gap-3 md:grid-cols-2">
+        {EQUIPMENT.map((item) => {
+          const ownedQty = s.inventory[item.id] ?? 0;
+          const equipped = s.equipped.includes(item.id);
+          return (
+            <Card key={item.id} className={equipped ? "ring-2 ring-chart-2" : ""}>
+              <div className="flex items-center gap-3">
+                <span className="text-4xl">{item.icon}</span>
+                <div className="min-w-0"><div className="font-display text-lg">{item.name} <span className="text-xs uppercase text-muted-foreground">· {item.slot}</span></div><div className="text-sm text-muted-foreground">{item.desc}</div></div>
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <span className="text-sm text-chart-2">{fmt(item.cost)} Zeni</span>
+                {equipped ? (
+                  <Btn onClick={() => update((d) => applyAction(d, { type: "UNEQUIP_ITEM", itemId: item.id }))}>Unequip</Btn>
+                ) : ownedQty > 0 ? (
+                  <Btn onClick={() => update((d) => applyAction(d, { type: "EQUIP_ITEM", itemId: item.id }))}>Equip</Btn>
+                ) : (
+                  <Btn disabled={s.zeni < item.cost} onClick={() => update((d) => applyAction(d, { type: "BUY_ITEM", itemId: item.id }))}>Buy</Btn>
+                )}
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+      <Card>
+        <div className="font-display text-lg">Loadout bonus</div>
+        <div className="mt-1 flex flex-wrap gap-3 text-sm">
+          <span>🛡️ Effective DEF ×{(1 + equip.defenseMult).toFixed(2)}</span>
+          <span>💪 Power ×{(1 + equip.allStatsMult).toFixed(2)}</span>
+          <span>🏋️ Training ×{(1 + equip.trainingMult).toFixed(2)}</span>
+          <span>🧭 Scout find rate +{Math.round(equip.scoutBallBonus * 100)}%</span>
+        </div>
+        {s.equipped.length === 0 && <p className="mt-1 text-xs text-muted-foreground">Nothing equipped — try the Turtle Shell first (+25% effective Defense).</p>}
+      </Card>
+      <h3 className="font-display text-2xl">Consumables</h3>
+      <div className="grid gap-3 md:grid-cols-2">
+        {CONSUMABLES.map((item) => {
+          const ownedQty = s.inventory[item.id] ?? 0;
+          return (
+            <Card key={item.id}>
+              <div className="flex items-center gap-3">
+                <span className="text-4xl">{item.icon}</span>
+                <div><div className="font-display text-lg">{item.name} <span className="text-xs text-muted-foreground">×{ownedQty} owned</span></div><div className="text-sm text-muted-foreground">{item.desc}</div></div>
+              </div>
+              <Btn className="mt-2 w-full" disabled={s.zeni < item.cost} onClick={() => update((d) => applyAction(d, { type: "BUY_ITEM", itemId: item.id }))}>Buy · {fmt(item.cost)} Zeni</Btn>
+              <p className="mt-1 text-xs text-muted-foreground">Usable only during battle (buttons under the arena).</p>
+            </Card>
+          );
+        })}
+      </div>
+      <h3 className="font-display text-2xl">Technique Mastery</h3>
+      <p className="text-sm text-muted-foreground">Techniques level up with real use. Ranks unlock concrete tactical bonuses — not just bigger numbers.</p>
+      <div className="space-y-2">
+        {TECHNIQUES.map((t) => {
+          const uses = Math.floor(s.techniqueUses[t.id] ?? 0);
+          const rank = techniqueRank(s, t.id);
+          const next = TECHNIQUE_RANKS[rank];
+          const floor = rank === 0 ? 0 : TECHNIQUE_RANKS[rank - 1]!;
+          return (
+            <Card key={t.id} className="flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="font-display">{t.icon} {t.name} <span className="text-chart-2">· Rank {rank}{rank >= TECHNIQUE_RANKS.length ? " (MAX)" : ""}</span></div>
+                <div className="text-xs text-muted-foreground">{t.uses}: {fmt(uses)}{next !== undefined ? ` · next rank at ${next} uses` : " · mastered"}</div>
+                <div className="text-xs text-chart-1">{t.perks.join(" · ")}</div>
+              </div>
+              <Bar value={Math.max(0, uses - floor)} max={next !== undefined ? next - floor : 1} className="w-40 bg-chart-1" />
+            </Card>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+export function EndgameTab({ onFight }: { onFight: (boss: EndgameBoss) => void }) {
+  const { s } = useGame();
+  const pl = powerLevel(s);
+  const [wave, setWave] = useState(() => Math.max(1, Math.min(9999, s.survivalBest + 1)));
+  const [modifier, setModifier] = useState<EndlessModifierId>("none");
+  const preview = endlessBoss(wave, modifier);
+  return (
+    <div className="space-y-4">
+      <Card>
+        <h2 className="font-display text-3xl">♾️ Endless Survival</h2>
+        <p className="mt-1 text-sm text-muted-foreground">An unbroken gauntlet of champions, each deadlier than the last. Waves pay Zeni and TP on every clear — the deeper you climb, the richer the haul. Your best streak: <span className="font-display text-chart-2">Wave {s.survivalBest}</span>.</p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {ENDLESS_MODIFIERS.map((m) => (
+            <button key={m.id} onClick={() => setModifier(m.id)} title={m.desc} className={`rounded-lg border-2 px-3 py-2 text-sm ${modifier === m.id ? "border-primary text-primary" : "border-border"}`}>
+              <div className="font-display">{m.name}</div>
+              <div className="text-xs text-muted-foreground">{m.desc}</div>
+            </button>
+          ))}
+        </div>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <label className="text-sm">Wave
+            <input type="number" min={1} max={9999} value={wave} onChange={(e) => setWave(Math.max(1, Math.min(9999, Math.floor(+e.target.value || 1))))} className="ml-2 w-20 rounded bg-input px-2 py-1 text-foreground" aria-label="Endless wave" />
+          </label>
+          <span className="text-sm text-muted-foreground">vs {preview.name.split("— ")[1]} · HP {fmt(preview.hp)} · ATK {fmt(preview.atk)}</span>
+          <span className="text-sm text-chart-2">Reward: {fmt(preview.zeni)} Zeni · {preview.tp} TP</span>
+          <Btn onClick={() => onFight(preview)}>Fight Wave {wave}</Btn>
+        </div>
+      </Card>
+      <h3 className="font-display text-2xl">🐉 Raid Bosses</h3>
+      <div className="grid gap-3 md:grid-cols-2">
+        {RAID_BOSSES.map((raid) => {
+          const cleared = s.defeated.includes(raid.base.id);
+          const canEnter = pl >= raid.entry;
+          return (
+            <Card key={raid.id}>
+              <div className="text-5xl">{raid.emoji}</div>
+              <div className="font-display text-xl">{raid.name} {cleared && "✅"}</div>
+              <div className="text-sm text-muted-foreground">{raid.desc}</div>
+              <div className="mt-1 text-sm">Entry: Power Level {fmt(raid.entry)} · HP {fmt(raid.base.hp)} · ATK {fmt(raid.base.atk)}</div>
+              <div className="text-sm text-chart-2">First clear: {fmt(raid.zeni)} Zeni · {raid.tp} TP · a Dragon Ball{cleared ? " · Rematches pay 15%" : ""}</div>
+              <Btn className="mt-2 w-full" disabled={!canEnter} onClick={() => onFight({ ...raid.base })}>{canEnter ? "Challenge!" : `Needs PL ${fmt(raid.entry)}`}</Btn>
+            </Card>
+          );
+        })}
+      </div>
     </div>
   );
 }

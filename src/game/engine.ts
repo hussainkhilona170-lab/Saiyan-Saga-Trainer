@@ -1,5 +1,5 @@
 // Pure game rules: no React, no browser APIs. All state transitions live here.
-import { BOSSES, FORMS, LOCATIONS, PASSES, QUESTS, WISHES, SAGA_BONUSES, TOURNAMENT, type Boss, type Form, type Quest, type QuestKind, type StatKey } from "./data";
+import { BOSSES, FORMS, LOCATIONS, PASSES, QUESTS, WISHES, SAGA_BONUSES, TOURNAMENT, EQUIPMENT, CONSUMABLES, TECHNIQUE_RANKS, RAID_BOSSES, ENDLESS_ROSTER, ENDLESS_MODIFIERS, type Boss, type Form, type Quest, type QuestKind, type StatKey, type EndlessModifierId } from "./data";
 
 export type TournamentBoss = Boss & { tournament?: number };
 
@@ -34,6 +34,10 @@ export type GameState = {
   sagaBonuses: string[];
   tournamentRound: number;
   bestGrades: Record<string, BattleGrade>;
+  inventory: Record<string, number>;
+  equipped: string[];
+  techniqueUses: Record<string, number>;
+  survivalBest: number;
 };
 
 export const initialState: GameState = {
@@ -50,6 +54,10 @@ export const initialState: GameState = {
   sagaBonuses: [],
   tournamentRound: 0,
   bestGrades: {},
+  inventory: {},
+  equipped: [],
+  techniqueUses: {},
+  survivalBest: 0,
 };
 
 export const MAX_SAVE_NUMBER = 1e18;
@@ -68,18 +76,49 @@ export function logTransaction(d: GameState, kind: Transaction["kind"], currency
 }
 
 export const CUSTOM_FORM_MAX_MULT = 5000;
+
+/** Equipment effect totals, aggregated over currently-equipped items. */
+export function equipmentBonus(s: GameState): { defenseMult: number; allStatsMult: number; trainingMult: number; scoutBallBonus: number } {
+  let defenseMult = 0, allStatsMult = 0, trainingMult = 0, scoutBallBonus = 0;
+  for (const id of s.equipped ?? []) {
+    const item = EQUIPMENT.find((e) => e.id === id);
+    if (!item) continue;
+    defenseMult += item.defenseMult ?? 0;
+    allStatsMult += item.allStatsMult ?? 0;
+    trainingMult += item.trainingMult ?? 0;
+    scoutBallBonus += item.scoutBallBonus ?? 0;
+  }
+  return { defenseMult, allStatsMult, trainingMult, scoutBallBonus };
+}
+
+export const techniqueRank = (s: GameState, id: string): number => {
+  const uses = typeof s.techniqueUses?.[id] === "number" ? s.techniqueUses[id]! : 0;
+  let rank = 0;
+  for (let i = 0; i < TECHNIQUE_RANKS.length; i++) if (uses >= TECHNIQUE_RANKS[i]!) rank = i + 1;
+  return rank;
+};
+
+/** Increments a technique counter (mutates draft; clamped to a sane ceiling). */
+export function bumpTechniqueUse(d: GameState, id: string, amount = 1): void {
+  const current = typeof d.techniqueUses[id] === "number" && isFinite(d.techniqueUses[id]!) ? d.techniqueUses[id]! : 0;
+  d.techniqueUses[id] = Math.min(1_000_000, current + Math.max(1, Math.floor(amount)));
+}
+
 export const allForms = (s: GameState): Form[] => [...FORMS, ...(s.customForms ?? [])];
 export const findForm = (s: GameState, id: string) => allForms(s).find((f) => f.id === id);
 export const formMult = (s: GameState) => findForm(s, s.activeForm)?.mult ?? 1;
 export const gravMult = (s: GameState) => Math.min(1e6, 1 + (s.gravity - 1) * 0.25);
 export const powerLevel = (s: GameState) => {
-  const pl = Math.floor((s.stats.strength + s.stats.agility + s.stats.ki + s.stats.defense) * gravMult(s) * formMult(s) * 10);
+  const equip = equipmentBonus(s);
+  const statSum = (s.stats.strength + s.stats.agility + s.stats.ki + s.stats.defense * (1 + equip.defenseMult)) * (1 + equip.allStatsMult);
+  const pl = Math.floor(statSum * gravMult(s) * formMult(s) * 10);
   return Number.isFinite(pl) ? Math.min(pl, MAX_SAVE_NUMBER) : MAX_SAVE_NUMBER;
 };
 
 export const trainingGain = (s: GameState) => {
   const loc = LOCATIONS.find((l) => l.id === s.location)?.mult ?? 1;
-  const gain = loc * gravMult(s) * (s.passes.includes("x2") ? 2 : 1) * Math.pow(formMult(s), 0.75);
+  const equip = equipmentBonus(s);
+  const gain = loc * gravMult(s) * (s.passes.includes("x2") ? 2 : 1) * Math.pow(formMult(s), 0.75) * (1 + equip.trainingMult);
   return Number.isFinite(gain) ? Math.min(gain, MAX_SAVE_NUMBER) : MAX_SAVE_NUMBER;
 };
 
@@ -192,6 +231,9 @@ export type GameAction =
   | { type: "UNLOCK_FORM"; formId: string }
   | { type: "TRANSFORM"; formId: string }
   | { type: "BUY_PASS"; passId: string }
+  | { type: "BUY_ITEM"; itemId: string }
+  | { type: "EQUIP_ITEM"; itemId: string }
+  | { type: "UNEQUIP_ITEM"; itemId: string }
   | { type: "MAKE_WISH"; wishId: string }
   | { type: "SCOUT"; rand?: number }
   | { type: "TOURNAMENT_WIN"; round: number }
@@ -246,6 +288,7 @@ export type CombatAction =
   | { type: "ULTIMATE"; now?: number }
   | { type: "VANISH"; now?: number }
   | { type: "PERFECT_GUARD"; now: number; uiForm?: boolean }
+  | { type: "USE_CONSUMABLE"; consumable: "senzu" | "tonic" }
   | { type: "CHARGE"; amount: number }
   | { type: "ENEMY_TICK"; playerMaxHp: number; now?: number }
   | { type: "CLASH_START" }
@@ -321,12 +364,15 @@ export function resolveBattleAction(battle: BattleState, game: GameState, action
       };
     case "PUNCH": {
       if (next.phase !== "active" || !boss) return next;
-      next.combo = action.now - next.lastPunchAt < 950 ? (next.combo % 8) + 1 : 1;
+      const punchRank = techniqueRank(game, "punch");
+      const windowMs = punchRank >= 2 ? 1050 : 950;
+      const chainCap = punchRank >= 4 ? 10 : 8;
+      next.combo = action.now - next.lastPunchAt < windowMs ? (next.combo % chainCap) + 1 : 1;
       next.lastPunchAt = action.now;
       next.meleeStreak += 1;
       next.kiStreak = 0;
       if (next.meleeStreak >= 4 && action.now > 0) next.adaptMeleeUntil = action.now + 2500; // boss can punish predictable rushing
-      const bonus = 1 + Math.min(7, next.combo - 1) * 0.09;
+      const bonus = 1 + Math.min(chainCap - 1, next.combo - 1) * 0.09;
       damageBoss((game.stats.strength * 2 + game.stats.agility) * multiplier * bonus);
       resolvePlayerDamage();
       return next;
@@ -337,7 +383,8 @@ export function resolveBattleAction(battle: BattleState, game: GameState, action
       next.lastPunchAt = action.now ?? next.lastPunchAt;
       next.meleeStreak = 0;
       next.kiStreak = 0;
-      const heavyBonus = next.combo >= 4 ? 1.5 : 1;
+      const finisher = techniqueRank(game, "heavy") >= 2 ? 1.75 : 1.5;
+      const heavyBonus = next.combo >= 4 ? finisher : 1;
       damageBoss((game.stats.strength * 3 + game.stats.agility * 1.5) * multiplier * heavyBonus);
       if (next.phase === "active") next.message = heavyBonus > 1 ? "Haymaker finisher!" : "Heavy Strike!";
       resolvePlayerDamage();
@@ -348,8 +395,10 @@ export function resolveBattleAction(battle: BattleState, game: GameState, action
       if (action.now - next.lastPunchAt >= 1100) next.combo = 0;
       return next;
     case "BLAST":
-      if (next.phase !== "active" || !boss || next.ki < 20) return next;
-      next.ki -= 20;
+      if (next.phase !== "active" || !boss) return next;
+      const blastCost = techniqueRank(game, "blast") >= 2 ? 15 : 20;
+      if (next.ki < blastCost) return next;
+      next.ki -= blastCost;
       next.kiStreak += 1;
       next.meleeStreak = 0;
       // Ki-assisted combo branch: blasting mid-combo amplifies damage.
@@ -369,15 +418,17 @@ export function resolveBattleAction(battle: BattleState, game: GameState, action
       next.meleeStreak = 0;
       const finalStretch = next.combo >= 5 ? 1.25 : 1;
       damageBoss((game.stats.ki * 40 + game.stats.strength * 10) * multiplier * finalStretch);
-      // Ki Overload: massive cast staggers you — the boss punishes openings for 3 seconds.
-      if (now > 0) next.overloadedUntil = now + 3000;
+      // Ki Overload: massive cast staggers you — the boss punishes openings for a bit.
+      if (now > 0) next.overloadedUntil = now + (techniqueRank(game, "ultimate") >= 3 ? 1500 : 3000);
       if (next.phase === "active") next.message = finalStretch > 1 ? "FINAL STRETCH — FINAL FLASH! (you are vulnerable!)" : "Ki overloads! You are vulnerable!";
       resolvePlayerDamage();
       refreshPhase();
       return next;
     case "VANISH":
-      if (next.phase !== "active" || !boss || next.ki < 15) return next;
-      next.ki -= 15;
+      if (next.phase !== "active" || !boss) return next;
+      const vanishCost = techniqueRank(game, "vanish") >= 2 ? 12 : 15;
+      if (next.ki < vanishCost) return next;
+      next.ki -= vanishCost;
       next.meleeStreak = 0;
       next.kiStreak = 0;
       // Punish branch: vanishing mid-combo is a guaranteed gap-closer crit.
@@ -394,20 +445,36 @@ export function resolveBattleAction(battle: BattleState, game: GameState, action
         return next;
       }
       const uiForm = action.uiForm === true;
-      next.guardUntil = now + (uiForm ? 750 : 450);
-      next.guardCdUntil = now + (uiForm ? 800 : 1100);
+      const pRank = techniqueRank(game, "parry");
+      next.guardUntil = now + (uiForm ? 750 : pRank >= 3 ? 550 : 450);
+      next.guardCdUntil = now + (uiForm ? 800 : pRank >= 2 ? 800 : 1100);
       next.message = uiForm ? "Perfect guard — time slows! (Ultra Instinct)" : "Perfect guard stance…";
       return next;
     }
     case "CHARGE":
-      if (next.phase === "active" && boss) next.ki = Math.min(100, next.ki + action.amount);
+      if (next.phase === "active" && boss) {
+        const chargeMult = techniqueRank(game, "charge") >= 2 ? 1.25 : 1;
+        next.ki = Math.min(100, next.ki + action.amount * chargeMult);
+      }
       return next;
+    case "USE_CONSUMABLE": {
+      if (next.phase !== "active" || !boss) return next;
+      if (action.consumable === "senzu") {
+        next.playerHp = next.maxPlayerHp;
+        next.message = "Senzu bean! You are fully restored.";
+      } else {
+        next.ki = 100;
+        next.message = "Energy tonic! Ki floods through you.";
+      }
+      return next;
+    }
     case "ENEMY_TICK":
       if (next.phase !== "active" && next.phase !== "clash") return next;
       if (!boss) return next;
       if (!game.godMode) {
         const scale = phaseScale(next.phaseNumber);
-        let damage = Math.max(1, boss.atk * scale - game.stats.defense * multiplier * 0.5);
+        const defenseMult = 1 + equipmentBonus(game).defenseMult;
+        let damage = Math.max(1, boss.atk * scale - game.stats.defense * defenseMult * multiplier * 0.5);
         if (next.phase === "clash") damage *= 0.35;
         const parried = now > 0 && now <= next.guardUntil;
         if (parried) {
@@ -558,6 +625,68 @@ export function applyTournamentRewards(d: GameState, roundIndex: number): void {
   grantExperience(d, firstClear ? 120 + roundIndex * 180 : 30);
 }
 
+/** Spawns a wave-scaled endless-survival boss built from the rotating roster. */
+export function endlessBoss(wave: number, modifier: EndlessModifierId = "none"): Boss {
+  const safeWave = Math.max(1, Math.floor(wave));
+  const baseId = ENDLESS_ROSTER[(safeWave - 1) % ENDLESS_ROSTER.length]!;
+  const template = BOSSES.find((b) => b.id === baseId)!;
+  const mod = ENDLESS_MODIFIERS.find((m) => m.id === modifier) ?? ENDLESS_MODIFIERS[0]!;
+  const hpScale = (1 + 0.6 * (safeWave - 1)) * (modifier === "heavyweight" ? 1.5 : 1);
+  const atkScale = (1 + 0.45 * (safeWave - 1)) * (modifier === "aggression" ? 1.5 : 1);
+  return {
+    ...template,
+    id: `endless-${safeWave}`,
+    name: `Endless ${safeWave} — ${template.name}`,
+    hp: Math.max(1, Math.floor(template.hp * hpScale)),
+    atk: Math.max(1, Math.floor(template.atk * atkScale)),
+    zeni: Math.floor((1500 + safeWave * 2500) * mod.rewardMult),
+    tp: Math.max(1, Math.floor((safeWave / 2) * mod.rewardMult)),
+    req: 0,
+    endlessModifier: modifier,
+  };
+}
+
+/** Pays endless-survival rewards for a wave and records the best cleared wave. */
+export function applySurvivalRewards(d: GameState, boss: Boss): void {
+  const wave = Math.max(1, Math.floor(Number(boss.id.split("-")[1]) || 1));
+  d.zeni = clampSaveNumber(d.zeni + boss.zeni, d.zeni);
+  d.tp = clampSaveNumber(d.tp + boss.tp, d.tp);
+  logTransaction(d, "credit", "zeni", boss.zeni, `Endless Survival — Wave ${wave}`);
+  logTransaction(d, "credit", "tp", boss.tp, `Endless Survival — Wave ${wave}`);
+  if (wave > d.survivalBest) d.survivalBest = wave;
+  grantExperience(d, 40 + wave * 40);
+}
+
+/** Pays raid rewards (full the first time, 15% after) and tracks first-clear Dragon Balls. */
+export function applyRaidRewards(d: GameState, raidId: string): void {
+  const raid = RAID_BOSSES.find((r) => r.id === raidId);
+  if (!raid) return;
+  const id = raid.base.id;
+  const first = !d.defeated.includes(id);
+  const zeni = first ? raid.zeni : Math.floor(raid.zeni * 0.15);
+  const tp = first ? raid.tp : Math.floor(raid.tp * 0.15);
+  d.zeni = clampSaveNumber(d.zeni + zeni, d.zeni);
+  d.tp = clampSaveNumber(d.tp + tp, d.tp);
+  if (first) d.defeated.push(id);
+  if (first && raid.ballOnFirstClear) grantBall(d);
+  logTransaction(d, "credit", "zeni", zeni, `Raid — ${raid.name}${first ? "" : " (rematch)"}`);
+  logTransaction(d, "credit", "tp", tp, `Raid — ${raid.name}${first ? "" : " (rematch)"}`);
+  grantExperience(d, first ? 1500 : 200);
+}
+
+export function countItem(d: GameState, id: string): number {
+  const n = d.inventory[id];
+  return typeof n === "number" && isFinite(n) && n >= 0 ? Math.floor(n) : 0;
+}
+
+export function consumeItem(d: GameState, id: string): boolean {
+  const n = countItem(d, id);
+  if (n <= 0) return false;
+  if (n <= 1) delete d.inventory[id];
+  else d.inventory[id] = n - 1;
+  return true;
+}
+
 /** Applies a boss victory payout; the drop roll is supplied by the caller for deterministic tests. */
 export function applyBattleRewards(game: GameState, boss: Boss, foundDragonBall: boolean): void {
   const zeniGain = boss.zeni * (game.passes.includes("vip") ? 1.5 : 1);
@@ -649,6 +778,44 @@ export function applyAction(d: GameState, a: GameAction): void {
       d.forms.push(form.id);
       return;
     }
+    case "BUY_ITEM": {
+      const equip = EQUIPMENT.find((e) => e.id === a.itemId);
+      if (equip) {
+        if (countItem(d, equip.id) > 0 || d.equipped.includes(equip.id) || d.zeni < equip.cost) return;
+        d.zeni = clampSaveNumber(d.zeni - equip.cost, 0);
+        logTransaction(d, "debit", "zeni", equip.cost, `Equipment — ${equip.name}`);
+        d.inventory[equip.id] = 1;
+        return;
+      }
+      const consumable = CONSUMABLES.find((c) => c.id === a.itemId);
+      if (consumable) {
+        if (d.zeni < consumable.cost) return;
+        d.zeni = clampSaveNumber(d.zeni - consumable.cost, 0);
+        logTransaction(d, "debit", "zeni", consumable.cost, `Item — ${consumable.name}`);
+        d.inventory[consumable.id] = countItem(d, consumable.id) + 1;
+      }
+      return;
+    }
+    case "EQUIP_ITEM": {
+      const equip = EQUIPMENT.find((e) => e.id === a.itemId);
+      if (!equip || countItem(d, equip.id) <= 0) return;
+      d.inventory[equip.id] = countItem(d, equip.id) - 1;
+      if (d.inventory[equip.id] === 0) delete d.inventory[equip.id];
+      // One item per slot: the currently-equipped piece in this slot returns to the bag.
+      const current = d.equipped.find((id) => EQUIPMENT.find((e) => e.id === id)?.slot === equip.slot);
+      if (current) {
+        d.equipped = d.equipped.filter((id) => id !== current);
+        d.inventory[current] = countItem(d, current) + 1;
+      }
+      d.equipped.push(equip.id);
+      return;
+    }
+    case "UNEQUIP_ITEM": {
+      if (!d.equipped.includes(a.itemId)) return;
+      d.equipped = d.equipped.filter((id) => id !== a.itemId);
+      d.inventory[a.itemId] = countItem(d, a.itemId) + 1;
+      return;
+    }
     case "BUY_PASS": {
       const pass = PASSES.find((p) => p.id === a.passId);
       if (!pass || d.passes.includes(pass.id) || d.tp < pass.tp) return;
@@ -684,7 +851,7 @@ export function applyAction(d: GameState, a: GameAction): void {
       const loc = LOCATIONS.find((l) => l.id === d.location) ?? LOCATIONS[0]!;
       const mult = loc.mult;
       const r = typeof a.rand === "number" && isFinite(a.rand) ? Math.min(0.999999, Math.max(0, a.rand)) : Math.random();
-      if (r < 0.05) grantBall(d);
+      if (r < 0.05 + equipmentBonus(d).scoutBallBonus) grantBall(d);
       else if (r < 0.22) d.zeni = clampSaveNumber(d.zeni + Math.floor(mult * (80 + r * 600)), d.zeni);
       grantExperience(d, Math.max(2, Math.floor(mult * 2)));
       bumpQuestProgress(d, "explore", 1);
@@ -795,6 +962,40 @@ export function hydrate(raw: unknown): GameState {
   }
   out.sagaBonuses = cleanStrings(r.sagaBonuses, []).filter((saga) => saga in SAGA_BONUSES);
   out.tournamentRound = Math.max(0, Math.min(TOURNAMENT.length, Math.floor(clampSaveNumber(r.tournamentRound, 0, TOURNAMENT.length))));
+  // Inventory: item ids must exist in a registry; consumables cap at 999, gear at 1.
+  out.inventory = {};
+  if (r.inventory && typeof r.inventory === "object" && !Array.isArray(r.inventory)) {
+    const EQUIP_IDS = new Set(EQUIPMENT.map((e) => e.id));
+    const CONSUMABLE_IDS = new Set(CONSUMABLES.map((c) => c.id));
+    for (const [id, qty] of Object.entries(r.inventory as Record<string, unknown>)) {
+      if (typeof qty !== "number" || !isFinite(qty) || qty <= 0) continue;
+      if (!EQUIP_IDS.has(id) && !CONSUMABLE_IDS.has(id)) continue;
+      out.inventory[id] = EQUIP_IDS.has(id) ? 1 : Math.min(999, Math.floor(qty));
+    }
+  }
+  // Equipped: unique ids, known equipment only, one item per slot.
+  out.equipped = [];
+  if (Array.isArray(r.equipped)) {
+    const seen = new Set<string>();
+    const slots = new Set<string>();
+    for (const raw of r.equipped) {
+      if (typeof raw !== "string" || seen.has(raw)) continue;
+      const def = EQUIPMENT.find((e) => e.id === raw);
+      if (!def || slots.has(def.slot)) continue;
+      seen.add(raw); slots.add(def.slot); out.equipped.push(raw);
+    }
+  }
+  // Technique counters: known ids only, clamped.
+  const TECHNIQUE_IDS = new Set(["punch", "heavy", "blast", "ultimate", "vanish", "charge", "parry"]);
+  out.techniqueUses = {};
+  if (r.techniqueUses && typeof r.techniqueUses === "object" && !Array.isArray(r.techniqueUses)) {
+    for (const [id, uses] of Object.entries(r.techniqueUses as Record<string, unknown>)) {
+      if (!TECHNIQUE_IDS.has(id)) continue;
+      const v = clampSaveNumber(uses, 0, 1_000_000);
+      if (v > 0) out.techniqueUses[id] = Math.floor(v);
+    }
+  }
+  out.survivalBest = Math.max(0, Math.min(9999, Math.floor(clampSaveNumber(r.survivalBest, 0, 9999))));
   // Best combat grades: keep the highest letter grade per boss; drop duplicates and junk ranks.
   out.bestGrades = {};
   if (r.bestGrades && typeof r.bestGrades === "object" && !Array.isArray(r.bestGrades)) {

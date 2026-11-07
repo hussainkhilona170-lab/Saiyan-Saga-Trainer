@@ -110,7 +110,8 @@ src/test/engine.test.ts (+ app-routing.test.tsx) — 23 passing tests
 - [x] Phase 3 — Save & data integrity (checkpoint `phase-3`)
 - [x] Phase 4 — Sagas, missions & exploration (checkpoint `phase-4`)
 - [x] Phase 5 — Skill-based combat & AI (checkpoint `phase-5`)
-- [ ] Phase 6 — Equipment, inventory & endgame  ← **NEXT**
+- [x] Phase 6 — Equipment, inventory & endgame (checkpoint `phase-6`)
+- [ ] Phase 7 — God Engine foundations (full)  ← **NEXT**
 - [ ] Phase 7 — God Engine foundations (full)
 - [ ] Phase 8 — God Engine interface & command center
 - [ ] Phase 9 — Visual & audio polish
@@ -134,6 +135,15 @@ src/test/engine.test.ts (+ app-routing.test.tsx) — 23 passing tests
 2. **phase-3**: save integrity overhaul (tag `phase-3`), 46 tests pass, build OK.
 3. **phase-4**: quest v2 + scout + tournament (tag `phase-4`), 65 tests pass, build OK.
 4. **phase-5**: skill-based combat depth (tag `phase-5`), 87 tests pass, build OK.
+5. **phase-6**: equipment, technique mastery, endless survival, raid bosses (tag `phase-6`), 110 tests pass, build OK.
+
+### Phase 6 — completed work (checkpoint `phase-6`)
+- **Inventory & equipment**: new `EQUIPMENT` (Turtle Shell +25% DEF, Weighted Gloves +20% training, Dragon Radar +5% scout finds, Potara +10% power) and `CONSUMABLES` (Senzu Bean full HP, Energy Tonic full Ki) registries; bought with Zeni (Potara unique), one item per slot, bag ↔ loadout with full persistence (`inventory`, `equipped`), equipment feeds `powerLevel`, `trainingGain`, scout rates and effective Defense in combat.
+- **Technique Mastery**: per-technique use counters (`techniqueUses`) with 5 ranks each (5 / 15 / 35 / 70 / 130 uses); concrete tactical perks — melee combo window 950→1050 ms and chain 8→10 at rank 4, Heavy finisher 1.5→1.75×, Ki Blast cost 20→15, Kamehameha overload 3 s→1.5 s, Vanish cost 15→12, Charge +25%, Perfect Guard CD 1.1→0.8 s (window 450→550 ms at rank 3). Ranks shown in the battle HUD and in Inventory.
+- **Endless Survival**: rotating-roster waves with +60% HP / +45% ATK per wave scaling, optional **challenge modifiers** (Aggravated Foes ×1.5 ATK / Ironclad ×1.5 HP, both ×2 rewards), reward curve, `survivalBest` persisted; waves and modifiers selectable in the new **Endgame** tab.
+- **Raid Bosses**: Broly and Super Janemba — huge scaling stat fights with signatures, first-clear full payout + a guaranteed Dragon Ball, rematches 15% (anti-farm), full rewards first time, 15% after, tracked via defeated flags.
+- All new paths covered by `endgame.test.ts` (23 new tests; 110 total).
+- UI: new **Inventory** (shop / loadout / consumables / technique mastery) and **Endgame** (survival + raids) tabs — arena battle route reused.
 
 ## How to test each checkpoint (Windows, this machine)
 Node is not on PATH; use the portable copy under Temp. From `C:\Users\Administrator\Documents\Default Project\saiyan-training-simulator`:

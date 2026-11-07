@@ -21,7 +21,8 @@ export const FORMS: Form[] = [
 ];
 
 export type BossSignature = { name: string; mult: number };
-export type Boss = { id: string; name: string; hp: number; atk: number; zeni: number; tp: number; req: number; emoji: string; tournament?: number; signature?: BossSignature };
+export type EndlessModifierId = "none" | "aggression" | "heavyweight";
+export type Boss = { id: string; name: string; hp: number; atk: number; zeni: number; tp: number; req: number; emoji: string; tournament?: number; signature?: BossSignature; endlessModifier?: EndlessModifierId };
 export const BOSSES: Boss[] = [
   { id: "raditz", name: "Raditz", hp: 1500, atk: 10, zeni: 3000, tp: 10, req: 0, emoji: "🦹", signature: { name: "Double Sunday", mult: 2.1 } },
   { id: "vegeta", name: "Vegeta", hp: 25000, atk: 60, zeni: 30000, tp: 30, req: 2000, emoji: "👑", signature: { name: "Final Flash", mult: 2.4 } },
@@ -102,6 +103,52 @@ export const WISHES = [
   { id: "power", name: "Become stronger", desc: "All stats ×2" },
   { id: "tp", name: "Medals of honor", desc: "+500 TP Medals" },
   { id: "stamina", name: "Endless stamina", desc: "+50 max stamina, permanently" },
+];
+
+export type EquipmentSlot = "body" | "accessory" | "hands";
+export type EquipmentDef = {
+  id: string; slot: EquipmentSlot; name: string; desc: string; cost: number; icon: string;
+  /** Effect knobs read by the engine; all additive. */
+  defenseMult?: number; allStatsMult?: number; trainingMult?: number; scoutBallBonus?: number;
+};
+export const EQUIPMENT: EquipmentDef[] = [
+  { id: "turtle-shell", slot: "body", name: "Turtle Shell", desc: "A legendary training shell. +25% effective Defense.", cost: 50000, icon: "🐢", defenseMult: 0.25 },
+  { id: "weighted-gloves", slot: "hands", name: "Weighted Training Gloves", desc: "Constant pressure while training. +20% training gains.", cost: 25000, icon: "🥊", trainingMult: 0.2 },
+  { id: "dragon-radar", slot: "accessory", name: "Dragon Radar", desc: "Pinpoints Dragon Balls. Scout finds orbs +5% more often.", cost: 100000, icon: "📡", scoutBallBonus: 0.05 },
+  { id: "potara", slot: "accessory", name: "Potara Earrings", desc: "Gift of the Supreme Kai. +10% to your total Power.", cost: 2e8, icon: "💍", allStatsMult: 0.1 },
+];
+
+export type ConsumableDef = { id: string; name: string; desc: string; cost: number; icon: string; battleOnly: boolean; battleUse: "senzu" | "tonic" };
+export const CONSUMABLES: ConsumableDef[] = [
+  { id: "senzu", name: "Senzu Bean", desc: "Fully restores HP. Usable in battle.", cost: 5000, icon: "🫘", battleOnly: true, battleUse: "senzu" },
+  { id: "energy-tonic", name: "Energy Tonic", desc: "Completely refills your Ki. Usable in battle.", cost: 3000, icon: "🧪", battleOnly: true, battleUse: "tonic" },
+];
+
+export type TechniqueId = "punch" | "heavy" | "blast" | "ultimate" | "vanish" | "charge" | "parry";
+export type TechniqueDef = { id: TechniqueId; name: string; icon: string; uses: string; perks: string[] };
+export const TECHNIQUES: TechniqueDef[] = [
+  { id: "punch", name: "Melee Rush Combo", icon: "👊", uses: "Melee hits landed", perks: ["Rank 2 — longer combo window (950→1050ms)", "Rank 4 — combo chain extends to 10 hits"] },
+  { id: "heavy", name: "Heavy Strike", icon: "🥊", uses: "Heavy Strikes landed", perks: ["Rank 2 — finisher bonus 1.5× → 1.75× at 4+ combo"] },
+  { id: "blast", name: "Ki Blast", icon: "💥", uses: "Ki blasts fired", perks: ["Rank 2 — Ki cost 20 → 15"] },
+  { id: "ultimate", name: "Kamehameha", icon: "🌊", uses: "Kamehameha unleashed", perks: ["Rank 3 — Ki Overload vulnerability 3s → 1.5s"] },
+  { id: "vanish", name: "Vanish Strike", icon: "💨", uses: "Vanish Strikes landed", perks: ["Rank 2 — Ki cost 15 → 12"] },
+  { id: "charge", name: "Ki Charge", icon: "⚡", uses: "Charge ticks held", perks: ["Rank 2 — charging yields +25% Ki (2.5 → 3.125)"] },
+  { id: "parry", name: "Perfect Guard", icon: "🛡️", uses: "Guards braced", perks: ["Rank 2 — cooldown 1.1s → 0.8s", "Rank 3 — window 450 → 550ms"] },
+];
+/** Uses required for ranks 1..5 */
+export const TECHNIQUE_RANKS = [5, 15, 35, 70, 130];
+
+export const ENDLESS_MODIFIERS: { id: EndlessModifierId; name: string; desc: string; rewardMult: number }[] = [
+  { id: "none", name: "Standard", desc: "Classic climb — no gimmicks, no gimme.", rewardMult: 1 },
+  { id: "aggression", name: "Aggravated Foes", desc: "Boss ATK ×1.5 · rewards ×2.", rewardMult: 2 },
+  { id: "heavyweight", name: "Ironclad", desc: "Boss HP ×1.5 · rewards ×2.", rewardMult: 2 },
+];
+export const ENDLESS_ROSTER = ["raditz", "vegeta", "frieza", "cell", "buu", "beerus"] as const;
+
+export type RaidDef = { id: string; name: string; emoji: string; desc: string; entry: number; bossId?: string; base: Boss; zeni: number; tp: number; ballOnFirstClear: boolean };
+export const RAID_BOSSES: RaidDef[] = [
+  { id: "broly", name: "Broly — Legendary Super Saiyan", emoji: "🟢", desc: "A tidal wave of uncontrollable power. Even his name makes soldiers flee.", entry: 5e7, base: { id: "raid-broly", name: "Broly", hp: 5e9, atk: 2e6, zeni: 3e10, tp: 600, req: 5e7, emoji: "🟢", signature: { name: "Eraser Cannon", mult: 3.2 } }, zeni: 3e10, tp: 600, ballOnFirstClear: true },
+  { id: "janemba", name: "Super Janemba", emoji: "👹", desc: "Unleashed from pride and greed — he ends the world twice over.", entry: 2e8, base: { id: "raid-janemba", name: "Super Janemba", hp: 9e10, atk: 9e6, zeni: 1e11, tp: 1200, req: 2e8, emoji: "👹", signature: { name: "Wasabi Split", mult: 3.4 } }, zeni: 1e11, tp: 1200, ballOnFirstClear: true },
 ];
 
 export function fmt(n: number): string {

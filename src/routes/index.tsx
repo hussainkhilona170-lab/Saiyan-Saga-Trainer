@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { FORMS, LOCATIONS, fmt, type Boss } from "@/game/data";
 import { allForms } from "@/game/engine";
 import { GameProvider, powerLevel, useGame } from "@/game/store";
-import { AdminPanel, BattleTab, FormsTab, QuestsTab, ShopTab, TournamentTab, TrainTab, Bar } from "@/game/ui";
+import { AdminPanel, BattleTab, EndgameTab, FormsTab, InventoryTab, QuestsTab, ShopTab, TournamentTab, TrainTab, Bar } from "@/game/ui";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -19,7 +19,7 @@ export const Route = createFileRoute("/")({
   component: () => <GameProvider><Game /></GameProvider>,
 });
 
-const TABS = ["Train", "Battle", "Forms", "Quests", "Shop", "Tournament"] as const;
+const TABS = ["Train", "Battle", "Forms", "Quests", "Shop", "Tournament", "Inventory", "Endgame"] as const;
 
 function Game() {
   const { s, shake, slot, recoveredFromBackup } = useGame();
@@ -85,6 +85,8 @@ function Game() {
         {tab === "Quests" && <QuestsTab />}
         {tab === "Shop" && <ShopTab />}
         {tab === "Tournament" && <TournamentTab onFight={(b) => { setCustomBoss({ ...b }); setTab("Battle"); }} />}
+        {tab === "Inventory" && <InventoryTab />}
+        {tab === "Endgame" && <EndgameTab onFight={(b) => { setCustomBoss({ ...b }); setTab("Battle"); }} />}
       </div>
       {admin && <AdminPanel onClose={() => setAdmin(false)} onSpawn={(b) => { setCustomBoss({ ...b }); setTab("Battle"); }} />}
     </div>
