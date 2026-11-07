@@ -20,7 +20,7 @@ export const FORMS: Form[] = [
   { id: "ui", name: "Ultra Instinct", mult: 1200, req: 6e8, cost: 3e9, aura: "oklch(0.92 0.04 260)", levelReq: 28, pass: "uipass" },
 ];
 
-export type Boss = { id: string; name: string; hp: number; atk: number; zeni: number; tp: number; req: number; emoji: string };
+export type Boss = { id: string; name: string; hp: number; atk: number; zeni: number; tp: number; req: number; emoji: string; tournament?: number };
 export const BOSSES: Boss[] = [
   { id: "raditz", name: "Raditz", hp: 1500, atk: 10, zeni: 3000, tp: 10, req: 0, emoji: "🦹" },
   { id: "vegeta", name: "Vegeta", hp: 25000, atk: 60, zeni: 30000, tp: 30, req: 2000, emoji: "👑" },
@@ -38,17 +38,54 @@ export const LOCATIONS = [
   { id: "beerus", name: "Beerus's Planet", mult: 150, req: 6e7, bg: "oklch(0.4 0.14 300)" },
 ];
 
-export type Quest = { id: string; saga: string; title: string; pl?: number; boss?: string; zeni: number; tp: number };
+export type QuestKind = "pl" | "boss" | "level" | "train" | "explore" | "collect" | "wish" | "tournament";
+export type Quest = {
+  id: string;
+  saga: string;
+  title: string;
+  desc: string;
+  kind: QuestKind;
+  count: number;
+  stat?: StatKey;
+  boss?: string;
+  prereq?: string[];
+  zeni: number;
+  tp: number;
+};
+
 export const QUESTS: Quest[] = [
-  { id: "q1", saga: "Saiyan Saga", title: "Reach Power Level 500", pl: 500, zeni: 1000, tp: 5 },
-  { id: "q2", saga: "Saiyan Saga", title: "Defeat Raditz", boss: "raditz", zeni: 3000, tp: 10 },
-  { id: "q3", saga: "Saiyan Saga", title: "Defeat Vegeta", boss: "vegeta", zeni: 30000, tp: 25 },
-  { id: "q4", saga: "Namek Saga", title: "Reach Power Level 100,000", pl: 1e5, zeni: 100000, tp: 50 },
-  { id: "q5", saga: "Namek Saga", title: "Defeat Frieza", boss: "frieza", zeni: 4e5, tp: 100 },
-  { id: "q6", saga: "Cell Saga", title: "Defeat Perfect Cell", boss: "cell", zeni: 5e6, tp: 250 },
-  { id: "q7", saga: "Buu Saga", title: "Defeat Kid Buu", boss: "buu", zeni: 8e7, tp: 450 },
-  { id: "q8", saga: "Battle of Gods", title: "Reach Power Level 1 Billion", pl: 1e9, zeni: 1e9, tp: 600 },
-  { id: "q9", saga: "Battle of Gods", title: "Defeat Beerus", boss: "beerus", zeni: 1e10, tp: 3000 },
+  { id: "q1", saga: "Saiyan Saga", title: "Reach Power Level 500", desc: "Prove your Saiyan blood by powering up to 500.", kind: "pl", count: 500, zeni: 1000, tp: 5 },
+  { id: "q11", saga: "Saiyan Saga", title: "Complete 100 training reps", desc: "Every warrior is forged one rep at a time.", kind: "train", count: 100, zeni: 1500, tp: 5 },
+  { id: "q12", saga: "Saiyan Saga", title: "Reach Fighter rank (Level 5)", desc: "Level 5 unlocks the true path of the warrior.", kind: "level", count: 5, zeni: 2000, tp: 8 },
+  { id: "q2", saga: "Saiyan Saga", title: "Defeat Raditz", desc: "The first Saiyan to stand in your way.", kind: "boss", count: 1, boss: "raditz", prereq: ["q1"], zeni: 3000, tp: 10 },
+  { id: "q3", saga: "Saiyan Saga", title: "Defeat Vegeta", desc: "The prideful Saiyan Prince awaits.", kind: "boss", count: 1, boss: "vegeta", prereq: ["q2"], zeni: 30000, tp: 25 },
+  { id: "q10", saga: "Saiyan Saga", title: "Scout the wilds — 5 missions", desc: "Search Roshi's Island for caches and the Dragon Balls.", kind: "explore", count: 5, prereq: ["q2"], zeni: 2500, tp: 8 },
+  { id: "q13", saga: "Saiyan Saga", title: "Gather 3 Dragon Balls", desc: "Three orbs of wish-granting power, scattered across the world.", kind: "collect", count: 3, prereq: ["q10"], zeni: 5000, tp: 15 },
+  { id: "q4", saga: "Namek Saga", title: "Reach Power Level 100,000", desc: "Train under Korin and beyond.", kind: "pl", count: 1e5, prereq: ["q2"], zeni: 100000, tp: 50 },
+  { id: "q5", saga: "Namek Saga", title: "Defeat Frieza", desc: "The Emperor of the Universe must fall.", kind: "boss", count: 1, boss: "frieza", prereq: ["q4"], zeni: 4e5, tp: 100 },
+  { id: "q6", saga: "Cell Saga", title: "Defeat Perfect Cell", desc: "A bio-engineered nightmare stands guard.", kind: "boss", count: 1, boss: "cell", prereq: ["q5"], zeni: 5e6, tp: 250 },
+  { id: "q7", saga: "Buu Saga", title: "Defeat Kid Buu", desc: "Pure, childish chaos consumes the earth.", kind: "boss", count: 1, boss: "buu", prereq: ["q6"], zeni: 8e7, tp: 450 },
+  { id: "q14", saga: "Buu Saga", title: "Enter the World Martial Arts Tournament", desc: "Win at least one match in the Tenkaichi Budokai.", kind: "tournament", count: 1, prereq: ["q5"], zeni: 250000, tp: 120 },
+  { id: "q15", saga: "Buu Saga", title: "Summon Shenron", desc: "Gather all seven Dragon Balls and make one wish.", kind: "wish", count: 1, prereq: ["q13"], zeni: 1e6, tp: 300 },
+  { id: "q8", saga: "Battle of Gods", title: "Reach Power Level 1 Billion", desc: "Only the divine may stand at a billion.", kind: "pl", count: 1e9, prereq: ["q7"], zeni: 1e9, tp: 600 },
+  { id: "q9", saga: "Battle of Gods", title: "Defeat Beerus", desc: "The God of Destruction judges all life.", kind: "boss", count: 1, boss: "beerus", prereq: ["q8"], zeni: 1e10, tp: 3000 },
+];
+
+export const SAGA_BONUSES: Record<string, { zeni: number; tp: number }> = {
+  "Saiyan Saga": { zeni: 20000, tp: 30 },
+  "Namek Saga": { zeni: 1000000, tp: 150 },
+  "Cell Saga": { zeni: 10000000, tp: 300 },
+  "Buu Saga": { zeni: 150000000, tp: 600 },
+  "Battle of Gods": { zeni: 2e10, tp: 3000 },
+};
+export const SAGA_ORDER = ["Saiyan Saga", "Namek Saga", "Cell Saga", "Buu Saga", "Battle of Gods"];
+
+export type TournamentRound = { id: string; name: string; bossId: string; bossName: string; hpMult: number; atkMult: number; entry: number; zeni: number; tp: number; emoji: string };
+export const TOURNAMENT: TournamentRound[] = [
+  { id: "r1", name: "Opening Match", bossId: "raditz", bossName: "Yamu the Challenger", hpMult: 0.75, atkMult: 0.75, entry: 300, zeni: 10000, tp: 40, emoji: "🥊" },
+  { id: "r2", name: "Quarterfinal", bossId: "vegeta", bossName: "Quarterfinal — Vegeta", hpMult: 0.8, atkMult: 0.8, entry: 1500, zeni: 75000, tp: 120, emoji: "👑" },
+  { id: "r3", name: "Semifinal", bossId: "cell", bossName: "Semifinal — Cell", hpMult: 0.8, atkMult: 0.8, entry: 60000, zeni: 1500000, tp: 400, emoji: "🦗" },
+  { id: "r4", name: "Grand Final", bossId: "beerus", bossName: "Grand Final — Beerus", hpMult: 0.6, atkMult: 0.6, entry: 2.5e7, zeni: 5e9, tp: 1500, emoji: "🐱" },
 ];
 
 export const PASSES = [

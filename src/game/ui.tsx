@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { BOSSES, FORMS, LOCATIONS, PASSES, QUESTS, TRAININGS, WISHES, fmt, type Boss, type StatKey } from "./data";
-import { allForms, applyAction, applyBattleRewards, applyShadowRewards, CUSTOM_FORM_MAX_MULT, findForm, battleClashDelay, battleClashPressure, canUnlockForm, formMult, gravMult, openSave, initialBattleState, levelForXp, powerLevel, questDone, rankForLevel, resolveBattleAction, shadowDummyBoss, SHADOW_REWARD_MULT, SHADOW_ZENKAI_HP_FRACTION, SHADOW_ZENKAI_MULT, xpRequiredForLevel, type BattleState } from "./engine";
+import { BOSSES, FORMS, LOCATIONS, PASSES, QUESTS, SAGA_ORDER, TOURNAMENT, TRAININGS, WISHES, fmt, type Boss, type StatKey } from "./data";
+import { allForms, applyAction, applyBattleRewards, applyShadowRewards, applyTournamentRewards, CUSTOM_FORM_MAX_MULT, findForm, battleClashDelay, battleClashPressure, canUnlockForm, formMult, gravMult, openSave, initialBattleState, levelForXp, powerLevel, questSummary, sagaQuests, sagaStatus, rankForLevel, resolveBattleAction, shadowDummyBoss, SHADOW_REWARD_MULT, SHADOW_ZENKAI_HP_FRACTION, SHADOW_ZENKAI_MULT, xpRequiredForLevel, type BattleState } from "./engine";
 import { exportSlotText } from "./persistence";
 import { registerBattleHandler, sendBattleCommand, type BattleCommand } from "./battleBus";
 import { useBattleControls } from "./controls";
@@ -92,6 +92,7 @@ export function TrainTab() {
           ))}
         </Card>
       )}
+      <ScoutCard />
       <h3 className="font-display text-2xl">Training Locations</h3>
       <div className="grid gap-2 md:grid-cols-5">
         {LOCATIONS.map((l) => {
@@ -107,6 +108,24 @@ export function TrainTab() {
         })}
       </div>
     </div>
+  );
+}
+
+function ScoutCard() {
+  const { s, update } = useGame();
+  const [result, setResult] = useState("");
+  const loc = LOCATIONS.find((l) => l.id === s.location) ?? LOCATIONS[0]!;
+  return (
+    <Card>
+      <div className="font-display text-2xl">🗺️ Scout {loc.name}</div>
+      <p className="text-sm text-muted-foreground">Send search parties into the wilderness — 2 stamina per mission. Loot scales with the location: caches of Zeni, rare Dragon Balls, and training XP.</p>
+      <Btn className="mt-2" disabled={s.stamina < 2 && !s.godMode} onClick={() => {
+        const r = Math.random();
+        update((d) => applyAction(d, { type: "SCOUT", rand: r }));
+        setResult(r < 0.05 ? "You found a DRAGON BALL! 🟠" : r < 0.22 ? "The scouts recovered a hidden cache of Zeni." : "The scouts found nothing of value — but the trek sharpened you.");
+      }}>Scout the area (2 stamina)</Btn>
+      {result && <p className="mt-2 text-sm text-chart-2" role="status">{result}</p>}
+    </Card>
   );
 }
 
@@ -331,9 +350,17 @@ export function BattleTab({ customBoss }: { customBoss: Boss | null }) {
         if (soundOn) playBattleSound("win");
         setBattle((current) => ({ ...current, boss: null, phase: "idle", message: `Shadow Self conquered! All stats ×${factor}${zenkai ? " — ZENKAI BOOST! Stamina fully restored." : ""}` }));
       } else {
-        const ball = Math.random() < 0.5;
-        update((d) => applyBattleRewards(d, wonBoss, ball));
-        setBattle((current) => ({ ...current, boss: null, phase: "idle", message: `You defeated ${wonBoss.name}! +${fmt(wonBoss.zeni)} Zeni, +${wonBoss.tp} TP${ball ? ", found a Dragon Ball!" : ""}` }));
+        const tournamentRound = wonBoss.tournament;
+        if (tournamentRound !== undefined) {
+          const firstClear = sRef.current.tournamentRound === tournamentRound;
+          const round = TOURNAMENT[tournamentRound];
+          update((d) => applyTournamentRewards(d, tournamentRound));
+          setBattle((current) => ({ ...current, boss: null, phase: "idle", message: `${round?.name ?? "Match"} won! ${firstClear ? "Bracket advanced." : "A worthy rematch."}` }));
+        } else {
+          const ball = Math.random() < 0.5;
+          update((d) => applyBattleRewards(d, wonBoss, ball));
+          setBattle((current) => ({ ...current, boss: null, phase: "idle", message: `You defeated ${wonBoss.name}! +${fmt(wonBoss.zeni)} Zeni, +${wonBoss.tp} TP${ball ? ", found a Dragon Ball!" : ""}` }));
+        }
       }
     } else if (battle.phase === "lost") {
       if (soundOn) playBattleSound("lose");
@@ -449,20 +476,54 @@ export function BattleTab({ customBoss }: { customBoss: Boss | null }) {
   );
 }
 
+const QUEST_KIND_ICON: Record<string, string> = { pl: "📈", boss: "⚔️", level: "📖", train: "💪", explore: "🗺️", collect: "🟠", wish: "🐉", tournament: "🥋" };
+
 export function QuestsTab() {
   const { s, update } = useGame();
-  let saga = "";
   return (
-    <div className="space-y-2">
-      {QUESTS.map((q) => {
-        const header = q.saga !== saga ? (saga = q.saga, <h3 className="mt-3 font-display text-2xl text-primary">{q.saga}</h3>) : null;
-        const claimed = s.quests.includes(q.id); const done = questDone(s, q.id);
+    <div className="space-y-4">
+      {SAGA_ORDER.map((saga) => {
+        const status = sagaStatus(s, saga);
         return (
-          <div key={q.id}>{header}
-            <Card className="flex items-center justify-between">
-              <div><div className="font-display text-lg">{q.title}</div><div className="text-sm text-muted-foreground">Reward: {fmt(q.zeni)} Zeni, {q.tp} TP</div></div>
-              <Btn disabled={claimed || !done} onClick={() => update((d) => applyAction(d, { type: "CLAIM_QUEST", questId: q.id }))}>{claimed ? "Claimed" : done ? "Claim" : "In progress"}</Btn>
-            </Card>
+          <div key={saga} className="space-y-2">
+            <div className="flex items-baseline justify-between gap-2">
+              <h3 className="font-display text-2xl text-primary">{saga}</h3>
+              <span className="text-sm text-muted-foreground">{status.claimed}/{status.total} quests</span>
+            </div>
+            {status.complete && !status.bonusClaimed && (
+              <Card className="border-chart-1">
+                <div className="font-display text-lg text-chart-1">Saga complete!</div>
+                <p className="text-sm text-muted-foreground">Claim the saga bonus: {fmt(status.bonus.zeni)} Zeni · {status.bonus.tp} TP</p>
+                <Btn className="mt-2" onClick={() => update((d) => applyAction(d, { type: "CLAIM_SAGA", saga }))}>Claim saga bonus</Btn>
+              </Card>
+            )}
+            {status.bonusClaimed && <p className="text-xs text-chart-2">✓ Saga bonus claimed</p>}
+            {sagaQuests(saga).map((q) => {
+              const claimed = s.quests.includes(q.id);
+              const summary = questSummary(s, q.id)!;
+              return (
+                <Card key={q.id} className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="font-display text-lg">{QUEST_KIND_ICON[q.kind] ?? "•"} {q.title}</div>
+                    <div className="text-xs text-muted-foreground">{q.desc}</div>
+                    {!claimed && !summary.locked && summary.target > 1 && (
+                      <div className="mt-1 flex items-center gap-2">
+                        <Bar value={summary.progress} max={summary.target} className="w-40 bg-chart-1" />
+                        <span className="text-xs text-muted-foreground">{fmt(summary.progress)} / {fmt(summary.target)}</span>
+                      </div>
+                    )}
+                    <div className="mt-0.5 text-sm text-muted-foreground">Reward: {fmt(q.zeni)} Zeni · {q.tp} TP</div>
+                  </div>
+                  {claimed ? (
+                    <span className="whitespace-nowrap font-display text-chart-2">✓ Claimed</span>
+                  ) : summary.locked ? (
+                    <span className="max-w-40 text-right text-xs text-muted-foreground">🔒 Requires: {summary.prereqs.filter((p) => !s.quests.includes(p)).map((p) => QUESTS.find((x) => x.id === p)?.title ?? p).join(", ")}</span>
+                  ) : (
+                    <Btn disabled={!summary.done} onClick={() => update((d) => applyAction(d, { type: "CLAIM_QUEST", questId: q.id }))}>{summary.done ? "Claim" : "In progress"}</Btn>
+                  )}
+                </Card>
+              );
+            })}
           </div>
         );
       })}
@@ -521,6 +582,66 @@ export function ShopTab() {
           </ul>
         )}
       </Card>
+    </div>
+  );
+}
+
+type TournamentBoss = Boss & { tournament: number };
+export function TournamentTab({ onFight }: { onFight: (boss: TournamentBoss) => void }) {
+  const { s } = useGame();
+  const pl = powerLevel(s);
+  const cleared = s.tournamentRound;
+  const champion = cleared >= TOURNAMENT.length;
+  return (
+    <div className="space-y-4">
+      <Card>
+        <h2 className="font-display text-3xl">🥋 World Martial Arts Tournament</h2>
+        <p className="mt-1 text-sm text-muted-foreground">Four rounds, one champion. Each match uses the combat arena — and your own skill decides the winner. First-time clears pay the listed reward; rematches pay 15%.</p>
+        {champion ? (
+          <div className="mt-2 rounded-lg border border-chart-1 bg-secondary p-3 font-display text-xl text-chart-1">👑 Tenkaichi Budokai Champion — your name is carved into tournament history.</div>
+        ) : (
+          <div className="mt-1 text-xs text-muted-foreground">{cleared}/{TOURNAMENT.length} rounds cleared</div>
+        )}
+      </Card>
+      <ol className="space-y-3">
+        {TOURNAMENT.map((round, i) => {
+          const template = BOSSES.find((b) => b.id === round.bossId)!;
+          const boss: TournamentBoss = {
+            ...template,
+            id: `tournament-${round.id}`,
+            name: round.bossName,
+            hp: Math.max(1, Math.floor(template.hp * round.hpMult)),
+            atk: Math.max(1, Math.floor(template.atk * round.atkMult)),
+            zeni: round.zeni,
+            tp: round.tp,
+            req: round.entry,
+            emoji: round.emoji,
+            tournament: i,
+          };
+          const done = i < cleared;
+          const current = i === cleared;
+          const future = i > cleared;
+          const canEnter = pl >= round.entry && !future;
+          return (
+            <Card key={round.id} className={current ? "border-primary" : future ? "opacity-60" : ""}>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="font-display text-xl">{round.emoji} Round {i + 1} — {round.name}</div>
+                  <div className="text-sm text-muted-foreground">vs {round.bossName} · HP {fmt(boss.hp)} · Entry: Power Level {fmt(round.entry)}+</div>
+                  <div className="text-sm text-chart-2">Reward: {fmt(round.zeni)} Zeni · {round.tp} TP{done ? " (rematch: 15%)" : ""}</div>
+                </div>
+                {done ? (
+                  <Btn onClick={() => onFight(boss)}>Rematch (15% rewards)</Btn>
+                ) : future ? (
+                  <span className="text-sm text-muted-foreground">🔒 Clear round {i} first</span>
+                ) : (
+                  <Btn disabled={!canEnter} onClick={() => onFight(boss)}>{canEnter ? "Fight!" : `Needs PL ${fmt(round.entry)}`}</Btn>
+                )}
+              </div>
+            </Card>
+          );
+        })}
+      </ol>
     </div>
   );
 }

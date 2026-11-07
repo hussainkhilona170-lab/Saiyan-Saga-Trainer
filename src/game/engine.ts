@@ -1,5 +1,7 @@
 // Pure game rules: no React, no browser APIs. All state transitions live here.
-import { BOSSES, FORMS, LOCATIONS, PASSES, QUESTS, WISHES, type Boss, type Form, type Quest, type StatKey } from "./data";
+import { BOSSES, FORMS, LOCATIONS, PASSES, QUESTS, WISHES, SAGA_BONUSES, TOURNAMENT, type Boss, type Form, type Quest, type QuestKind, type StatKey } from "./data";
+
+export type TournamentBoss = Boss & { tournament?: number };
 
 export type Transaction = { id: string; at: number; kind: "credit" | "debit"; currency: "zeni" | "tp"; amount: number; label: string; balance: number };
 
@@ -28,6 +30,9 @@ export type GameState = {
   darkAura: boolean;
   maxStaminaBonus: number;
   transactions: Transaction[];
+  questProgress: Record<string, number>;
+  sagaBonuses: string[];
+  tournamentRound: number;
 };
 
 export const initialState: GameState = {
@@ -40,6 +45,9 @@ export const initialState: GameState = {
   godMode: false, infiniteZeni: false, darkAura: false,
   maxStaminaBonus: 0,
   transactions: [],
+  questProgress: {},
+  sagaBonuses: [],
+  tournamentRound: 0,
 };
 
 export const MAX_SAVE_NUMBER = 1e18;
@@ -113,12 +121,64 @@ export function questExperienceReward(id: string): number {
   return 25 + quest.tp * 2 + Math.floor(Math.log10(quest.zeni + 1) * 5);
 }
 
+/** Increments counted objectives (train/explore/collect/wish/tournament) for every matching quest. */
+export function bumpQuestProgress(d: GameState, kind: QuestKind, amount = 1, stat?: StatKey): void {
+  for (const q of QUESTS) {
+    if (q.kind !== kind) continue;
+    if (kind === "train" && q.stat && stat !== q.stat) continue;
+    const current = typeof d.questProgress[q.id] === "number" && isFinite(d.questProgress[q.id] ?? 0) ? d.questProgress[q.id]! : 0;
+    d.questProgress[q.id] = current + amount;
+  }
+}
+
+export function prerequisitesMet(s: GameState, quest: Quest): boolean {
+  return !quest.prereq || quest.prereq.every((p) => s.quests.includes(p));
+}
+
+export type QuestSummary = { quest: Quest; done: boolean; progress: number; target: number; locked: boolean; prereqs: string[] };
+
+export function questSummary(s: GameState, questId: string): QuestSummary | null {
+  const quest = QUESTS.find((entry) => entry.id === questId);
+  if (!quest) return null;
+  const locked = !prerequisitesMet(s, quest);
+  let done = false;
+  let progress = 0;
+  switch (quest.kind) {
+    case "pl": progress = Math.min(powerLevel(s), quest.count); done = powerLevel(s) >= quest.count; break;
+    case "boss": progress = quest.boss && s.defeated.includes(quest.boss) ? 1 : 0; done = progress === 1; break;
+    case "level": progress = Math.min(s.level, quest.count); done = s.level >= quest.count; break;
+    default: progress = Math.min(d_clamp(s.questProgress[quest.id]), quest.count); done = progress >= quest.count; break;
+  }
+  if (locked) done = false;
+  return { quest, done, progress, target: quest.count, locked, prereqs: quest.prereq ?? [] };
+}
+
+function d_clamp(value: number | undefined): number {
+  return typeof value === "number" && isFinite(value) && value >= 0 ? value : 0;
+}
+
+export function questProgressFraction(s: GameState, questId: string): number {
+  const summary = questSummary(s, questId);
+  return summary ? summary.progress / Math.max(1, summary.target) : 0;
+}
+
 export function questDone(s: GameState, id: string) {
   const q = QUESTS.find((x) => x.id === id);
   if (!q) return false;
-  if (q.pl && powerLevel(s) < q.pl) return false;
-  if (q.boss && !s.defeated.includes(q.boss)) return false;
-  return true;
+  return questSummary(s, id)?.done ?? false;
+}
+
+export function sagaQuests(saga: string): Quest[] {
+  return QUESTS.filter((q) => q.saga === saga);
+}
+
+export type SagaStatus = { saga: string; claimed: number; total: number; complete: boolean; bonusClaimed: boolean; bonus: { zeni: number; tp: number } };
+
+export function sagaStatus(s: GameState, saga: string): SagaStatus {
+  const quests = sagaQuests(saga);
+  const claimed = quests.filter((q) => s.quests.includes(q.id)).length;
+  const complete = quests.length > 0 && claimed === quests.length;
+  return { saga, claimed, total: quests.length, complete, bonusClaimed: s.sagaBonuses.includes(saga), bonus: SAGA_BONUSES[saga] ?? { zeni: 0, tp: 0 } };
 }
 
 export type GameAction =
@@ -131,6 +191,9 @@ export type GameAction =
   | { type: "TRANSFORM"; formId: string }
   | { type: "BUY_PASS"; passId: string }
   | { type: "MAKE_WISH"; wishId: string }
+  | { type: "SCOUT"; rand?: number }
+  | { type: "TOURNAMENT_WIN"; round: number }
+  | { type: "CLAIM_SAGA"; saga: string }
   | { type: "CREATE_FORM"; id: string; name: string; mult: number; aura: string; hair: string }
   | { type: "DELETE_FORM"; formId: string };
 
@@ -341,13 +404,42 @@ export function applyShadowRewards(game: GameState, zenkai: boolean): void {
   grantExperience(game, 60);
 }
 
+/** Grants a Dragon Ball and feeds collect-quest progress. Returns true if a ball was gained. */
+function grantBall(d: GameState): boolean {
+  if (d.dragonBalls >= 7) return false;
+  d.dragonBalls++;
+  bumpQuestProgress(d, "collect", 1);
+  return true;
+}
+
+/** Applies tournament match rewards. First clears pay in full and advance the bracket; rematches pay 15%. */
+export function applyTournamentRewards(d: GameState, roundIndex: number): void {
+  const round = TOURNAMENT[roundIndex];
+  if (!round) return;
+  const firstClear = d.tournamentRound === roundIndex;
+  const scale = firstClear ? 1 : 0.15;
+  const zeni = Math.floor(round.zeni * scale);
+  const tp = Math.floor(round.tp * scale);
+  if (zeni > 0) {
+    d.zeni = clampSaveNumber(d.zeni + zeni, d.zeni);
+    logTransaction(d, "credit", "zeni", zeni, `Martial Arts Tournament — ${round.name}${firstClear ? "" : " (rematch)"}`);
+  }
+  if (tp > 0) {
+    d.tp = clampSaveNumber(d.tp + tp, d.tp);
+    logTransaction(d, "credit", "tp", tp, `Martial Arts Tournament — ${round.name}${firstClear ? "" : " (rematch)"}`);
+  }
+  if (firstClear) d.tournamentRound = Math.min(TOURNAMENT.length, d.tournamentRound + 1);
+  bumpQuestProgress(d, "tournament", 1);
+  grantExperience(d, firstClear ? 120 + roundIndex * 180 : 30);
+}
+
 /** Applies a boss victory payout; the drop roll is supplied by the caller for deterministic tests. */
 export function applyBattleRewards(game: GameState, boss: Boss, foundDragonBall: boolean): void {
   const zeniGain = boss.zeni * (game.passes.includes("vip") ? 1.5 : 1);
   game.zeni = clampSaveNumber(game.zeni + zeniGain, game.zeni);
   game.tp = clampSaveNumber(game.tp + boss.tp, game.tp);
   if (!game.defeated.includes(boss.id)) game.defeated.push(boss.id);
-  if (foundDragonBall && game.dragonBalls < 7) game.dragonBalls++;
+  if (foundDragonBall) grantBall(game);
   logTransaction(game, "credit", "zeni", zeniGain, `Boss victory — ${boss.name}`);
   logTransaction(game, "credit", "tp", boss.tp, `Boss victory — ${boss.name}`);
   grantExperience(game, battleExperienceReward(boss));
@@ -386,7 +478,8 @@ export function applyAction(d: GameState, a: GameAction): void {
       if (!d.godMode) d.stamina -= 1;
       const g = applyTraining(d, a.stat, trainingGain(d));
       d.zeni = clampSaveNumber(d.zeni + Math.ceil(g * 0.75 * (d.passes.includes("vip") ? 1.5 : 1)), d.zeni);
-      if ((a.rand ?? Math.random()) < 0.002 && d.dragonBalls < 7) d.dragonBalls++;
+      if ((a.rand ?? Math.random()) < 0.002) grantBall(d);
+      bumpQuestProgress(d, "train", 1, a.stat);
       return;
     }
     case "TRAIN_GRAVITY": {
@@ -457,6 +550,34 @@ export function applyAction(d: GameState, a: GameAction): void {
         d.maxStamina = clampSaveNumber(d.maxStamina + 50, d.maxStamina);
         d.stamina = d.maxStamina;
       }
+      bumpQuestProgress(d, "wish", 1);
+      return;
+    }
+    case "SCOUT": {
+      if (d.stamina < 2 && !d.godMode) return;
+      if (!d.godMode) d.stamina -= 2;
+      const loc = LOCATIONS.find((l) => l.id === d.location) ?? LOCATIONS[0]!;
+      const mult = loc.mult;
+      const r = typeof a.rand === "number" && isFinite(a.rand) ? Math.min(0.999999, Math.max(0, a.rand)) : Math.random();
+      if (r < 0.05) grantBall(d);
+      else if (r < 0.22) d.zeni = clampSaveNumber(d.zeni + Math.floor(mult * (80 + r * 600)), d.zeni);
+      grantExperience(d, Math.max(2, Math.floor(mult * 2)));
+      bumpQuestProgress(d, "explore", 1);
+      return;
+    }
+    case "TOURNAMENT_WIN": {
+      applyTournamentRewards(d, a.round);
+      return;
+    }
+    case "CLAIM_SAGA": {
+      const status = sagaStatus(d, a.saga);
+      if (!status.complete || status.bonusClaimed) return;
+      d.sagaBonuses.push(status.saga);
+      d.zeni = clampSaveNumber(d.zeni + status.bonus.zeni, d.zeni);
+      d.tp = clampSaveNumber(d.tp + status.bonus.tp, d.tp);
+      logTransaction(d, "credit", "zeni", status.bonus.zeni, `Saga complete — ${status.saga}`);
+      logTransaction(d, "credit", "tp", status.bonus.tp, `Saga complete — ${status.saga}`);
+      grantExperience(d, 200 + d.quests.length * 25);
       return;
     }
     case "TRANSFORM":
@@ -531,6 +652,18 @@ export function hydrate(raw: unknown): GameState {
       .map((t) => ({ ...t, amount: Math.floor(Math.abs(t.amount)), balance: Math.floor(Math.abs(t.balance ?? 0)) }))
     : [];
   if (!out.forms.includes("base")) out.forms.unshift("base");
+  // Quest progress: keep only COUNTED quest ids (train/explore/collect/wish/tournament) with finite non-negative counters.
+  const COUNTED = new Set<QuestKind>(["train", "explore", "collect", "wish", "tournament"]);
+  out.questProgress = {};
+  if (r.questProgress && typeof r.questProgress === "object" && !Array.isArray(r.questProgress)) {
+    for (const q of QUESTS) {
+      if (!COUNTED.has(q.kind)) continue;
+      const v = (r.questProgress as Record<string, unknown>)[q.id];
+      if (typeof v === "number" && isFinite(v) && v >= 0) out.questProgress[q.id] = Math.floor(v);
+    }
+  }
+  out.sagaBonuses = cleanStrings(r.sagaBonuses, []).filter((saga) => saga in SAGA_BONUSES);
+  out.tournamentRound = Math.max(0, Math.min(TOURNAMENT.length, Math.floor(clampSaveNumber(r.tournamentRound, 0, TOURNAMENT.length))));
   if (typeof out.activeForm !== "string" || !findForm(out, out.activeForm)) out.activeForm = "base";
   if (!LOCATIONS.some((l) => l.id === out.location)) out.location = base.location;
   out.darkAura = r.darkAura === true;
