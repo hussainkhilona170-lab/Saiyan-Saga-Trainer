@@ -152,7 +152,11 @@ $env:PATH = "C:\Users\Administrator\AppData\Local\Temp\opencode\node-v26.13.0-wi
 Set-ExecutionPolicy -Scope Process Bypass -Force
 npm run dev        # dev server with HMR (what you want for testing)
 ```
-Tests: `npx vitest run` · Types: `npx tsc --noEmit` · Build: `npm run build` · Checkout a checkpoint: `git checkout <tag>` (`baseline`, `phase-3`, `phase-4`, `phase-5`).
+Tests: `npx vitest run` · Types: `npx tsc --noEmit` · Build: `npm run build` · Checkout a checkpoint: `git checkout <tag>` (`baseline`, `phase-3`, `phase-4`, `phase-5`, `phase-6`).
+
+### Bug fixes made outside a phase
+- **God Engine 5-rapid-click access was unreachable** (taps batched into one render) — fixed with ref-based tap counter + 1.5 s window; verified in-browser.
+- `vite preview` cannot serve this nitro build (`dist/server/server.js` doesn't exist) — use `npm run dev -- --port 3100 --strictPort` instead. A portable Node runtime is bundled inside the project at `.tools/node/` (gitignored) for machines without a global install.
 
 **Phase 5 smoke-test plan**: Battle tab → Fight Raditz. H = Heavy Strike, F = Perfect Guard (parry an enemy tick → "PARRY!" message + boss exposed 2.5 s). Drop Raditz below 66% → EXPOSED banner + ×2 damage; below 33% → Critical. Phase 2+ boss casts its signature (watch the bar under the boss HP). Win with high HP → S/A grade on the boss card. Rematches pay tournament rewards only 15% after your first clear.
 

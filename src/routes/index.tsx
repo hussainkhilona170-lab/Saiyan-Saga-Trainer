@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FORMS, LOCATIONS, fmt, type Boss } from "@/game/data";
 import { allForms } from "@/game/engine";
 import { GameProvider, powerLevel, useGame } from "@/game/store";
@@ -25,7 +25,8 @@ function Game() {
   const { s, shake, slot, recoveredFromBackup } = useGame();
   const [tab, setTab] = useState<(typeof TABS)[number]>("Train");
   const [admin, setAdmin] = useState(false);
-  const [taps, setTaps] = useState(0);
+  const tapsRef = useRef(0);
+  const tapTimeRef = useRef(0);
   const [customBoss, setCustomBoss] = useState<Boss | null>(null);
   const [shaking, setShaking] = useState(false);
   const form = allForms(s).find((f) => f.id === s.activeForm) ?? FORMS.find((f) => f.id === "base")!;
@@ -41,7 +42,7 @@ function Game() {
     <div className={`min-h-screen ${shaking ? "screen-shake" : ""}`} style={{ background: `radial-gradient(ellipse at top, ${loc.bg}, var(--background) 70%)` }}>
       <div className="mx-auto max-w-6xl p-4">
         <header className="mb-4 flex flex-wrap items-center gap-4">
-          <h1 className="cursor-default select-none font-display text-4xl text-primary drop-shadow" onClick={() => { const n = taps + 1; setTaps(n); if (n >= 5) { setAdmin(true); setTaps(0); } }}>
+          <h1 className="cursor-default select-none font-display text-4xl text-primary drop-shadow" onClick={() => { const now = Date.now(); tapsRef.current = now - tapTimeRef.current < 1500 ? tapsRef.current + 1 : 1; tapTimeRef.current = now; if (tapsRef.current >= 5) { tapsRef.current = 0; setAdmin(true); } }}>
             Saiyan Training Sim
           </h1>
           <div className="ml-auto flex flex-wrap gap-3 font-display text-lg">
