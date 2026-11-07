@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { BOSSES, FORMS, LOCATIONS, PASSES, QUESTS, SAGA_ORDER, TOURNAMENT, TRAININGS, WISHES, fmt, type Boss, type StatKey } from "./data";
-import { allForms, applyAction, applyBattleRewards, applyShadowRewards, applyTournamentRewards, CUSTOM_FORM_MAX_MULT, findForm, battleClashDelay, battleClashPressure, canUnlockForm, formMult, gravMult, openSave, initialBattleState, levelForXp, powerLevel, questSummary, sagaQuests, sagaStatus, rankForLevel, resolveBattleAction, shadowDummyBoss, SHADOW_REWARD_MULT, SHADOW_ZENKAI_HP_FRACTION, SHADOW_ZENKAI_MULT, xpRequiredForLevel, type BattleState } from "./engine";
+import { allForms, applyAction, applyBattleRewards, applyShadowRewards, applyTournamentRewards, battleGrade, CUSTOM_FORM_MAX_MULT, findForm, battleClashDelay, battleClashPressure, canUnlockForm, formMult, gravMult, openSave, initialBattleState, levelForXp, powerLevel, questSummary, sagaQuests, sagaStatus, rankForLevel, resolveBattleAction, shadowDummyBoss, SHADOW_REWARD_MULT, SHADOW_ZENKAI_HP_FRACTION, SHADOW_ZENKAI_MULT, xpRequiredForLevel, type BattleState } from "./engine";
 import { exportSlotText } from "./persistence";
 import { registerBattleHandler, sendBattleCommand, type BattleCommand } from "./battleBus";
 import { useBattleControls } from "./controls";
@@ -310,7 +310,7 @@ export function BattleTab({ customBoss }: { customBoss: Boss | null }) {
 
   useEffect(() => {
     if (!boss || (battle.phase !== "active" && battle.phase !== "clash")) return;
-    const t = setInterval(() => dispatchBattle({ type: "ENEMY_TICK", playerMaxHp: maxP }), 1000);
+    const t = setInterval(() => dispatchBattle({ type: "ENEMY_TICK", playerMaxHp: maxP, now: Date.now() }), 1000);
     return () => clearInterval(t);
   }, [boss, battle.phase, maxP]); // eslint-disable-line
 
@@ -343,6 +343,8 @@ export function BattleTab({ customBoss }: { customBoss: Boss | null }) {
     clashTapRef.current = null;
     if (battle.phase === "won") {
       const wonBoss = boss;
+      const grade = battleGrade(Math.max(0, battle.playerHp) / Math.max(1, maxP));
+      update((d) => applyAction(d, { type: "RECORD_BOSS_GRADE", bossId: wonBoss.id, grade }));
       if (wonBoss.id === "shadow-self") {
         const zenkai = battle.playerHp / Math.max(1, maxP) < SHADOW_ZENKAI_HP_FRACTION;
         const factor = zenkai ? SHADOW_ZENKAI_MULT : SHADOW_REWARD_MULT;
@@ -355,11 +357,11 @@ export function BattleTab({ customBoss }: { customBoss: Boss | null }) {
           const firstClear = sRef.current.tournamentRound === tournamentRound;
           const round = TOURNAMENT[tournamentRound];
           update((d) => applyTournamentRewards(d, tournamentRound));
-          setBattle((current) => ({ ...current, boss: null, phase: "idle", message: `${round?.name ?? "Match"} won! ${firstClear ? "Bracket advanced." : "A worthy rematch."}` }));
+          setBattle((current) => ({ ...current, boss: null, phase: "idle", message: `${round?.name ?? "Match"} won! ${firstClear ? "Bracket advanced." : "A worthy rematch."} Grade: ${grade}` }));
         } else {
           const ball = Math.random() < 0.5;
           update((d) => applyBattleRewards(d, wonBoss, ball));
-          setBattle((current) => ({ ...current, boss: null, phase: "idle", message: `You defeated ${wonBoss.name}! +${fmt(wonBoss.zeni)} Zeni, +${wonBoss.tp} TP${ball ? ", found a Dragon Ball!" : ""}` }));
+          setBattle((current) => ({ ...current, boss: null, phase: "idle", message: `You defeated ${wonBoss.name}! +${fmt(wonBoss.zeni)} Zeni, +${wonBoss.tp} TP${ball ? ", found a Dragon Ball!" : ""} Grade: ${grade}` }));
         }
       }
     } else if (battle.phase === "lost") {
@@ -392,24 +394,35 @@ export function BattleTab({ customBoss }: { customBoss: Boss | null }) {
   };
   const runBlast = () => {
     if (!boss || clashActive || ki < 20) return;
-    dispatchBattle({ type: "BLAST" });
+    dispatchBattle({ type: "BLAST", now: Date.now() });
     setAction("blast"); setActionTick((n) => n + 1);
     if (soundOn) playBattleSound("blast");
   };
   const runUltimate = () => {
     if (!boss || clashActive || ki < 100) return;
-    dispatchBattle({ type: "ULTIMATE" });
+    dispatchBattle({ type: "ULTIMATE", now: Date.now() });
     setAction("kamehameha"); setActionTick((n) => n + 1); triggerShake();
     if (soundOn) playBattleSound("ultimate");
   };
   const runVanish = () => {
     if (!boss || clashActive || ki < 15) return;
-    dispatchBattle({ type: "VANISH" });
+    dispatchBattle({ type: "VANISH", now: Date.now() });
     setAction("vanish"); setActionTick((n) => n + 1);
     if (soundOn) playBattleSound("vanish");
   };
+  const runHeavy = () => {
+    if (!boss || clashActive) return;
+    dispatchBattle({ type: "HEAVY", now: Date.now() });
+    setAction("punch"); setActionTick((n) => n + 1); triggerShake();
+    if (soundOn) playBattleSound("punch");
+  };
+  const runParry = () => {
+    if (!boss || clashActive) return;
+    dispatchBattle({ type: "PERFECT_GUARD", now: Date.now(), uiForm: sRef.current.activeForm === "ui" });
+    if (soundOn) playBattleSound("charge");
+  };
   const runCharge = () => dispatchBattle({ type: "CHARGE", amount: 2.5 });
-  useBattleControls({ punch: () => runPunch(), blast: runBlast, ultimate: runUltimate, vanish: runVanish, charge: runCharge });
+  useBattleControls({ punch: () => runPunch(), blast: runBlast, ultimate: runUltimate, vanish: runVanish, charge: runCharge, parry: runParry, heavy: runHeavy });
   const charge = useHold(() => dispatchBattle({ type: "CHARGE", amount: 4 }));
 
   if (!boss)
@@ -434,7 +447,7 @@ export function BattleTab({ customBoss }: { customBoss: Boss | null }) {
             return (
               <Card key={b.id}>
                 <div className="text-5xl">{b.emoji}</div>
-                <div className="font-display text-2xl">{b.name} {s.defeated.includes(b.id) && "✅"}</div>
+                <div className="font-display text-2xl">{b.name} {s.defeated.includes(b.id) && "✅"} {s.bestGrades?.[b.id] && <span className="font-display text-lg text-chart-2" title="Best combat grade">({s.bestGrades[b.id]})</span>}</div>
                 <div className="text-sm text-muted-foreground">HP {fmt(b.hp)} • ATK {fmt(b.atk)}/s • Reward {fmt(b.zeni)} Zeni</div>
                 <Btn className="mt-2 w-full" disabled={!ok} onClick={() => start(b)}>{ok ? "Fight!" : `Needs PL ${fmt(b.req)}`}</Btn>
               </Card>
@@ -450,7 +463,8 @@ export function BattleTab({ customBoss }: { customBoss: Boss | null }) {
         <div className="font-display text-2xl">{boss.emoji} {boss.name} <span className="text-sm text-muted-foreground">{s.godMode && "• GOD MODE"}</span></div>
         <button type="button" aria-label={soundOn ? "Mute battle sounds" : "Enable battle sounds"} title={soundOn ? "Mute battle sounds" : "Enable battle sounds"} onClick={() => setSoundOn((on) => !on)} className="rounded-md border border-border px-3 py-2 text-sm">{soundOn ? "🔊 Sound on" : "🔇 Sound off"}</button>
       </div>
-      <div className="flex justify-between text-sm"><span>Opponent • {fmt(Math.max(0, hp))} HP</span><span>You • {fmt(Math.max(0, php))} HP</span></div>
+      <div className="flex justify-between text-sm"><span>Opponent • {fmt(Math.max(0, hp))} HP {boss.signature ? <span className="text-muted-foreground">· ⚡ {boss.signature.name}</span> : null}</span><span>You • {fmt(Math.max(0, php))} HP</span></div>
+      {battle.phase !== "idle" && <div className="text-center font-display text-xs uppercase tracking-wide text-destructive">{battle.phaseNumber === 3 ? "Critical Phase — enemy at full fury" : battle.phaseNumber === 2 ? "Enraged Phase — enemy hits harder" : "Opening Phase"}{Date.now() < battle.exposedUntil && <span className="ml-2 text-chart-2">⚠ EXPOSED ×2</span>}</div>}
       <div className="grid grid-cols-2 gap-2"><Bar value={hp} max={boss.hp} className="bg-destructive" /><Bar value={php} max={maxP} className="bg-chart-2" /></div>
       <StickmanArena boss={boss} formName={form.name} aura={form.aura} hair={form.hair} darkAura={s.darkAura} action={action} actionTick={actionTick} clashActive={clashActive} clashProgress={clashProgress} playerHp={php} playerMaxHp={maxP} bossHp={hp} onArenaClick={() => runPunch()} onArenaAltClick={runVanish} />
       {clashActive && <div className="space-y-2 border-l-2 border-primary pl-3" role="status">
@@ -464,11 +478,13 @@ export function BattleTab({ customBoss }: { customBoss: Boss | null }) {
         <Btn className="py-5 text-lg" disabled={clashActive} onClick={(e) => { runPunch(e); dispatchBattle({ type: "CHARGE", amount: 2 }); }}>👊 Punch <kbd className="ml-1 text-sm">J</kbd></Btn>
         <Btn className="py-5 text-lg" disabled={ki < 20 || clashActive} onClick={() => runBlast()}>💥 Ki Blast <kbd className="ml-1 text-sm">K</kbd></Btn>
         <Btn className="py-5 text-lg" disabled={ki < 100 || clashActive} onClick={() => runUltimate()}>🌊 Kamehameha <kbd className="ml-1 text-sm">L</kbd></Btn>
+        <Btn className="py-5 text-lg" disabled={clashActive} onClick={() => runHeavy()}>🥊 Heavy Strike <kbd className="ml-1 text-sm">H</kbd></Btn>
         <button {...charge} disabled={clashActive} className="select-none rounded-lg bg-chart-1 py-5 font-display text-lg text-primary-foreground active:scale-95 disabled:opacity-40">⚡ Charge <kbd className="ml-1 text-sm">C</kbd></button>
+        <Btn className="py-5 text-lg" disabled={clashActive || Date.now() < battle.guardCdUntil} onClick={() => runParry()}>🛡️ Perfect Guard <kbd className="ml-1 text-sm">F</kbd></Btn>
         <Btn className="col-span-2 py-4 text-lg md:col-span-4" disabled={ki < 15 || clashActive} onClick={() => runVanish()}>💨 Vanish Strike <kbd className="ml-2 text-sm">Shift · right-click arena</kbd></Btn>
         {layer}
       </div>
-      <p className="font-display text-xs text-muted-foreground">KEYS: J / SPACE punch · K ki blast · L Kamehameha · C charge · SHIFT vanish · click punch · right-click vanish</p>
+      <p className="font-display text-xs text-muted-foreground">KEYS: J / SPACE punch · H heavy strike · F perfect guard · K ki blast · L Kamehameha · C charge · SHIFT vanish · click punch · right-click vanish</p>
       {combo > 1 && <div className="font-display text-sm text-primary" role="status">{combo} HIT COMBO</div>}
       {log && <p className="font-display text-lg text-primary" role="status">{log}</p>}
       <button type="button" className="text-sm text-muted-foreground underline" onClick={() => { if (clashIntervalRef.current) clearInterval(clashIntervalRef.current); dispatchBattle({ type: "FLEE" }); }}>Flee</button>

@@ -33,6 +33,7 @@ export type GameState = {
   questProgress: Record<string, number>;
   sagaBonuses: string[];
   tournamentRound: number;
+  bestGrades: Record<string, BattleGrade>;
 };
 
 export const initialState: GameState = {
@@ -48,6 +49,7 @@ export const initialState: GameState = {
   questProgress: {},
   sagaBonuses: [],
   tournamentRound: 0,
+  bestGrades: {},
 };
 
 export const MAX_SAVE_NUMBER = 1e18;
@@ -194,11 +196,13 @@ export type GameAction =
   | { type: "SCOUT"; rand?: number }
   | { type: "TOURNAMENT_WIN"; round: number }
   | { type: "CLAIM_SAGA"; saga: string }
+  | { type: "RECORD_BOSS_GRADE"; bossId: string; grade: "S" | "A" | "B" | "C" | "D" }
   | { type: "CREATE_FORM"; id: string; name: string; mult: number; aura: string; hair: string }
   | { type: "DELETE_FORM"; formId: string };
 
 export type BattlePhase = "idle" | "active" | "clash" | "won" | "lost";
 
+/** Runtime-only combat trackers (never persisted; rebuilt on battle start). */
 export type BattleState = {
   boss: Boss | null;
   phase: BattlePhase;
@@ -211,32 +215,82 @@ export type BattleState = {
   combo: number;
   lastPunchAt: number;
   message: string;
+  /** Timestamps (ms) driving guard/exposed/overload windows. */
+  guardUntil: number;
+  guardCdUntil: number;
+  exposedUntil: number;
+  overloadedUntil: number;
+  /** Boss phase derived from remaining HP (1 = opener, 2 = enraged, 3 = critical). */
+  phaseNumber: 1 | 2 | 3;
+  bossSpecialAt: number;
+  /** Adaptive tracking — streaks of repeated strategies the boss can punish. */
+  meleeStreak: number;
+  kiStreak: number;
+  adaptMeleeUntil: number;
 };
 
 export const initialBattleState: BattleState = {
   boss: null, phase: "idle", hp: 0, playerHp: 0, maxPlayerHp: 0, ki: 0,
   clashProgress: 50, clashCount: 0, combo: 0, lastPunchAt: 0, message: "",
+  guardUntil: 0, guardCdUntil: 0, exposedUntil: 0, overloadedUntil: 0,
+  phaseNumber: 1, bossSpecialAt: 0,
+  meleeStreak: 0, kiStreak: 0, adaptMeleeUntil: 0,
 };
 
 export type CombatAction =
   | { type: "START_BATTLE"; boss: Boss; playerMaxHp: number; initialKi: number }
   | { type: "PUNCH"; now: number }
+  | { type: "HEAVY"; now?: number }
   | { type: "RESET_COMBO"; now: number }
-  | { type: "BLAST" }
-  | { type: "ULTIMATE" }
-  | { type: "VANISH" }
+  | { type: "BLAST"; now?: number }
+  | { type: "ULTIMATE"; now?: number }
+  | { type: "VANISH"; now?: number }
+  | { type: "PERFECT_GUARD"; now: number; uiForm?: boolean }
   | { type: "CHARGE"; amount: number }
-  | { type: "ENEMY_TICK"; playerMaxHp: number }
+  | { type: "ENEMY_TICK"; playerMaxHp: number; now?: number }
   | { type: "CLASH_START" }
   | { type: "CLASH_PUSH"; agility: number }
   | { type: "CLASH_TICK"; pressurePerSecond: number; deltaSeconds: number; elapsedMs: number }
   | { type: "FLEE" };
+
+export const phaseScale = (phaseNumber: 1 | 2 | 3): number => phaseNumber === 3 ? 1.7 : phaseNumber === 2 ? 1.35 : 1;
+export const battlePhaseOf = (bossHp: number, bossMaxHp: number): 1 | 2 | 3 => {
+  const frac = bossMaxHp > 0 ? bossHp / bossMaxHp : 1;
+  return frac > 0.66 ? 1 : frac > 0.33 ? 2 : 3;
+};
+export type BattleGrade = "S" | "A" | "B" | "C" | "D";
+export const battleGrade = (playerHpFraction: number): BattleGrade =>
+  playerHpFraction >= 0.85 ? "S" : playerHpFraction >= 0.65 ? "A" : playerHpFraction >= 0.4 ? "B" : playerHpFraction >= 0.15 ? "C" : "D";
+export const GRADE_ORDER: BattleGrade[] = ["D", "C", "B", "A", "S"];
 
 /** Pure combat state transition. UI and timers dispatch actions; rules stay here. */
 export function resolveBattleAction(battle: BattleState, game: GameState, action: CombatAction): BattleState {
   const next = { ...battle };
   const boss = next.boss;
   const multiplier = formMult(game) * gravMult(game);
+  const now = "now" in action && typeof action.now === "number" ? action.now : 0;
+
+  /** Weak-point window: boss takes double damage while exposed. Also tracks master transitions. */
+  const damageBoss = (rawDamage: number) => {
+    if (!boss) return;
+    const exposed = now > 0 && now < next.exposedUntil;
+    next.hp -= rawDamage * (exposed ? 2 : 1);
+    if (next.hp <= 0) return; // resolvePlayerDamage sets the win message; no phase surge after death
+    refreshPhase();
+  };
+  const refreshPhase = () => {
+    if (!boss || next.phase === "won" || next.phase === "lost") return;
+    const phaseNumber = battlePhaseOf(next.hp, boss.hp);
+    if (phaseNumber !== next.phaseNumber) {
+      const wasSurge = phaseNumber > next.phaseNumber;
+      next.phaseNumber = phaseNumber;
+      if (now > 0 && wasSurge) {
+        next.exposedUntil = Math.max(next.exposedUntil, now + 5000);
+        next.bossSpecialAt = Math.max(next.bossSpecialAt, now + 2000);
+        next.message = `⚠ ${boss.name}'s power surges — EXPOSED! Strike now!`;
+      }
+    }
+  };
 
   const resolvePlayerDamage = () => {
     if (next.hp <= 0 && boss) {
@@ -269,9 +323,25 @@ export function resolveBattleAction(battle: BattleState, game: GameState, action
       if (next.phase !== "active" || !boss) return next;
       next.combo = action.now - next.lastPunchAt < 950 ? (next.combo % 8) + 1 : 1;
       next.lastPunchAt = action.now;
+      next.meleeStreak += 1;
+      next.kiStreak = 0;
+      if (next.meleeStreak >= 4 && action.now > 0) next.adaptMeleeUntil = action.now + 2500; // boss can punish predictable rushing
       const bonus = 1 + Math.min(7, next.combo - 1) * 0.09;
-      next.hp -= (game.stats.strength * 2 + game.stats.agility) * multiplier * bonus;
+      damageBoss((game.stats.strength * 2 + game.stats.agility) * multiplier * bonus);
       resolvePlayerDamage();
+      return next;
+    }
+    case "HEAVY": {
+      if (next.phase !== "active" || !boss) return next;
+      next.combo = next.combo + 1;
+      next.lastPunchAt = action.now ?? next.lastPunchAt;
+      next.meleeStreak = 0;
+      next.kiStreak = 0;
+      const heavyBonus = next.combo >= 4 ? 1.5 : 1;
+      damageBoss((game.stats.strength * 3 + game.stats.agility * 1.5) * multiplier * heavyBonus);
+      if (next.phase === "active") next.message = heavyBonus > 1 ? "Haymaker finisher!" : "Heavy Strike!";
+      resolvePlayerDamage();
+      refreshPhase();
       return next;
     }
     case "RESET_COMBO":
@@ -280,21 +350,55 @@ export function resolveBattleAction(battle: BattleState, game: GameState, action
     case "BLAST":
       if (next.phase !== "active" || !boss || next.ki < 20) return next;
       next.ki -= 20;
-      next.hp -= game.stats.ki * 10 * multiplier;
+      next.kiStreak += 1;
+      next.meleeStreak = 0;
+      // Ki-assisted combo branch: blasting mid-combo amplifies damage.
+      const comboAssist = next.combo >= 3 ? 1 + next.combo * 0.05 : 1;
+      // Adaptive response: the boss anticipates Ki-spam and blunts it.
+      const read = next.kiStreak >= 3 ? 0.75 : 1;
+      damageBoss(game.stats.ki * 10 * multiplier * comboAssist * read);
+      if (next.phase === "active" && read < 1) next.message = `${boss.name} anticipates your Ki blast!`;
+      else if (next.phase === "active" && comboAssist > 1) next.message = "Ki-assisted combo!";
       resolvePlayerDamage();
+      refreshPhase();
       return next;
     case "ULTIMATE":
       if (next.phase !== "active" || !boss || next.ki < 100) return next;
       next.ki = 0;
-      next.hp -= (game.stats.ki * 40 + game.stats.strength * 10) * multiplier;
+      next.kiStreak += 1;
+      next.meleeStreak = 0;
+      const finalStretch = next.combo >= 5 ? 1.25 : 1;
+      damageBoss((game.stats.ki * 40 + game.stats.strength * 10) * multiplier * finalStretch);
+      // Ki Overload: massive cast staggers you — the boss punishes openings for 3 seconds.
+      if (now > 0) next.overloadedUntil = now + 3000;
+      if (next.phase === "active") next.message = finalStretch > 1 ? "FINAL STRETCH — FINAL FLASH! (you are vulnerable!)" : "Ki overloads! You are vulnerable!";
       resolvePlayerDamage();
+      refreshPhase();
       return next;
     case "VANISH":
       if (next.phase !== "active" || !boss || next.ki < 15) return next;
       next.ki -= 15;
-      next.hp -= (game.stats.agility * 5 + game.stats.strength * 2) * multiplier;
+      next.meleeStreak = 0;
+      next.kiStreak = 0;
+      // Punish branch: vanishing mid-combo is a guaranteed gap-closer crit.
+      const punish = next.combo >= 4 ? 1.5 : 1;
+      damageBoss((game.stats.agility * 5 + game.stats.strength * 2) * multiplier * punish);
+      if (next.phase === "active" && punish > 1) next.message = "Vanish punish!";
       resolvePlayerDamage();
+      refreshPhase();
       return next;
+    case "PERFECT_GUARD": {
+      if (next.phase !== "active" || !boss || now <= 0) return next;
+      if (now < next.guardCdUntil) {
+        next.message = "Guard recovering…";
+        return next;
+      }
+      const uiForm = action.uiForm === true;
+      next.guardUntil = now + (uiForm ? 750 : 450);
+      next.guardCdUntil = now + (uiForm ? 800 : 1100);
+      next.message = uiForm ? "Perfect guard — time slows! (Ultra Instinct)" : "Perfect guard stance…";
+      return next;
+    }
     case "CHARGE":
       if (next.phase === "active" && boss) next.ki = Math.min(100, next.ki + action.amount);
       return next;
@@ -302,8 +406,27 @@ export function resolveBattleAction(battle: BattleState, game: GameState, action
       if (next.phase !== "active" && next.phase !== "clash") return next;
       if (!boss) return next;
       if (!game.godMode) {
-        const damage = Math.max(1, boss.atk - game.stats.defense * multiplier * 0.5);
-        next.playerHp -= damage * (next.phase === "clash" ? 0.35 : 1);
+        const scale = phaseScale(next.phaseNumber);
+        let damage = Math.max(1, boss.atk * scale - game.stats.defense * multiplier * 0.5);
+        if (next.phase === "clash") damage *= 0.35;
+        const parried = now > 0 && now <= next.guardUntil;
+        if (parried) {
+          damage = 0;
+          next.exposedUntil = Math.max(next.exposedUntil, now + 2500);
+          next.message = `PARRY! ${boss.name} is overexposed — strike now!`;
+        } else if (boss.signature && next.phaseNumber >= 2 && now > 0 && now >= next.bossSpecialAt) {
+          damage = boss.atk * scale * boss.signature.mult;
+          next.bossSpecialAt = now + 6000;
+          next.message = `⚡ ${boss.name} unleashes ${boss.signature.name}!`;
+        } else if (now > 0 && next.overloadedUntil > now) {
+          damage *= 1.5;
+          next.message = `${boss.name} punishes your Ki overload!`;
+        } else if (now > 0 && next.adaptMeleeUntil >= now) {
+          damage *= 1.35;
+          next.adaptMeleeUntil = 0;
+          next.message = `${boss.name} counters your predictable rush!`;
+        }
+        next.playerHp -= damage;
         resolvePlayerDefeat();
       }
       if (game.passes.includes("kicharge") && next.playerHp > 0) next.ki = 100;
@@ -319,6 +442,7 @@ export function resolveBattleAction(battle: BattleState, game: GameState, action
       if (next.phase !== "clash") return next;
       next.clashProgress = Math.min(100, next.clashProgress + 3.5 + Math.min(4, Math.log10(action.agility + 1)));
       if (next.clashProgress >= 100) resolveClash(next, boss);
+      refreshPhase();
       return next;
     case "CLASH_TICK":
       if (next.phase !== "clash") return next;
@@ -327,6 +451,7 @@ export function resolveBattleAction(battle: BattleState, game: GameState, action
         if (next.clashProgress >= 50) resolveClash(next, boss);
         else resolveClashLoss(next, boss);
       }
+      refreshPhase();
       return next;
     case "FLEE":
       return { ...initialBattleState, message: "You fled." };
@@ -580,6 +705,12 @@ export function applyAction(d: GameState, a: GameAction): void {
       grantExperience(d, 200 + d.quests.length * 25);
       return;
     }
+    case "RECORD_BOSS_GRADE": {
+      const entry = a.bossId.slice(0, 60);
+      const current = d.bestGrades[entry];
+      if (!current || GRADE_ORDER.indexOf(a.grade) > GRADE_ORDER.indexOf(current)) d.bestGrades[entry] = a.grade;
+      return;
+    }
     case "TRANSFORM":
       if (d.forms.includes(a.formId) && findForm(d, a.formId)) d.activeForm = a.formId;
       return;
@@ -664,6 +795,15 @@ export function hydrate(raw: unknown): GameState {
   }
   out.sagaBonuses = cleanStrings(r.sagaBonuses, []).filter((saga) => saga in SAGA_BONUSES);
   out.tournamentRound = Math.max(0, Math.min(TOURNAMENT.length, Math.floor(clampSaveNumber(r.tournamentRound, 0, TOURNAMENT.length))));
+  // Best combat grades: keep the highest letter grade per boss; drop duplicates and junk ranks.
+  out.bestGrades = {};
+  if (r.bestGrades && typeof r.bestGrades === "object" && !Array.isArray(r.bestGrades)) {
+    for (const [bossId, grade] of Object.entries(r.bestGrades as Record<string, unknown>)) {
+      if (typeof bossId === "string" && typeof grade === "string" && (GRADE_ORDER as readonly string[]).includes(grade)) {
+        out.bestGrades[bossId.slice(0, 60)] = grade as BattleGrade;
+      }
+    }
+  }
   if (typeof out.activeForm !== "string" || !findForm(out, out.activeForm)) out.activeForm = "base";
   if (!LOCATIONS.some((l) => l.id === out.location)) out.location = base.location;
   out.darkAura = r.darkAura === true;

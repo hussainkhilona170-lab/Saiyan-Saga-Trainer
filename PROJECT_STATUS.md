@@ -108,9 +108,9 @@ src/test/engine.test.ts (+ app-routing.test.tsx) — 23 passing tests
 - [x] Phase 1 — Engine foundations (verified OK; save-writer integrity fixed here)
 - [x] Phase 2 — Progression overhaul (done to spec; preserved)
 - [x] Phase 3 — Save & data integrity (checkpoint `phase-3`)
-- [ ] Phase 4 — Sagas, missions & exploration  ← **FIRST (in progress)**
-- [ ] Phase 5 — Skill-based combat & AI
-- [ ] Phase 6 — Equipment, inventory & endgame
+- [x] Phase 4 — Sagas, missions & exploration (checkpoint `phase-4`)
+- [x] Phase 5 — Skill-based combat & AI (checkpoint `phase-5`)
+- [ ] Phase 6 — Equipment, inventory & endgame  ← **NEXT**
 - [ ] Phase 7 — God Engine foundations (full)
 - [ ] Phase 8 — God Engine interface & command center
 - [ ] Phase 9 — Visual & audio polish
@@ -132,3 +132,34 @@ src/test/engine.test.ts (+ app-routing.test.tsx) — 23 passing tests
 ## Recoverable checkpoints
 1. **Baseline**: project as-extracted (tag `baseline`), 23 tests pass, build OK.
 2. **phase-3**: save integrity overhaul (tag `phase-3`), 46 tests pass, build OK.
+3. **phase-4**: quest v2 + scout + tournament (tag `phase-4`), 65 tests pass, build OK.
+4. **phase-5**: skill-based combat depth (tag `phase-5`), 87 tests pass, build OK.
+
+## How to test each checkpoint (Windows, this machine)
+Node is not on PATH; use the portable copy under Temp. From `C:\Users\Administrator\Documents\Default Project\saiyan-training-simulator`:
+```powershell
+$env:PATH = "C:\Users\Administrator\AppData\Local\Temp\opencode\node-v26.13.0-win-x64;$env:PATH"
+Set-ExecutionPolicy -Scope Process Bypass -Force
+npm run dev        # dev server with HMR (what you want for testing)
+```
+Tests: `npx vitest run` · Types: `npx tsc --noEmit` · Build: `npm run build` · Checkout a checkpoint: `git checkout <tag>` (`baseline`, `phase-3`, `phase-4`, `phase-5`).
+
+**Phase 5 smoke-test plan**: Battle tab → Fight Raditz. H = Heavy Strike, F = Perfect Guard (parry an enemy tick → "PARRY!" message + boss exposed 2.5 s). Drop Raditz below 66% → EXPOSED banner + ×2 damage; below 33% → Critical. Phase 2+ boss casts its signature (watch the bar under the boss HP). Win with high HP → S/A grade on the boss card. Rematches pay tournament rewards only 15% after your first clear.
+
+### Phase 5 — completed work (checkpoint `phase-5`)
+- **Boss phases** (`battlePhaseOf` / `phaseNumber 1|2|3`, derived from remaining HP): below 66% → Enraged (+35% ATK), below/at 33% → Critical (+70% ATK). Crossing a phase drops the boss into a **5 s EXPOSED weak point** (player damage ×2) and telegraphs the signature 2 s out; phase banner shown in battle UI.
+- **Signature moves** on every boss (Double Sunday → Hakai, ×2.1–3.0 ATK), phase 2+ only, 6 s cooldown, shown under the boss HP bar.
+- **Perfect Guard / F** (`PERFECT_GUARD`): 450 ms parry window (750 ms and shorter cooldown in Ultra Instinct), 1.1 s cooldown; parry nullifies the tick and exposes the boss 2.5 s. Guard button + phase/exposed banner in UI.
+- **Combo branches**: `H` Heavy Strike (finisher bonus at 4+ combo), `K` Ki-assisted combo bonus (≥3 combo), `L` Final Stretch bonus (≥5) with a 3 s vulnerability tradeoff (Ki Overload), `Shift` Vanish Punish (≥4 combo), melee-rush adaptation counter and Ki-spam adaptation read after repeated use.
+- **Combat grades S/A/B/C/D** from remaining HP at victory; best grade per boss persisted (`bestGrades`, hydrated/deduped) and shown on boss cards and in the victory message.
+- Battle rules stay pure (`resolveBattleAction`); all buttons wired; arena untouched.
+- **Honest limits**: phases/signatures/parry windows are time-based via caller-supplied `Date.now()` (deterministic in tests); grade is stored against the boss id (tournament copies pool grades under `tournament-*` ids, by design).
+
+### Phase 4 — completed work (checkpoint `phase-4`)
+- **Quest system rebuilt to v2** (`QUESTS` typed `pl|boss|level|train|explore|collect|wish|tournament` + `prereq` chains, `count` targets). Displayed with per-saga grouping, progress bars, prereq locks, claim-once integrity; `questSummary`/`questProgressFraction`/`sagaStatus` exported for UI.
+- **15 quests across the 5 sagas** (9 original ids preserved, rewards preserved; 6 new counted objectives).
+- **Saga completion bonuses** via `CLAIM_SAGA` — all quests of a saga claimed → one-time Zeni/TP bonus, logged and persisted (`sagaBonuses`).
+- **Scout exploration** (`SCOUT`): 2 stamina, location-scaled XP + Zeni caches (rare) + Dragon Ball finds (5%) — quest-fed.
+- **Dragon Ball sources expanded**: boss drops, scout caches, wish quests — collection now gameplay-driven; wishes use `MAKE_WISH` (see Phase 3).
+- **World Martial Arts Tournament**: 4 rounds (Opening/Quarterfinal/Semifinal/Grand Final), multiplier-scaled champions built on the real boss registry, first-clear full rewards, 15% rematch rewards (anti-farm), champion title at crown, persisted `tournamentRound`.
+- Save schema: `questProgress` (counted courses only, unknown ids dropped), `sagaBonuses`, `tournamentRound` — all clamped/deduped on hydrate.

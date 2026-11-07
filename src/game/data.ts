@@ -20,14 +20,15 @@ export const FORMS: Form[] = [
   { id: "ui", name: "Ultra Instinct", mult: 1200, req: 6e8, cost: 3e9, aura: "oklch(0.92 0.04 260)", levelReq: 28, pass: "uipass" },
 ];
 
-export type Boss = { id: string; name: string; hp: number; atk: number; zeni: number; tp: number; req: number; emoji: string; tournament?: number };
+export type BossSignature = { name: string; mult: number };
+export type Boss = { id: string; name: string; hp: number; atk: number; zeni: number; tp: number; req: number; emoji: string; tournament?: number; signature?: BossSignature };
 export const BOSSES: Boss[] = [
-  { id: "raditz", name: "Raditz", hp: 1500, atk: 10, zeni: 3000, tp: 10, req: 0, emoji: "🦹" },
-  { id: "vegeta", name: "Vegeta", hp: 25000, atk: 60, zeni: 30000, tp: 30, req: 2000, emoji: "👑" },
-  { id: "frieza", name: "Frieza", hp: 400000, atk: 600, zeni: 300000, tp: 80, req: 35000, emoji: "👽" },
-  { id: "cell", name: "Perfect Cell", hp: 7.5e6, atk: 7500, zeni: 4e6, tp: 200, req: 8e5, emoji: "🦗" },
-  { id: "buu", name: "Kid Buu", hp: 1e8, atk: 8e4, zeni: 6e7, tp: 400, req: 1.5e7, emoji: "🍬" },
-  { id: "beerus", name: "Beerus", hp: 2e9, atk: 1.2e6, zeni: 2e9, tp: 1000, req: 2.5e8, emoji: "🐱" },
+  { id: "raditz", name: "Raditz", hp: 1500, atk: 10, zeni: 3000, tp: 10, req: 0, emoji: "🦹", signature: { name: "Double Sunday", mult: 2.1 } },
+  { id: "vegeta", name: "Vegeta", hp: 25000, atk: 60, zeni: 30000, tp: 30, req: 2000, emoji: "👑", signature: { name: "Final Flash", mult: 2.4 } },
+  { id: "frieza", name: "Frieza", hp: 400000, atk: 600, zeni: 300000, tp: 80, req: 35000, emoji: "👽", signature: { name: "Death Beam", mult: 2.4 } },
+  { id: "cell", name: "Perfect Cell", hp: 7.5e6, atk: 7500, zeni: 4e6, tp: 200, req: 8e5, emoji: "🦗", signature: { name: "Perfect Beam Barrage", mult: 2.6 } },
+  { id: "buu", name: "Kid Buu", hp: 1e8, atk: 8e4, zeni: 6e7, tp: 400, req: 1.5e7, emoji: "🍬", signature: { name: "Planet Buster", mult: 2.8 } },
+  { id: "beerus", name: "Beerus", hp: 2e9, atk: 1.2e6, zeni: 2e9, tp: 1000, req: 2.5e8, emoji: "🐱", signature: { name: "Hakai", mult: 3.0 } },
 ];
 
 export const LOCATIONS = [

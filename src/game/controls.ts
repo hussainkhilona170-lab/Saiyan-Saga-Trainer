@@ -6,6 +6,8 @@ export type BattleControls = {
   ultimate: () => void;
   vanish: () => void;
   charge: () => void;
+  parry: () => void;
+  heavy: () => void;
 };
 
 /** Owns the PC keyboard mapping and held-charge lifecycle for the battle screen. */
@@ -34,6 +36,12 @@ export function useBattleControls(actions: BattleControls) {
         if (!event.repeat) actionsRef.current.ultimate();
       } else if (key === "shift") {
         if (!event.repeat) actionsRef.current.vanish();
+      } else if (key === "f") {
+        event.preventDefault();
+        if (!event.repeat) actionsRef.current.parry();
+      } else if (key === "h") {
+        event.preventDefault();
+        if (!event.repeat) actionsRef.current.heavy();
       } else if (key === "c") {
         event.preventDefault();
         if (!event.repeat && !chargeTimerRef.current) actionsRef.current.charge();
