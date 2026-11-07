@@ -20,6 +20,12 @@ export const FORMS: Form[] = [
   { id: "ui", name: "Ultra Instinct", mult: 1200, req: 6e8, cost: 3e9, aura: "oklch(0.92 0.04 260)", levelReq: 28, pass: "uipass" },
 ];
 
+export type CustomTechniqueScale = "ki" | "strength" | "agility" | "defense";
+export type CustomTechnique = { id: string; name: string; desc: string; scale: CustomTechniqueScale; mult: number; kiCost: number; cooldownMs: number; aura: string };
+
+export const MAX_CUSTOM_TECHNIQUES = 20;
+export const MAX_CUSTOM_TECHNIQUE_MULT = 50;
+
 export type BossSignature = { name: string; mult: number };
 export type EndlessModifierId = "none" | "aggression" | "heavyweight";
 export type Boss = { id: string; name: string; hp: number; atk: number; zeni: number; tp: number; req: number; emoji: string; tournament?: number; signature?: BossSignature; endlessModifier?: EndlessModifierId };

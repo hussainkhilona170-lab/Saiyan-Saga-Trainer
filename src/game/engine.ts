@@ -1,5 +1,5 @@
 // Pure game rules: no React, no browser APIs. All state transitions live here.
-import { BOSSES, FORMS, LOCATIONS, PASSES, QUESTS, WISHES, SAGA_BONUSES, TOURNAMENT, EQUIPMENT, CONSUMABLES, TECHNIQUE_RANKS, RAID_BOSSES, ENDLESS_ROSTER, ENDLESS_MODIFIERS, type Boss, type Form, type Quest, type QuestKind, type StatKey, type EndlessModifierId } from "./data";
+import { BOSSES, FORMS, LOCATIONS, PASSES, QUESTS, WISHES, SAGA_BONUSES, TOURNAMENT, EQUIPMENT, CONSUMABLES, TECHNIQUE_RANKS, RAID_BOSSES, ENDLESS_ROSTER, ENDLESS_MODIFIERS, MAX_CUSTOM_TECHNIQUES, MAX_CUSTOM_TECHNIQUE_MULT, type Boss, type Form, type Quest, type QuestKind, type StatKey, type EndlessModifierId, type CustomTechniqueScale, type CustomTechnique } from "./data";
 
 export type TournamentBoss = Boss & { tournament?: number };
 
@@ -38,7 +38,12 @@ export type GameState = {
   equipped: string[];
   techniqueUses: Record<string, number>;
   survivalBest: number;
+  infiniteKi: boolean;
+  customTechniques: CustomTechnique[];
+  adminEvents: AdminEvent[];
 };
+
+export type AdminEvent = { id: string; at: number; action: string; target: string; previousValue: string; newValue: string; outcome: "ok" | "failed" | "blocked"; detail?: string };
 
 export const initialState: GameState = {
   stats: { strength: 1, agility: 1, ki: 1, defense: 1 }, level: 1, xp: 0,
@@ -58,6 +63,9 @@ export const initialState: GameState = {
   equipped: [],
   techniqueUses: {},
   survivalBest: 0,
+  infiniteKi: false,
+  customTechniques: [],
+  adminEvents: [],
 };
 
 export const MAX_SAVE_NUMBER = 1e18;
@@ -269,6 +277,8 @@ export type BattleState = {
   meleeStreak: number;
   kiStreak: number;
   adaptMeleeUntil: number;
+  /** Technique cooldowns by technique id (built-in ids reserved, custom techs use their own id). */
+  cooldowns: Record<string, number>;
 };
 
 export const initialBattleState: BattleState = {
@@ -277,6 +287,7 @@ export const initialBattleState: BattleState = {
   guardUntil: 0, guardCdUntil: 0, exposedUntil: 0, overloadedUntil: 0,
   phaseNumber: 1, bossSpecialAt: 0,
   meleeStreak: 0, kiStreak: 0, adaptMeleeUntil: 0,
+  cooldowns: {},
 };
 
 export type CombatAction =
@@ -289,6 +300,7 @@ export type CombatAction =
   | { type: "VANISH"; now?: number }
   | { type: "PERFECT_GUARD"; now: number; uiForm?: boolean }
   | { type: "USE_CONSUMABLE"; consumable: "senzu" | "tonic" }
+  | { type: "CUSTOM_TECHNIQUE"; techniqueId: string; now?: number }
   | { type: "CHARGE"; amount: number }
   | { type: "ENEMY_TICK"; playerMaxHp: number; now?: number }
   | { type: "CLASH_START" }
@@ -397,8 +409,8 @@ export function resolveBattleAction(battle: BattleState, game: GameState, action
     case "BLAST":
       if (next.phase !== "active" || !boss) return next;
       const blastCost = techniqueRank(game, "blast") >= 2 ? 15 : 20;
-      if (next.ki < blastCost) return next;
-      next.ki -= blastCost;
+      if (!game.infiniteKi && next.ki < blastCost) return next;
+      if (!game.infiniteKi) next.ki -= blastCost;
       next.kiStreak += 1;
       next.meleeStreak = 0;
       // Ki-assisted combo branch: blasting mid-combo amplifies damage.
@@ -412,8 +424,8 @@ export function resolveBattleAction(battle: BattleState, game: GameState, action
       refreshPhase();
       return next;
     case "ULTIMATE":
-      if (next.phase !== "active" || !boss || next.ki < 100) return next;
-      next.ki = 0;
+      if (next.phase !== "active" || !boss || (!game.infiniteKi && next.ki < 100)) return next;
+      if (!game.infiniteKi) next.ki = 0;
       next.kiStreak += 1;
       next.meleeStreak = 0;
       const finalStretch = next.combo >= 5 ? 1.25 : 1;
@@ -427,8 +439,8 @@ export function resolveBattleAction(battle: BattleState, game: GameState, action
     case "VANISH":
       if (next.phase !== "active" || !boss) return next;
       const vanishCost = techniqueRank(game, "vanish") >= 2 ? 12 : 15;
-      if (next.ki < vanishCost) return next;
-      next.ki -= vanishCost;
+      if (!game.infiniteKi && next.ki < vanishCost) return next;
+      if (!game.infiniteKi) next.ki -= vanishCost;
       next.meleeStreak = 0;
       next.kiStreak = 0;
       // Punish branch: vanishing mid-combo is a guaranteed gap-closer crit.
@@ -466,6 +478,26 @@ export function resolveBattleAction(battle: BattleState, game: GameState, action
         next.ki = 100;
         next.message = "Energy tonic! Ki floods through you.";
       }
+      return next;
+    }
+    case "CUSTOM_TECHNIQUE": {
+      if (next.phase !== "active" || !boss) return next;
+      const tech = game.customTechniques.find((t) => t.id === action.techniqueId);
+      if (!tech) return next;
+      const nowMs = now;
+      if (nowMs > 0 && (next.cooldowns[tech.id] ?? 0) > nowMs) {
+        next.message = `${tech.name} is recovering…`;
+        return next;
+      }
+      if (!game.infiniteKi && next.ki < tech.kiCost) return next;
+      if (!game.infiniteKi) next.ki -= tech.kiCost;
+      const statTotal = tech.scale === "ki" ? game.stats.ki : tech.scale === "strength" ? game.stats.strength : tech.scale === "agility" ? game.stats.agility : game.stats.defense;
+      const exposed = nowMs > 0 && nowMs < next.exposedUntil;
+      const damage = statTotal * tech.mult * multiplier * (exposed ? 2 : 1);
+      damageBoss(damage);
+      if (next.phase === "active") next.message = `${tech.name}!`;
+      if (nowMs > 0) next.cooldowns = { ...next.cooldowns, [tech.id]: nowMs + tech.cooldownMs };
+      resolvePlayerDamage();
       return next;
     }
     case "ENEMY_TICK":
@@ -699,7 +731,7 @@ export function applyBattleRewards(game: GameState, boss: Boss, foundDragonBall:
   grantExperience(game, battleExperienceReward(boss));
 }
 
-function grantExperience(state: GameState, amount: number): void {
+export function grantExperience(state: GameState, amount: number): void {
   state.xp += Math.max(0, Math.floor(amount));
   state.level = levelForXp(state.xp);
 }
@@ -996,6 +1028,45 @@ export function hydrate(raw: unknown): GameState {
     }
   }
   out.survivalBest = Math.max(0, Math.min(9999, Math.floor(clampSaveNumber(r.survivalBest, 0, 9999))));
+  out.infiniteKi = r.infiniteKi === true;
+  // Custom techniques: strict shape enforcement — they execute in real combat.
+  const TECH_SCALES: readonly CustomTechniqueScale[] = ["ki", "strength", "agility", "defense"];
+  out.customTechniques = [];
+  if (Array.isArray(r.customTechniques)) {
+    for (const raw of r.customTechniques) {
+      if (!raw || typeof raw !== "object") continue;
+      const t = raw as Partial<CustomTechnique>;
+      if (typeof t.id !== "string" || !t.id.startsWith("custom-tech-")) continue;
+      if (typeof t.name !== "string" || !t.name.trim() || t.name.length > 40) continue;
+      if (typeof t.desc !== "string") continue;
+      if (!TECH_SCALES.includes(t.scale as CustomTechniqueScale)) continue;
+      const mult = typeof t.mult === "number" && isFinite(t.mult) ? Math.max(0.1, Math.min(MAX_CUSTOM_TECHNIQUE_MULT, t.mult)) : 1;
+      const kiCost = typeof t.kiCost === "number" && isFinite(t.kiCost) ? Math.max(0, Math.min(100, Math.floor(t.kiCost))) : 10;
+      const cooldownMs = typeof t.cooldownMs === "number" && isFinite(t.cooldownMs) ? Math.max(0, Math.min(15000, Math.floor(t.cooldownMs))) : 1000;
+      const aura = typeof t.aura === "string" && t.aura.length <= 40 ? t.aura : "#7c58ff";
+      out.customTechniques.push({ id: t.id.slice(0, 48), name: t.name.trim(), desc: t.desc.slice(0, 200), scale: t.scale as CustomTechniqueScale, mult, kiCost, cooldownMs, aura });
+      if (out.customTechniques.length >= MAX_CUSTOM_TECHNIQUES) break;
+    }
+  }
+  // Admin event log: keep only well-formed rows, cap at 100.
+  out.adminEvents = [];
+  if (Array.isArray(r.adminEvents)) {
+    for (const raw of r.adminEvents) {
+      if (!raw || typeof raw !== "object") continue;
+      const e = raw as Partial<AdminEvent>;
+      if (typeof e.id !== "string" || typeof e.at !== "number" || !isFinite(e.at)) continue;
+      if (typeof e.action !== "string" || typeof e.target !== "string") continue;
+      const outcome = e.outcome === "blocked" || e.outcome === "failed" ? e.outcome : "ok";
+      out.adminEvents.push({
+        id: e.id.slice(0, 64), at: Math.floor(e.at),
+        action: e.action.slice(0, 60), target: e.target.slice(0, 120),
+        previousValue: String(e.previousValue ?? "").slice(0, 120), newValue: String(e.newValue ?? "").slice(0, 120),
+        outcome,
+        ...(typeof e.detail === "string" ? { detail: e.detail.slice(0, 200) } : {}),
+      });
+      if (out.adminEvents.length >= 100) break;
+    }
+  }
   // Best combat grades: keep the highest letter grade per boss; drop duplicates and junk ranks.
   out.bestGrades = {};
   if (r.bestGrades && typeof r.bestGrades === "object" && !Array.isArray(r.bestGrades)) {

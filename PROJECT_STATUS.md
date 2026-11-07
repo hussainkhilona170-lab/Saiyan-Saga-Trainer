@@ -111,7 +111,8 @@ src/test/engine.test.ts (+ app-routing.test.tsx) — 23 passing tests
 - [x] Phase 4 — Sagas, missions & exploration (checkpoint `phase-4`)
 - [x] Phase 5 — Skill-based combat & AI (checkpoint `phase-5`)
 - [x] Phase 6 — Equipment, inventory & endgame (checkpoint `phase-6`)
-- [ ] Phase 7 — God Engine foundations (full)  ← **NEXT**
+- [x] Phase 7 — God Engine foundations (full) (checkpoint `phase-7`)
+- [ ] Phase 8 — GOD ENGINE interface & command center  ← **NEXT**
 - [ ] Phase 7 — God Engine foundations (full)
 - [ ] Phase 8 — God Engine interface & command center
 - [ ] Phase 9 — Visual & audio polish
@@ -136,6 +137,17 @@ src/test/engine.test.ts (+ app-routing.test.tsx) — 23 passing tests
 3. **phase-4**: quest v2 + scout + tournament (tag `phase-4`), 65 tests pass, build OK.
 4. **phase-5**: skill-based combat depth (tag `phase-5`), 87 tests pass, build OK.
 5. **phase-6**: equipment, technique mastery, endless survival, raid bosses (tag `phase-6`), 110 tests pass, build OK.
+6. **phase-7**: God Engine foundations — typed admin API, console parser, simulator, infinite Ki, custom techniques (tag `phase-7`), 139 tests pass, build OK.
+
+### Phase 7 — completed work (checkpoint `phase-7`)
+- **Typed admin API** (`src/game/admin.ts`): every privileged operation funnels through `executeAdminAction` — SET/ADD stats, mastery, level/XP (cross-synced), Zeni/TP/Stamina/Gravity/Dragon Balls, form lock/unlock (admin-force), quest force-complete/reset (never refunds), god-mode / infinite-ki / infinite-zeni overrides, TELEPORT validation, Endless best, spawn routing. All writes clamped to extreme-number bounds; every action logged to a new persisted **admin event log** (`adminEvents`, capped 100) with previous/new values, actor outcome and detail; destructive verbs (unlock-all/lock-all/quest-reset/complete) flagged `confirmRequired`.
+- **Command console core** (`src/game/adminConsole.ts`): parser maps text → real `AdminAction`s; strict validation (NaN, negatives, wrong stats, unknown ids rejected); `help` lists every registered command; `consoleSuggestions()` powers autocomplete; zero `eval` anywhere.
+- **Deterministic battle simulator** (`src/game/battleSim.ts`) for the Automated Battle Tester — clones state, seeded rotation, returns result/grade/phase reached/damage totals; documented as a simulation, not a live canvas fight.
+- **Infinite Ki override** wired into the real combat pipeline (BLAST/ULTIMATE/VANISH/CUSTOM_TECHNIQUE all honor it).
+- **Custom techniques on the real pipeline**: new `CustomTechnique` model (ki/strength/agility/defense scaling, mult, kiCost, cooldown, aura) with strict hydrate sanitizers; battle-side `CUSTOM_TECHNIQUE` action deals real damage through the damage-boss path, respects cooldowns (BattleState.cooldowns), Ki costs, EXPOSED doubling and infinite-Ki.
+- Hydration clamps: custom techniques (20 max, id prefix, mult ≤ 50, cooldown ≤ 15 s, scale whitelist), admin events (junk dropped, cap 100), infiniteKi flag.
+- **Not yet done (Phase 8)**: the full command-center UI — this phase ships only the verified backend. The legacy 5-tab admin modal is untouched and still fully functional.
+- 29 new tests in `god-engine.test.ts`; 139 total pass.
 
 ### Phase 6 — completed work (checkpoint `phase-6`)
 - **Inventory & equipment**: new `EQUIPMENT` (Turtle Shell +25% DEF, Weighted Gloves +20% training, Dragon Radar +5% scout finds, Potara +10% power) and `CONSUMABLES` (Senzu Bean full HP, Energy Tonic full Ki) registries; bought with Zeni (Potara unique), one item per slot, bag ↔ loadout with full persistence (`inventory`, `equipped`), equipment feeds `powerLevel`, `trainingGain`, scout rates and effective Defense in combat.
