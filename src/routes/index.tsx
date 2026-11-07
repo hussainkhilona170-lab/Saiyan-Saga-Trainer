@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { FORMS, LOCATIONS, fmt, type Boss } from "@/game/data";
 import { allForms } from "@/game/engine";
 import { GameProvider, powerLevel, useGame } from "@/game/store";
+import { FormArt } from "@/game/FormArt";
 import { BattleTab, EndgameTab, FormsTab, InventoryTab, QuestsTab, ShopTab, TournamentTab, TrainTab, Bar } from "@/game/ui";
 import { AdminPanel } from "@/game/godEngine";
 
@@ -56,7 +57,7 @@ function Game() {
         <div className="mb-4 grid items-center gap-4 rounded-xl border border-border bg-card/70 p-4 backdrop-blur md:grid-cols-[auto_1fr]">
           <div className="relative mx-auto flex h-28 w-28 items-center justify-center">
             {(form.id !== "base" || s.darkAura) && <div className="aura absolute inset-0 rounded-full" style={{ background: s.darkAura ? "oklch(0.45 0.2 300)" : form.aura, boxShadow: `0 0 60px 20px ${s.darkAura ? "oklch(0.45 0.2 300)" : form.aura}` }} />}
-            <span className="relative text-6xl">🥋</span>
+            <span className="relative drop-shadow-[0_0_10px_rgba(0,0,0,0.6)]"><FormArt formId={form.id} hair={form.hair} aura={form.aura} size={96} /></span>
           </div>
           <div>
             <div className="text-sm text-muted-foreground">{form.name} • {loc.name} ×{loc.mult}</div>

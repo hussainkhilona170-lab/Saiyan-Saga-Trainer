@@ -90,10 +90,10 @@ export const SAGA_ORDER = ["Saiyan Saga", "Namek Saga", "Cell Saga", "Buu Saga",
 
 export type TournamentRound = { id: string; name: string; bossId: string; bossName: string; hpMult: number; atkMult: number; entry: number; zeni: number; tp: number; emoji: string };
 export const TOURNAMENT: TournamentRound[] = [
-  { id: "r1", name: "Opening Match", bossId: "raditz", bossName: "Yamu the Challenger", hpMult: 0.75, atkMult: 0.75, entry: 300, zeni: 10000, tp: 40, emoji: "🥊" },
-  { id: "r2", name: "Quarterfinal", bossId: "vegeta", bossName: "Quarterfinal — Vegeta", hpMult: 0.8, atkMult: 0.8, entry: 1500, zeni: 75000, tp: 120, emoji: "👑" },
-  { id: "r3", name: "Semifinal", bossId: "cell", bossName: "Semifinal — Cell", hpMult: 0.8, atkMult: 0.8, entry: 60000, zeni: 1500000, tp: 400, emoji: "🦗" },
-  { id: "r4", name: "Grand Final", bossId: "beerus", bossName: "Grand Final — Beerus", hpMult: 0.6, atkMult: 0.6, entry: 2.5e7, zeni: 5e9, tp: 1500, emoji: "🐱" },
+  { id: "r1", name: "Opening Match", bossId: "raditz", bossName: "Yamu the Challenger", hpMult: 0.9, atkMult: 0.9, entry: 300, zeni: 10000, tp: 40, emoji: "🥊" },
+  { id: "r2", name: "Quarterfinal", bossId: "vegeta", bossName: "Quarterfinal — Vegeta", hpMult: 0.92, atkMult: 0.92, entry: 1500, zeni: 75000, tp: 120, emoji: "👑" },
+  { id: "r3", name: "Semifinal", bossId: "cell", bossName: "Semifinal — Cell", hpMult: 0.92, atkMult: 0.92, entry: 60000, zeni: 1500000, tp: 400, emoji: "🦗" },
+  { id: "r4", name: "Grand Final", bossId: "beerus", bossName: "Grand Final — Beerus", hpMult: 0.8, atkMult: 0.8, entry: 2.5e7, zeni: 5e9, tp: 1500, emoji: "🐱" },
 ];
 
 export const PASSES = [

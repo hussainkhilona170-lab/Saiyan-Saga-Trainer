@@ -11,6 +11,7 @@ import { createSnapshot, parseSnapshotList, SNAPSHOTS_KEY, type Snapshot } from 
 import { exportSlotText, backupKey, slotKey, resolveInitialLoad } from "./persistence";
 import { sendBattleCommand, isBattleLive } from "./battleBus";
 import { Card, Btn } from "./ui";
+import { FormArt } from "./FormArt";
 import { useGame } from "./store";
 
 type Section =
@@ -236,7 +237,7 @@ function TransformationSection({ s, act, update }: { s: GameState; act: (a: Admi
           const owned = s.forms.includes(f.id);
           return (
             <div key={f.id} className={`${row} ${s.activeForm === f.id ? "border-chart-2" : ""}`}>
-              <div className="flex items-center gap-2"><span className="h-5 w-5 rounded-full border border-border" style={{ background: f.aura }} /><span>{f.name} <span className="text-xs text-muted-foreground">×{fmt(f.mult)}</span></span></div>
+              <div className="flex items-center gap-2"><FormArt formId={f.id} hair={f.hair} aura={f.aura} size={40} className="shrink-0" /><span>{f.name} <span className="text-xs text-muted-foreground">×{fmt(f.mult)}</span></span></div>
               <div className="flex gap-1">
                 {owned ? (
                   <>
@@ -270,7 +271,13 @@ function TransformationSection({ s, act, update }: { s: GameState; act: (a: Admi
         <div className="font-display">Custom transformation creator</div>
         <div className="mt-1 grid items-end gap-2 sm:grid-cols-[2fr_2fr_1fr_auto]">
           <input className="rounded bg-input px-2 py-1" value={name} maxLength={30} onChange={(e) => setName(e.target.value)} aria-label="Form name" />
-          <label className="text-xs">Power ×{fmt(mult)}<input type="range" min={1} max={CUSTOM_FORM_MAX_MULT} value={mult} onChange={(e) => setMult(+e.target.value)} className="w-full" /></label>
+          <label className="text-xs">Power ×
+            <div className="mt-1 flex items-center gap-2">
+              <input type="range" min={1} max={CUSTOM_FORM_MAX_MULT} value={mult} onChange={(e) => setMult(+e.target.value)} className="flex-1" />
+              <input type="number" min={1} max={CUSTOM_FORM_MAX_MULT} className="w-20 rounded bg-input px-2 py-1 text-right text-foreground" value={mult} onChange={(e) => setMult(Math.max(1, Math.min(CUSTOM_FORM_MAX_MULT, Math.floor(+e.target.value || 1))))} aria-label="Power multiplier" />
+              <span className="text-xs text-muted-foreground">×{fmt(mult)}</span>
+            </div>
+          </label>
           <input type="color" value={aura} onChange={(e) => setAura(e.target.value)} className="h-9 w-full rounded" aria-label="Aura color" />
           <Btn disabled={!name.trim()} onClick={() => {
             const id = `custom-${Date.now()}`;
@@ -521,7 +528,13 @@ function TechniqueSection({ s, update, pushToast }: { s: GameState; update: (fn:
               <option value="ki">Ki</option><option value="strength">Strength</option><option value="agility">Agility</option><option value="defense">Defense</option>
             </select>
           </label>
-          <label className="text-sm">Power ×{mult.toFixed(1)}<input type="range" min={0.5} max={20} step={0.5} value={mult} onChange={(e) => setMult(+e.target.value)} className="mt-1 block w-full" /></label>
+          <label className="text-sm">Scaling multiplier
+            <div className="mt-1 flex items-center gap-2">
+              <input type="range" min={0.5} max={20} step={0.5} value={mult} onChange={(e) => setMult(+e.target.value)} className="flex-1" />
+              <input type="number" min={0.5} max={20} step={0.5} className="w-16 rounded bg-input px-2 py-1 text-right text-foreground" value={mult} onChange={(e) => setMult(Math.max(0.5, Math.min(20, +e.target.value || 1)))} aria-label="Damage multiplier" />
+              <span className="text-xs text-muted-foreground">×{mult.toFixed(1)}</span>
+            </div>
+          </label>
           <label className="text-sm">Ki cost {kiCost}<input type="range" min={0} max={100} value={kiCost} onChange={(e) => setKiCost(+e.target.value)} className="mt-1 block w-full" /></label>
           <label className="text-sm">Cooldown {(cooldownMs / 1000).toFixed(1)}s<input type="range" min={0} max={15000} step={100} value={cooldownMs} onChange={(e) => setCooldownMs(+e.target.value)} className="mt-1 block w-full" /></label>
           <label className="flex items-center gap-2 text-sm">Aura<input type="color" value={aura} onChange={(e) => setAura(e.target.value)} className="h-9 w-16 rounded" /></label>

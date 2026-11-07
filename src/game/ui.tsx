@@ -5,6 +5,7 @@ import { registerBattleHandler, type BattleCommand } from "./battleBus";
 import { useBattleControls } from "./controls";
 import { useGame } from "./store";
 import { playBattleSound, StickmanArena, type BattleAction, type BattleSound } from "./arena";
+import { FormArt } from "./FormArt";
 
 const waveOf = (b: Boss) => Math.max(1, Math.floor(Number(b.id.split("-")[1]) || 1));
 
@@ -148,7 +149,9 @@ export function FormsTab() {
         return (
           <Card key={f.id} className={`card-hover ${s.activeForm === f.id ? "ring-2 ring-primary" : ""}`}>
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-full" style={{ background: f.aura, boxShadow: `0 0 20px ${f.aura}` }} />
+              <div className="transition-transform duration-150 hover:scale-105" title={f.name}>
+                <FormArt formId={f.id} hair={f.hair} aura={f.aura} size={64} />
+              </div>
               <div className="flex-1"><div className="font-display text-xl">{f.name}</div><div className="text-sm text-muted-foreground">×{fmt(f.mult)} power · {f.custom ? "Custom form" : `Level ${f.levelReq}`}</div></div>
               {f.custom && <button className="text-sm text-destructive underline" onClick={() => { if (confirm(`Delete ${f.name}?`)) update((d) => applyAction(d, { type: "DELETE_FORM", formId: f.id })); }}>Delete</button>}
             </div>
@@ -187,15 +190,20 @@ function FormCreator() {
       <div className="mb-3 font-display text-2xl">Transformation Creator</div>
       <div className="grid items-end gap-3 md:grid-cols-[2fr_2fr_1fr_1fr_auto]">
         <label className="text-sm">Name<input value={name} maxLength={30} onChange={(e) => setName(e.target.value)} className="mt-1 w-full rounded bg-input px-2 py-1 text-foreground" /></label>
-        <label className="text-sm">Power ×{fmt(mult)}<input type="range" min={1} max={CUSTOM_FORM_MAX_MULT} value={mult} onChange={(e) => setMult(+e.target.value)} className="mt-2 w-full" /></label>
+        <label className="text-sm">Power ×
+          <div className="mt-1 flex items-center gap-2">
+            <input type="range" min={1} max={CUSTOM_FORM_MAX_MULT} value={mult} onChange={(e) => setMult(+e.target.value)} className="flex-1" />
+            <input type="number" min={1} max={CUSTOM_FORM_MAX_MULT} className="w-20 rounded bg-input px-2 py-1 text-right text-foreground" value={mult} onChange={(e) => setMult(Math.max(1, Math.min(CUSTOM_FORM_MAX_MULT, Math.floor(+e.target.value || 1))))} aria-label="Power multiplier" />
+            <span className="text-xs text-muted-foreground">×{fmt(mult)}</span>
+          </div>
+        </label>
         <label className="text-sm">Aura<input type="color" value={aura} onChange={(e) => setAura(e.target.value)} className="mt-1 block h-9 w-full rounded" /></label>
         <label className="text-sm">Hair<input type="color" value={hair} onChange={(e) => setHair(e.target.value)} className="mt-1 block h-9 w-full rounded" /></label>
         <Btn disabled={!name.trim()} onClick={create}>Create & Transform</Btn>
       </div>
       <div className="mt-3 flex items-center gap-3 text-sm text-muted-foreground">
-        <div className="h-8 w-8 rounded-full" style={{ background: aura, boxShadow: `0 0 18px ${aura}` }} />
-        <div className="h-8 w-8 rounded-full border-2 border-border" style={{ background: hair }} />
-        <span>Preview of aura and hair colour in the arena</span>
+        <FormArt formId="custom" hair={hair} aura={aura} size={56} />
+        <span>Preview of your custom transformation in the arena</span>
       </div>
     </Card>
   );
@@ -626,6 +634,37 @@ export function ShopTab() {
           );
         })}
       </div>
+      <h2 className="font-display text-2xl">Market — Gear & Supplies <span className="text-sm text-muted-foreground">(paid in Zeni)</span></h2>
+      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+        {EQUIPMENT.map((item) => {
+          const ownedQty = s.inventory[item.id] ?? 0;
+          const equipped = s.equipped.includes(item.id);
+          const done = equipped || ownedQty > 0;
+          return (
+            <Card key={item.id} className={`card-hover ${equipped ? "ring-2 ring-chart-2" : ""}`}>
+              <div className="flex items-center gap-2">
+                <span className="text-3xl">{item.icon}</span>
+                <div className="min-w-0"><div className="font-display text-base leading-tight">{item.name}</div><div className="text-xs text-muted-foreground">{item.desc}</div></div>
+              </div>
+              <Btn className="mt-2 w-full" disabled={done || s.zeni < item.cost} onClick={() => update((d) => applyAction(d, { type: "BUY_ITEM", itemId: item.id }))}>
+                {equipped ? "Equipped ✓" : ownedQty > 0 ? "In bag — equip in Inventory" : `Buy · ${fmt(item.cost)} Zeni`}
+              </Btn>
+            </Card>
+          );
+        })}
+        {CONSUMABLES.map((item) => {
+          const ownedQty = s.inventory[item.id] ?? 0;
+          return (
+            <Card key={item.id} className="card-hover">
+              <div className="flex items-center gap-2">
+                <span className="text-3xl">{item.icon}</span>
+                <div className="min-w-0"><div className="font-display text-base leading-tight">{item.name} <span className="text-xs text-muted-foreground">×{ownedQty}</span></div><div className="text-xs text-muted-foreground">{item.desc}</div></div>
+              </div>
+              <Btn className="mt-2 w-full" disabled={s.zeni < item.cost} onClick={() => update((d) => applyAction(d, { type: "BUY_ITEM", itemId: item.id }))}>Buy · {fmt(item.cost)} Zeni</Btn>
+            </Card>
+          );
+        })}
+      </div>
       <h2 className="font-display text-2xl">Dragon Balls</h2>
       <Card>
         <div className="flex gap-2 text-3xl">{Array.from({ length: 7 }, (_, i) => <span key={i} className={i < s.dragonBalls ? "" : "opacity-20 grayscale"}>🟠</span>)}</div>
@@ -674,7 +713,7 @@ export function TournamentTab({ onFight }: { onFight: (boss: TournamentBoss) => 
     <div className="space-y-4">
       <Card>
         <h2 className="font-display text-3xl">🥋 World Martial Arts Tournament</h2>
-        <p className="mt-1 text-sm text-muted-foreground">Four rounds, one champion. Each match uses the combat arena — and your own skill decides the winner. First-time clears pay the listed reward; rematches pay 15%.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Four rounds, one champion. These are real fights — every round is effectively at story strength, so you cannot button-mash your way to the title. First-time clears pay the listed reward; rematches pay 15%.</p>
         {champion ? (
           <div className="mt-2 rounded-lg border border-chart-1 bg-secondary p-3 font-display text-xl text-chart-1">👑 Tenkaichi Budokai Champion — your name is carved into tournament history.</div>
         ) : (
@@ -811,45 +850,104 @@ export function EndgameTab({ onFight }: { onFight: (boss: EndgameBoss) => void }
   const [wave, setWave] = useState(() => Math.max(1, Math.min(9999, s.survivalBest + 1)));
   const [modifier, setModifier] = useState<EndlessModifierId>("none");
   const preview = endlessBoss(wave, modifier);
+  const modChoice = ENDLESS_MODIFIERS.find((m) => m.id === modifier) ?? ENDLESS_MODIFIERS[0]!;
+  const wavePresets = [1, 5, 10, 25, 50, 100];
   return (
-    <div className="space-y-4">
-      <Card>
-        <h2 className="font-display text-3xl">♾️ Endless Survival</h2>
-        <p className="mt-1 text-sm text-muted-foreground">An unbroken gauntlet of champions, each deadlier than the last. Waves pay Zeni and TP on every clear — the deeper you climb, the richer the haul. Your best streak: <span className="font-display text-chart-2">Wave {s.survivalBest}</span>.</p>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {ENDLESS_MODIFIERS.map((m) => (
-            <button key={m.id} onClick={() => setModifier(m.id)} title={m.desc} className={`rounded-lg border-2 px-3 py-2 text-sm ${modifier === m.id ? "border-primary text-primary" : "border-border"}`}>
-              <div className="font-display">{m.name}</div>
-              <div className="text-xs text-muted-foreground">{m.desc}</div>
-            </button>
-          ))}
+    <div className="space-y-6">
+      {/* Hero banner */}
+      <div className="relative overflow-hidden rounded-2xl border-2 border-primary/50 bg-gradient-to-br from-chart-5 via-secondary to-background p-6 shadow-[0_0_60px_-20px_var(--primary)]">
+        <div className="pointer-events-none absolute -right-10 -top-16 select-none text-[9rem] leading-none opacity-10">♾️</div>
+        <div className="relative">
+          <div className="font-display text-xs uppercase tracking-[0.3em] text-chart-1">The Infinite Gauntlet</div>
+          <h2 className="mt-1 font-display text-5xl leading-none text-foreground drop-shadow">Endless<br /><span className="text-primary">Survival</span></h2>
+          <p className="mt-2 max-w-md text-sm text-muted-foreground">A gauntlet without an end. Every wave is deadlier than the last — climb as high as your legs will carry you. What you win every clear, you get to keep. Forever.</p>
+          <div className="mt-3 flex flex-wrap gap-2 text-xs">
+            <span className="rounded-full border border-chart-2 bg-chart-2/10 px-3 py-1 font-display text-chart-2">🏆 Best: Wave {s.survivalBest}</span>
+            <span className="rounded-full border border-chart-1 bg-chart-1/10 px-3 py-1 font-display text-chart-1">Tokens scale every wave</span>
+            <span className="rounded-full border border-primary/50 px-3 py-1 font-display text-primary">No continues. No mercy.</span>
+          </div>
         </div>
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <label className="text-sm">Wave
-            <input type="number" min={1} max={9999} value={wave} onChange={(e) => setWave(Math.max(1, Math.min(9999, Math.floor(+e.target.value || 1))))} className="ml-2 w-20 rounded bg-input px-2 py-1 text-foreground" aria-label="Endless wave" />
-          </label>
-          <span className="text-sm text-muted-foreground">vs {preview.name.split("— ")[1]} · HP {fmt(preview.hp)} · ATK {fmt(preview.atk)}</span>
-          <span className="text-sm text-chart-2">Reward: {fmt(preview.zeni)} Zeni · {preview.tp} TP</span>
-          <Btn onClick={() => onFight(preview)}>Fight Wave {wave}</Btn>
-        </div>
-      </Card>
-      <h2 className="font-display text-2xl">🐉 Raid Bosses</h2>
-      <div className="grid gap-3 md:grid-cols-2">
-        {RAID_BOSSES.map((raid) => {
-          const cleared = s.defeated.includes(raid.base.id);
-          const canEnter = pl >= raid.entry;
-          return (
-            <Card key={raid.id}>
-              <div className="text-5xl">{raid.emoji}</div>
-              <div className="font-display text-xl">{raid.name} {cleared && "✅"}</div>
-              <div className="text-sm text-muted-foreground">{raid.desc}</div>
-              <div className="mt-1 text-sm">Entry: Power Level {fmt(raid.entry)} · HP {fmt(raid.base.hp)} · ATK {fmt(raid.base.atk)}</div>
-              <div className="text-sm text-chart-2">First clear: {fmt(raid.zeni)} Zeni · {raid.tp} TP · a Dragon Ball{cleared ? " · Rematches pay 15%" : ""}</div>
-              <Btn className="mt-2 w-full" disabled={!canEnter} onClick={() => onFight({ ...raid.base })}>{canEnter ? "Challenge!" : `Needs PL ${fmt(raid.entry)}`}</Btn>
-            </Card>
-          );
-        })}
       </div>
+
+      {/* Modifier cards */}
+      <section aria-label="Challenge modifiers">
+        <div className="mb-1 flex items-baseline justify-between">
+          <h3 className="font-display text-xl text-muted-foreground">Challenge Modifiers</h3>
+          <span className="text-xs text-muted-foreground">Payout ×{modChoice.rewardMult}</span>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          {ENDLESS_MODIFIERS.map((m) => {
+            const active = modifier === m.id;
+            return (
+              <button key={m.id} onClick={() => setModifier(m.id)} aria-pressed={active}
+                className={`rounded-xl border-2 p-3 text-left transition-all duration-150 ${active ? "border-primary bg-primary/10 shadow-[0_0_25px_-10px_var(--primary)]" : "border-border bg-card/60 hover:border-primary/50"}`}>
+                <div className="font-display text-lg leading-tight">{m.id === "none" ? "⚪" : m.id === "aggression" ? "😡" : "🧊"} {m.name}</div>
+                <div className="mt-1 text-xs text-muted-foreground">{m.desc}</div>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* Wave selection */}
+      <section aria-label="Wave selection" className="rounded-xl border border-border bg-card/70 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="text-xs text-muted-foreground">Choose your wave</div>
+            <div className="font-display text-6xl text-primary leading-none">{wave}</div>
+          </div>
+          <div className="flex-1 min-w-56">
+            <input type="range" min={1} max={9999} value={wave} onChange={(e) => setWave(Math.max(1, Math.min(9999, Math.floor(+e.target.value || 1))))} className="w-full" aria-label="Wave" />
+            <div className="mt-1 flex flex-wrap gap-1">
+              {wavePresets.map((p) => <button key={p} onClick={() => setWave(p)} className={`rounded px-2 py-0.5 text-xs font-display ${wave === p ? "bg-primary text-primary-foreground" : "bg-secondary"}`}>{p}</button>)}
+            </div>
+          </div>
+          <div className="text-right text-sm">
+            <div className="text-xs text-muted-foreground">Opponent</div>
+            <div className="font-display text-lg">vs {preview.name.split("— ")[1]}</div>
+            <div className="text-xs text-muted-foreground">HP {fmt(preview.hp)} · ATK {fmt(preview.atk)}</div>
+            <div className="mt-1 text-chart-2">{fmt(preview.zeni)} Zeni · {preview.tp} TP</div>
+            <Btn className="mt-2 px-6 py-3 text-xl" onClick={() => onFight(preview)}>Fight Wave {wave} →</Btn>
+          </div>
+        </div>
+      </section>
+
+      {/* Raid bosses */}
+      <section aria-label="Raid bosses">
+        <div className="mb-1 flex items-baseline justify-between">
+          <h3 className="font-display text-xl text-muted-foreground">🐉 Raid Bosses — For the Legends Only</h3>
+          <span className="text-xs text-muted-foreground">First-clear: guaranteed Dragon Ball</span>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          {RAID_BOSSES.map((raid, idx) => {
+            const cleared = s.defeated.includes(raid.base.id);
+            const canEnter = pl >= raid.entry;
+            const grad = idx === 0
+              ? "from-green-950 via-emerald-900/40 to-background"
+              : "from-red-950 via-rose-900/40 to-background";
+            return (
+              <div key={raid.id} className={`relative overflow-hidden rounded-2xl border-2 ${canEnter ? "border-chart-5" : "border-border"} bg-gradient-to-br ${grad} p-5 transition-transform hover:-translate-y-0.5`}>
+                <div className="absolute -right-3 -top-6 select-none text-8xl opacity-15">{raid.emoji}</div>
+                <div className="relative">
+                  <div className="font-display text-xs uppercase tracking-widest text-chart-5">{cleared ? "Felled — rematch pays 15%" : "Raid target"}</div>
+                  <div className="mt-1 font-display text-2xl leading-tight">{raid.name}</div>
+                  <p className="mt-1 text-sm text-muted-foreground">{raid.desc}</p>
+                  <div className="mt-2 grid grid-cols-2 gap-2 text-center text-xs">
+                    <div className="rounded bg-background/50 p-2"><div className="text-muted-foreground">ENTRY GATE</div><div className="font-display text-sm text-foreground">{fmt(raid.entry)} PL</div></div>
+                    <div className="rounded bg-background/50 p-2"><div className="text-muted-foreground">REWARD</div><div className="font-display text-sm text-chart-2">{fmt(raid.zeni)} Zeni · {raid.tp} TP</div></div>
+                    <div className="rounded bg-background/50 p-2"><div className="text-muted-foreground">HP</div><div className="font-display text-sm text-foreground">{fmt(raid.base.hp)}</div></div>
+                    <div className="rounded bg-background/50 p-2"><div className="text-muted-foreground">ATK</div><div className="font-display text-sm text-foreground">{fmt(raid.base.atk)}</div></div>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between gap-2">
+                    <div className="text-sm text-chart-2">{raid.ballOnFirstClear ? "🟠 First clear grants a Dragon Ball" : "Bonus TP payout"}</div>
+                    <Btn className="px-5" disabled={!canEnter} onClick={() => onFight({ ...raid.base })}>{canEnter ? "Challenge" : `🔒 ${fmt(raid.entry)} PL`}</Btn>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
     </div>
   );
 }
