@@ -22,7 +22,7 @@ export const Route = createFileRoute("/")({
 const TABS = ["Train", "Battle", "Forms", "Quests", "Shop"] as const;
 
 function Game() {
-  const { s, shake, slot } = useGame();
+  const { s, shake, slot, recoveredFromBackup } = useGame();
   const [tab, setTab] = useState<(typeof TABS)[number]>("Train");
   const [admin, setAdmin] = useState(false);
   const [taps, setTaps] = useState(0);
@@ -72,6 +72,12 @@ function Game() {
             <button key={t} onClick={() => setTab(t)} className={`rounded-lg px-4 py-2 font-display text-lg ${tab === t ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground"}`}>{t}</button>
           ))}
         </nav>
+
+        {recoveredFromBackup && (
+          <div role="alert" className="mb-4 rounded-lg border border-chart-1 bg-secondary p-3 text-sm text-chart-1">
+            ⚠ Your main save could not be read, so a recovered backup was loaded. Your most recent play may be missing — export a backup from the God Engine (Ctrl+Shift+A) to protect it.
+          </div>
+        )}
 
         {tab === "Train" && <TrainTab />}
         {tab === "Battle" && <BattleTab customBoss={customBoss} />}

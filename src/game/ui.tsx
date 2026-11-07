@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { BOSSES, FORMS, LOCATIONS, PASSES, QUESTS, TRAININGS, WISHES, fmt, type Boss, type StatKey } from "./data";
 import { allForms, applyAction, applyBattleRewards, applyShadowRewards, CUSTOM_FORM_MAX_MULT, findForm, battleClashDelay, battleClashPressure, canUnlockForm, formMult, gravMult, openSave, initialBattleState, levelForXp, powerLevel, questDone, rankForLevel, resolveBattleAction, shadowDummyBoss, SHADOW_REWARD_MULT, SHADOW_ZENKAI_HP_FRACTION, SHADOW_ZENKAI_MULT, xpRequiredForLevel, type BattleState } from "./engine";
+import { exportSlotText } from "./persistence";
 import { registerBattleHandler, sendBattleCommand, type BattleCommand } from "./battleBus";
 import { useBattleControls } from "./controls";
 import { useGame } from "./store";
@@ -482,7 +483,7 @@ export function ShopTab() {
             <Card key={p.id}>
               <div className="font-display text-xl">{p.name}</div>
               <div className="text-sm text-muted-foreground">{p.desc}</div>
-              <Btn className="mt-2 w-full" disabled={owned || s.tp < p.tp} onClick={() => update((d) => { d.tp -= p.tp; d.passes.push(p.id); })}>{owned ? "Owned" : `${p.tp} TP`}</Btn>
+              <Btn className="mt-2 w-full" disabled={owned || s.tp < p.tp} onClick={() => update((d) => applyAction(d, { type: "BUY_PASS", passId: p.id }))}>{owned ? "Owned" : `${p.tp} TP`}</Btn>
             </Card>
           );
         })}
@@ -498,16 +499,26 @@ export function ShopTab() {
             <p className="font-display text-xl text-chart-2">"State your wish. I will grant one."</p>
             {WISHES.map((w) => (
               <Btn key={w.id} className="mr-2" onClick={() => {
-                update((d) => {
-                  d.dragonBalls = 0;
-                  if (w.id === "zeni") d.zeni += powerLevel(d) * 100;
-                  if (w.id === "power") (Object.keys(d.stats) as StatKey[]).forEach((k) => (d.stats[k] *= 2));
-                  if (w.id === "tp") d.tp += 500;
-                });
+                update((d) => applyAction(d, { type: "MAKE_WISH", wishId: w.id }));
                 setWishing(false);
-              }}>{w.name} — {w.desc}</Btn>
+              }}>{w.name} — {w.desc}{w.id === "zeni" ? ` (≈ ${fmt(powerLevel(s) * 100)})` : ""}</Btn>
             ))}
           </div>
+        )}
+      </Card>
+      <h3 className="font-display text-2xl">Transaction History</h3>
+      <Card>
+        {s.transactions.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No transactions yet — boss victories, quest payouts, wishes and gear purchases will appear here.</p>
+        ) : (
+          <ul className="max-h-64 space-y-1 overflow-y-auto text-sm">
+            {[...s.transactions].reverse().slice(0, 50).map((t) => (
+              <li key={t.id} className="flex items-center justify-between gap-2 border-b border-border pb-1">
+                <span className="text-muted-foreground">{new Date(t.at).toLocaleString()} · {t.label}</span>
+                <span className={t.kind === "credit" ? "text-chart-2" : "text-destructive"}>{t.kind === "credit" ? "+" : "−"}{fmt(t.amount)} {t.currency === "zeni" ? "Zeni" : "TP"}</span>
+              </li>
+            ))}
+          </ul>
         )}
       </Card>
     </div>
@@ -528,6 +539,7 @@ export function AdminPanel({ onClose, onSpawn }: { onClose: () => void; onSpawn:
   const [tab, setTab] = useState<GodTab>("player");
   const [snapshot, setSnapshot] = useState("");
   const [importText, setImportText] = useState("");
+  const [importError, setImportError] = useState("");
   const [name, setName] = useState("Broly");
   const [hp, setHp] = useState("1000000");
   const [atk, setAtk] = useState("5000");
@@ -538,10 +550,10 @@ export function AdminPanel({ onClose, onSpawn }: { onClose: () => void; onSpawn:
   const modeClass = s.godMode ? "border-destructive text-destructive" : slot === "sandbox" ? "border-chart-1 text-chart-1" : "border-border text-muted-foreground";
   const statRows: [string, StatKey][] = [["Strength", "strength"], ["Agility", "agility"], ["Ki", "ki"], ["Defense", "defense"]];
   const exportSave = () => {
-    const blob = new Blob([JSON.stringify(s, null, 2)], { type: "application/json" });
+    const blob = new Blob([exportSlotText(s)], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = "god-engine-save.json";
+    a.download = `god-engine-save-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(a.href);
   };
@@ -749,16 +761,17 @@ export function AdminPanel({ onClose, onSpawn }: { onClose: () => void; onSpawn:
               </div>
               <h4 className="pt-2 font-display text-lg">Snapshot</h4>
               <div className={grid}>
-                <Btn onClick={() => setSnapshot(JSON.stringify(s))}>Take snapshot</Btn>
-                <Btn disabled={!snapshot} onClick={() => { const st = openSave(snapshot); if (st) restore(st); setSnapshot(""); }}>Restore snapshot</Btn>
+                <Btn onClick={() => setSnapshot(exportSlotText(s))}>Take snapshot</Btn>
+                <Btn disabled={!snapshot} onClick={() => { const st = openSave(snapshot); if (st) { restore(st); setSnapshot(""); } else setImportError("Snapshot failed to validate — discarded."); }}>Restore snapshot</Btn>
               </div>
               <h4 className="pt-2 font-display text-lg">Save management</h4>
               <div className={grid}>
-                <Btn onClick={exportSave}>Export JSON</Btn>
-                <Btn onClick={() => setImportText(JSON.stringify(s))}>Load current into box</Btn>
+                <Btn onClick={exportSave}>Export versioned JSON</Btn>
+                <Btn onClick={() => { setImportText(exportSlotText(s)); setImportError(""); }}>Load current into box</Btn>
               </div>
-              <textarea value={importText} onChange={(e) => setImportText(e.target.value)} rows={4} placeholder="Paste save JSON here, then Import" aria-label="Save JSON import" className="w-full rounded bg-input p-2 font-mono text-xs text-foreground" />
-              <Btn className="w-full" onClick={() => { const st = openSave(importText); if (st) restore(st); setImportText(""); }}>Import save</Btn>
+              <textarea value={importText} onChange={(e) => { setImportText(e.target.value); setImportError(""); }} rows={4} placeholder="Paste save JSON here, then Import" aria-label="Save JSON import" className="w-full rounded bg-input p-2 font-mono text-xs text-foreground" />
+              {importError && <p className="text-xs text-destructive" role="alert">{importError}</p>}
+              <Btn className="w-full" onClick={() => { const st = openSave(importText); if (st) { restore(st); setImportText(""); } else setImportError("Not a valid save file — imported data failed validation and was rejected."); }}>Import save</Btn>
               <Btn className="w-full" onClick={() => { if (confirm(`Wipe this ${slot === "main" ? "main" : "sandbox"} save completely?`)) reset(); }}>Wipe save (factory reset)</Btn>
             </div>
           )}

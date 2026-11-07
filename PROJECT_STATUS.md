@@ -1,6 +1,6 @@
 # Dragon Ball RPG — PROJECT STATUS
 
-**Last updated:** Phase 0 (project understanding) — handoff checkpoint
+**Last updated:** After Phase 3 — Save & Data Integrity (checkpoint `phase-3`)
 **Workspace:** `C:\Users\Administrator\Documents\Default Project\saiyan-training-simulator` (extracted from `Downloads/saiyan-training-simulator.zip`)
 **Runtime note:** No system Node/npm/git. A portable Node 26.13.0 was extracted to `AppData\Local\Temp\opencode\node-v26.13.0-win-x64` and Git comes from GitHub Desktop (`resources/app/git/cmd/git.exe`). Prefix shell calls with
 `$env:PATH = "C:\Users\Administrator\AppData\Local\Temp\opencode\node-v26.13.0-win-x64;$env:PATH"` (and `Set-ExecutionPolicy -Scope Process Bypass`) to run `npm`, `npx`, `node`.
@@ -12,7 +12,7 @@
 The codebase is **real and working**, not a mock-up. It builds clean, and all **23 existing unit tests pass**. It is, however, a *clicker/RPG prototype* — far from the vision in the master prompt. The God Engine already exists in **partial** form (a single `AdminPanel` with Player / Forms & Passes / Battle & Bosses / World & Quests / System tabs). Roughly **Phases 1–3 are done/substantially done**, and the remaining phases (4–10) are almost entirely **unimplemented**.
 
 **Environment verification results (honest):**
-- `npx vitest run` → **2 files, 23 passed**
+- `npx vitest run` → **3 files, 46 passed** (23 pre-existing + 23 new save-integrity tests)
 - `npm run build` → **success** (client + ssr + nitro)
 - `npx tsc --noEmit` → **success, no errors**
 - ESLint → 444 errors, of which **440 are pre-existing Prettier-formatting diffs** (it appears Prettier was never enforced) and **4 real `no-empty` errors** in `store.tsx` (empty `catch {}` blocks, intentional save-error swallow). No mass-format was done — Prettier config is treated as advisory; existing style is preserved.
@@ -57,10 +57,10 @@ The codebase is **real and working**, not a mock-up. It builds clean, and all **
 
 ## Partially implemented / known bugs
 
-1. **Save format inconsistency.** `switchSlot` and the wipe path write `JSON.stringify(state)` (raw, unversioned) while the auto-save effect writes the versioned envelope via `sealSave`. `openSave` tolerates both, but exports (`exportSave`) also emit raw JSON. All writers should emit the versioned envelope.
-2. **localStorage write storm.** The store writes on *every* state change, including the 250 ms TICK interval — 4+ serializations of the full save per second during normal play. Should be throttled/debounced.
-3. **`infiniteZeni` victory hack.** `update()` hard-sets `s.zeni = 1e15` after any change while the flag is on (fights against the `Math.floor(+e.target.value || 0)` editing model and clobbers intentionally lowered values).
-4. **No sandbox isolation guarantees in the spec sense** — sandbox exists and is used, but there are no snapshot schema versions, no event log, no snapshot list, and "Take snapshot" stores one opaque `JSON.stringify` in a React state (lost on close, no validation, no named snapshots).
+1. ~~Save format inconsistency~~ **fixed in Phase 3** — all writers emit the versioned envelope; exports are versioned JSON; import validates and reports.
+2. ~~localStorage write storm~~ **fixed in Phase 3** — 750 ms throttle + page-unload flush.
+3. ~~`infiniteZeni` clobber~~ **fixed in Phase 3** — override now gates only the form-unlock cost.
+4. **No sandbox isolation guarantees in the spec sense** — sandbox slot exists and works, but there is no snapshot schema-versioned UI list, event log, or named snapshot manager yet (primitives shipped in `snapshots.ts`; UI in Phases 7–8).
 5. **Quest/saga model is flat.** No quest graph/dependencies beyond a linear saga grouping, no objective progress tracking, no exploration/world-events, tournaments, or rivals. Dragon Balls come only from boss kills/rare train drops. Wishes are hard-coded (no stamina-cap wish, no reward-history log).
 6. **Combat is a narrow slice.** No perfect-guard/parry (F), no weak points, no adaptive boss AI, no boss phases, no signature techniques, no combat grades, no combo branching, no endless survival/raids/challenge modifiers. Boss difficulty only scales as raw HP/ATK.
 7. **Forms are multipliers only.** No form mastery, no form-specific combat behaviour, no upkeep/tradeoffs for high-tier forms.
@@ -105,10 +105,10 @@ src/test/engine.test.ts (+ app-routing.test.tsx) — 23 passing tests
 
 ## Phases
 - [x] Phase 0 — Project understanding (this document)
-- [ ] Phase 1 — Engine foundations (verified OK; only save-writer fixes)
-- [x] Phase 2 — Progression overhaul (done to spec; preserve)
-- [ ] Phase 3 — Save & data integrity  ← **FIRST (this session starts here)**
-- [ ] Phase 4 — Sagas, missions & exploration
+- [x] Phase 1 — Engine foundations (verified OK; save-writer integrity fixed here)
+- [x] Phase 2 — Progression overhaul (done to spec; preserved)
+- [x] Phase 3 — Save & data integrity (checkpoint `phase-3`)
+- [ ] Phase 4 — Sagas, missions & exploration  ← **FIRST (in progress)**
 - [ ] Phase 5 — Skill-based combat & AI
 - [ ] Phase 6 — Equipment, inventory & endgame
 - [ ] Phase 7 — God Engine foundations (full)
@@ -116,5 +116,19 @@ src/test/engine.test.ts (+ app-routing.test.tsx) — 23 passing tests
 - [ ] Phase 9 — Visual & audio polish
 - [ ] Phase 10 — Final project audit
 
+### Phase 3 — completed work (checkpoint `phase-3`)
+- All save writes go through the versioned envelope (`encodeSlot`/`sealSave`); sandbox clones, slot switching, export and snapshots included.
+- localStorage write throttle (750 ms, trailing-edge) + `pagehide`/`beforeunload` flush — the 250 ms TICK no longer rewrites the save 4×/second.
+- Backup rotation + corruption fallback wired into `resolveInitialLoad`; header shows a recovery banner when a backup is loaded; God Engine surfaces a rejected-import message instead of silent no-ops.
+- Persisted values hardened: `hydrate()` clamps every currency/gravity/stamina/XP bound, dedupes forms/passes/defeated/quests, drops malformed transaction rows, caps the ledger at 200 entries.
+- `infiniteZeni` no longer clobbers the wallet to 1e15; `canUnlockForm`/`UNLOCK_FORM` honor the override instead.
+- `POWER LEVEL` saturates to `MAX_SAVE_NUMBER` instead of overflowing to `Infinity`.
+- **New `transactions` ledger** (credit/debit, currency, amount, label, balance) — filled by boss victories, quest payouts, form unlocks, wishes and pass purchases; shown in a new Shop → Transaction History panel.
+- Passes re-priced to the master table (25/50/75/150/200 TP).
+- Shenron wishes now applied by the engine action `MAKE_WISH` (race-proof, validates 7 balls, pays once); added the 4th wish **Endless stamina** (+50 max stamina via persisted `maxStaminaBonus`), buy/sell passes via `BUY_PASS`.
+- New `src/game/persistence.ts` (slot keys, backup fallback, pretty export) and `src/game/snapshots.ts` (schema-versioned named snapshots — foundation for the God Engine snapshot manager).
+- Known honest limitation: sandbox remains a *separate save slot* (by design), not an isolated sandbox runtime; snapshot list UI arrives in Phase 7/8.
+
 ## Recoverable checkpoints
-1. **Baseline**: project as-extracted (git tag `baseline`), 23 tests pass, build OK.
+1. **Baseline**: project as-extracted (tag `baseline`), 23 tests pass, build OK.
+2. **phase-3**: save integrity overhaul (tag `phase-3`), 46 tests pass, build OK.

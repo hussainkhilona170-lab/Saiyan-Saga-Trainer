@@ -52,17 +52,18 @@ export const QUESTS: Quest[] = [
 ];
 
 export const PASSES = [
-  { id: "x2", name: "2x Training Speed", desc: "Double all training gains", tp: 50 },
-  { id: "auto", name: "Auto-Train", desc: "Trains your selected stat automatically", tp: 120 },
-  { id: "kicharge", name: "Instant Ki Charge", desc: "Ki meter fills instantly in battle", tp: 80 },
-  { id: "uipass", name: "Ultra Instinct Master Pass", desc: "Required to unlock Ultra Instinct", tp: 2000 },
-  { id: "vip", name: "VIP Perks", desc: "+50% Zeni, 2x stamina regen", tp: 300 },
+  { id: "x2", name: "2x Training Speed", desc: "Double all training gains", tp: 25 },
+  { id: "auto", name: "Auto-Train", desc: "Trains your selected stat automatically", tp: 50 },
+  { id: "kicharge", name: "Instant Ki Charge", desc: "Ki meter fills instantly in battle", tp: 75 },
+  { id: "uipass", name: "Ultra Instinct Master Pass", desc: "Required to unlock Ultra Instinct", tp: 150 },
+  { id: "vip", name: "VIP Perks", desc: "+50% Zeni, 2x stamina regen", tp: 200 },
 ];
 
 export const WISHES = [
   { id: "zeni", name: "Infinite riches", desc: "+ Zeni equal to 100× your Power Level" },
   { id: "power", name: "Become stronger", desc: "All stats ×2" },
   { id: "tp", name: "Medals of honor", desc: "+500 TP Medals" },
+  { id: "stamina", name: "Endless stamina", desc: "+50 max stamina, permanently" },
 ];
 
 export function fmt(n: number): string {

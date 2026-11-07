@@ -1,5 +1,7 @@
 // Pure game rules: no React, no browser APIs. All state transitions live here.
-import { BOSSES, FORMS, LOCATIONS, QUESTS, type Boss, type Form, type Quest, type StatKey } from "./data";
+import { BOSSES, FORMS, LOCATIONS, PASSES, QUESTS, WISHES, type Boss, type Form, type Quest, type StatKey } from "./data";
+
+export type Transaction = { id: string; at: number; kind: "credit" | "debit"; currency: "zeni" | "tp"; amount: number; label: string; balance: number };
 
 export type GameState = {
   stats: Record<StatKey, number>;
@@ -24,6 +26,8 @@ export type GameState = {
   godMode: boolean;
   infiniteZeni: boolean;
   darkAura: boolean;
+  maxStaminaBonus: number;
+  transactions: Transaction[];
 };
 
 export const initialState: GameState = {
@@ -34,19 +38,39 @@ export const initialState: GameState = {
   forms: ["base"], customForms: [], activeForm: "base", location: "roshi",
   passes: [], defeated: [], quests: [], autoTarget: "strength",
   godMode: false, infiniteZeni: false, darkAura: false,
+  maxStaminaBonus: 0,
+  transactions: [],
 };
+
+export const MAX_SAVE_NUMBER = 1e18;
+export const MAX_TRANSACTIONS = 200;
+
+/** Clamps a persisted number to a finite, non-negative bound (extreme-number protection). */
+export function clampSaveNumber(value: unknown, fallback = 0, max: number = MAX_SAVE_NUMBER): number {
+  return typeof value === "number" && isFinite(value) && value >= 0 ? Math.min(value, max) : fallback;
+}
+
+export function logTransaction(d: GameState, kind: Transaction["kind"], currency: Transaction["currency"], amount: number, label: string, at = Date.now()): void {
+  if (!Number.isFinite(amount) || amount <= 0) return;
+  const balance = currency === "zeni" ? d.zeni : d.tp;
+  d.transactions.push({ id: `${at}-${d.transactions.length}`, at, kind, currency, amount: Math.floor(amount), label: label.slice(0, 80), balance: Math.floor(balance) });
+  if (d.transactions.length > MAX_TRANSACTIONS) d.transactions.splice(0, d.transactions.length - MAX_TRANSACTIONS);
+}
 
 export const CUSTOM_FORM_MAX_MULT = 5000;
 export const allForms = (s: GameState): Form[] => [...FORMS, ...(s.customForms ?? [])];
 export const findForm = (s: GameState, id: string) => allForms(s).find((f) => f.id === id);
 export const formMult = (s: GameState) => findForm(s, s.activeForm)?.mult ?? 1;
-export const gravMult = (s: GameState) => 1 + (s.gravity - 1) * 0.25;
-export const powerLevel = (s: GameState) =>
-  Math.floor((s.stats.strength + s.stats.agility + s.stats.ki + s.stats.defense) * gravMult(s) * formMult(s) * 10);
+export const gravMult = (s: GameState) => Math.min(1e6, 1 + (s.gravity - 1) * 0.25);
+export const powerLevel = (s: GameState) => {
+  const pl = Math.floor((s.stats.strength + s.stats.agility + s.stats.ki + s.stats.defense) * gravMult(s) * formMult(s) * 10);
+  return Number.isFinite(pl) ? Math.min(pl, MAX_SAVE_NUMBER) : MAX_SAVE_NUMBER;
+};
 
 export const trainingGain = (s: GameState) => {
   const loc = LOCATIONS.find((l) => l.id === s.location)?.mult ?? 1;
-  return loc * gravMult(s) * (s.passes.includes("x2") ? 2 : 1) * Math.pow(formMult(s), 0.75);
+  const gain = loc * gravMult(s) * (s.passes.includes("x2") ? 2 : 1) * Math.pow(formMult(s), 0.75);
+  return Number.isFinite(gain) ? Math.min(gain, MAX_SAVE_NUMBER) : MAX_SAVE_NUMBER;
 };
 
 export const xpRequiredForLevel = (level: number) => Math.max(0, (Math.max(1, Math.floor(level)) - 1) * Math.max(1, Math.floor(level)) * 50);
@@ -76,7 +100,7 @@ export function effectiveTrainingGain(s: GameState, stat: StatKey, rawGain = tra
 
 export function canUnlockForm(s: GameState, formId: string): boolean {
   const form = findForm(s, formId);
-  return Boolean(form && !s.forms.includes(form.id) && s.level >= form.levelReq && powerLevel(s) >= form.req && s.zeni >= form.cost && (!form.pass || s.passes.includes(form.pass)));
+  return Boolean(form && !s.forms.includes(form.id) && s.level >= form.levelReq && powerLevel(s) >= form.req && (s.infiniteZeni || s.zeni >= form.cost) && (!form.pass || s.passes.includes(form.pass)));
 }
 
 export function battleExperienceReward(boss: Boss): number {
@@ -105,6 +129,8 @@ export type GameAction =
   | { type: "FORCE_CLAIM_QUEST"; questId: string }
   | { type: "UNLOCK_FORM"; formId: string }
   | { type: "TRANSFORM"; formId: string }
+  | { type: "BUY_PASS"; passId: string }
+  | { type: "MAKE_WISH"; wishId: string }
   | { type: "CREATE_FORM"; id: string; name: string; mult: number; aura: string; hair: string }
   | { type: "DELETE_FORM"; formId: string };
 
@@ -317,10 +343,13 @@ export function applyShadowRewards(game: GameState, zenkai: boolean): void {
 
 /** Applies a boss victory payout; the drop roll is supplied by the caller for deterministic tests. */
 export function applyBattleRewards(game: GameState, boss: Boss, foundDragonBall: boolean): void {
-  game.zeni += boss.zeni * (game.passes.includes("vip") ? 1.5 : 1);
-  game.tp += boss.tp;
+  const zeniGain = boss.zeni * (game.passes.includes("vip") ? 1.5 : 1);
+  game.zeni = clampSaveNumber(game.zeni + zeniGain, game.zeni);
+  game.tp = clampSaveNumber(game.tp + boss.tp, game.tp);
   if (!game.defeated.includes(boss.id)) game.defeated.push(boss.id);
   if (foundDragonBall && game.dragonBalls < 7) game.dragonBalls++;
+  logTransaction(game, "credit", "zeni", zeniGain, `Boss victory — ${boss.name}`);
+  logTransaction(game, "credit", "tp", boss.tp, `Boss victory — ${boss.name}`);
   grantExperience(game, battleExperienceReward(boss));
 }
 
@@ -342,8 +371,10 @@ function applyTraining(state: GameState, stat: StatKey, rawGain: number, xpScale
 /** Pays a quest's full reward set; shared by normal claims and God Engine force-claims. */
 function payQuest(d: GameState, quest: Quest): void {
   d.quests.push(quest.id);
-  d.zeni += quest.zeni;
-  d.tp += quest.tp;
+  d.zeni = clampSaveNumber(d.zeni + quest.zeni, d.zeni);
+  d.tp = clampSaveNumber(d.tp + quest.tp, d.tp);
+  logTransaction(d, "credit", "zeni", quest.zeni, `Quest — ${quest.title}`);
+  logTransaction(d, "credit", "tp", quest.tp, `Quest — ${quest.title}`);
   grantExperience(d, questExperienceReward(quest.id));
 }
 
@@ -354,7 +385,7 @@ export function applyAction(d: GameState, a: GameAction): void {
       if (d.stamina < 1 && !d.godMode) return;
       if (!d.godMode) d.stamina -= 1;
       const g = applyTraining(d, a.stat, trainingGain(d));
-      d.zeni += Math.ceil(g * 0.75 * (d.passes.includes("vip") ? 1.5 : 1));
+      d.zeni = clampSaveNumber(d.zeni + Math.ceil(g * 0.75 * (d.passes.includes("vip") ? 1.5 : 1)), d.zeni);
       if ((a.rand ?? Math.random()) < 0.002 && d.dragonBalls < 7) d.dragonBalls++;
       return;
     }
@@ -367,7 +398,7 @@ export function applyAction(d: GameState, a: GameAction): void {
       return;
     }
     case "TICK": {
-      d.maxStamina = 100 + Math.floor(d.stats.defense / 5);
+      d.maxStamina = Math.min(MAX_SAVE_NUMBER, 100 + Math.floor(d.stats.defense / 5) + Math.floor(d.maxStaminaBonus ?? 0));
       const regen = (2 + d.maxStamina * 0.02) * (d.passes.includes("vip") ? 2 : 1);
       d.stamina = Math.min(d.maxStamina, d.stamina + regen);
       if (d.passes.includes("auto")) {
@@ -393,8 +424,39 @@ export function applyAction(d: GameState, a: GameAction): void {
     case "UNLOCK_FORM": {
       const form = findForm(d, a.formId);
       if (!form || !canUnlockForm(d, form.id)) return;
-      d.zeni -= form.cost;
+      if (!d.infiniteZeni) {
+        d.zeni = clampSaveNumber(d.zeni - form.cost, 0);
+        logTransaction(d, "debit", "zeni", form.cost, `Transformation — ${form.name}`);
+      }
       d.forms.push(form.id);
+      return;
+    }
+    case "BUY_PASS": {
+      const pass = PASSES.find((p) => p.id === a.passId);
+      if (!pass || d.passes.includes(pass.id) || d.tp < pass.tp) return;
+      d.tp = clampSaveNumber(d.tp - pass.tp, 0);
+      logTransaction(d, "debit", "tp", pass.tp, `Pass — ${pass.name}`);
+      d.passes.push(pass.id);
+      return;
+    }
+    case "MAKE_WISH": {
+      const wish = WISHES.find((w) => w.id === a.wishId);
+      if (!wish || d.dragonBalls < 7) return;
+      d.dragonBalls = 0;
+      if (wish.id === "zeni") {
+        const amount = Math.floor(powerLevel(d) * 100);
+        d.zeni = clampSaveNumber(d.zeni + amount, d.zeni);
+        logTransaction(d, "credit", "zeni", amount, "Shenron wish — Infinite riches");
+      } else if (wish.id === "power") {
+        for (const k of Object.keys(d.stats) as StatKey[]) d.stats[k] = clampSaveNumber(d.stats[k] * 2, d.stats[k]);
+      } else if (wish.id === "tp") {
+        d.tp = clampSaveNumber(d.tp + 500, d.tp);
+        logTransaction(d, "credit", "tp", 500, "Shenron wish — Medals of honor");
+      } else if (wish.id === "stamina") {
+        d.maxStaminaBonus = clampSaveNumber((d.maxStaminaBonus ?? 0) + 50, 0, MAX_SAVE_NUMBER);
+        d.maxStamina = clampSaveNumber(d.maxStamina + 50, d.maxStamina);
+        d.stamina = d.maxStamina;
+      }
       return;
     }
     case "TRANSFORM":
@@ -426,24 +488,50 @@ export function hydrate(raw: unknown): GameState {
   const out: GameState = { ...base, ...r, stats: { ...base.stats } };
   for (const k of Object.keys(base.stats) as StatKey[]) {
     const v = r.stats?.[k];
-    if (typeof v === "number" && isFinite(v) && v >= 0) out.stats[k] = v;
+    if (typeof v === "number" && isFinite(v) && v >= 0) out.stats[k] = Math.min(v, MAX_SAVE_NUMBER);
+    else out.stats[k] = base.stats[k];
   }
-  out.xp = typeof r.xp === "number" && isFinite(r.xp) && r.xp >= 0 ? r.xp : 0;
+  out.xp = clampSaveNumber(r.xp, 0);
   out.level = levelForXp(out.xp);
   out.mastery = { ...base.mastery };
   for (const k of Object.keys(base.mastery) as StatKey[]) {
     const mastery = r.mastery?.[k];
     if (typeof mastery === "number" && isFinite(mastery)) out.mastery[k] = Math.max(0, Math.min(100, mastery));
   }
-  for (const k of ["forms", "passes", "defeated", "quests"] as const) {
-    if (!Array.isArray(out[k])) out[k] = [...base[k]];
-  }
+  // Dedupe string arrays so a corrupted save cannot double-pay rewards or spam ids.
+  const cleanStrings = (input: unknown, fallback: string[], allowed?: ReadonlySet<string>): string[] => {
+    if (!Array.isArray(input)) return [...fallback];
+    const seen = new Set<string>();
+    for (const entry of input) if (typeof entry === "string" && entry && !seen.has(entry) && (!allowed || allowed.has(entry))) seen.add(entry);
+    return [...seen];
+  };
+  const FORM_IDS = new Set(allForms(base).map((f) => f.id));
+  out.forms = cleanStrings(out.forms, base.forms, undefined).filter((id) => FORM_IDS.has(id) || id.startsWith("custom-"));
+  for (const k of ["passes", "defeated", "quests"] as const) out[k] = cleanStrings(out[k], base[k]);
+  out.zeni = clampSaveNumber(r.zeni, 0);
+  out.tp = clampSaveNumber(r.tp, 0);
+  out.dragonBalls = Math.floor(clampSaveNumber(r.dragonBalls, 0, 7));
+  out.maxStaminaBonus = clampSaveNumber(r.maxStaminaBonus, 0);
+  out.maxStamina = Math.max(1, Math.min(MAX_SAVE_NUMBER, clampSaveNumber(r.maxStamina, 100)));
+  out.stamina = Math.max(0, Math.min(out.maxStamina, clampSaveNumber(r.stamina, base.stamina, out.maxStamina)));
+  out.gravity = Math.max(1, Math.min(1000, Math.floor(clampSaveNumber(r.gravity, 1, 1000))));
+  out.gravityProgress = Math.max(0, Math.min(out.gravity * 25, clampSaveNumber(r.gravityProgress, 0, out.gravity * 25)));
+  if (typeof out.autoTarget !== "string" || !(out.autoTarget in base.stats)) out.autoTarget = base.autoTarget;
+  out.godMode = r.godMode === true;
+  out.infiniteZeni = r.infiniteZeni === true;
   out.customForms = Array.isArray(r.customForms)
     ? r.customForms.filter((f): f is Form => !!f && typeof f.id === "string" && f.id.startsWith("custom-") && typeof f.name === "string" && typeof f.mult === "number" && isFinite(f.mult))
       .map((f) => ({ ...f, mult: Math.max(1, Math.min(CUSTOM_FORM_MAX_MULT, f.mult)), custom: true }))
     : [];
+  // Transactions: keep only well-formed rows, cap the log.
+  out.transactions = Array.isArray(r.transactions)
+    ? r.transactions
+      .filter((t): t is Transaction => !!t && typeof t.id === "string" && typeof t.at === "number" && isFinite(t.at) && (t.kind === "credit" || t.kind === "debit") && (t.currency === "zeni" || t.currency === "tp") && typeof t.amount === "number" && isFinite(t.amount) && typeof t.label === "string")
+      .slice(-MAX_TRANSACTIONS)
+      .map((t) => ({ ...t, amount: Math.floor(Math.abs(t.amount)), balance: Math.floor(Math.abs(t.balance ?? 0)) }))
+    : [];
   if (!out.forms.includes("base")) out.forms.unshift("base");
-  if (!findForm(out, out.activeForm)) out.activeForm = "base";
+  if (typeof out.activeForm !== "string" || !findForm(out, out.activeForm)) out.activeForm = "base";
   if (!LOCATIONS.some((l) => l.id === out.location)) out.location = base.location;
   out.darkAura = r.darkAura === true;
   return out;
