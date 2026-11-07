@@ -114,7 +114,7 @@ src/test/engine.test.ts (+ app-routing.test.tsx) — 23 passing tests
 - [x] Phase 7 — God Engine foundations (full) (checkpoint `phase-7`)
 - [x] Phase 8 — GOD ENGINE interface & command center (checkpoint `phase-8`)
 - [x] Phase 9 — Visual & audio polish (checkpoint `phase-9`)
-- [ ] Phase 10 — Final project audit  ← **NEXT**
+- [x] Phase 10 — Final project audit (checkpoint `phase-10`, see AUDIT.md)
 - [ ] Phase 7 — God Engine foundations (full)
 - [ ] Phase 8 — God Engine interface & command center
 - [ ] Phase 9 — Visual & audio polish
@@ -142,6 +142,13 @@ src/test/engine.test.ts (+ app-routing.test.tsx) — 23 passing tests
 6. **phase-7**: God Engine foundations — typed admin API, console parser, simulator, infinite Ki, custom techniques (tag `phase-7`), 139 tests pass, build OK.
 7. **phase-8**: GOD ENGINE command center (tag `phase-8`), 150 tests pass, build OK.
 8. **phase-9**: visual & audio polish (tag `phase-9`), 150 tests pass, build OK.
+9. **phase-10**: final project audit (tag `phase-10`), see AUDIT.md — 150 tests pass, 0 console errors across all tabs.
+
+### Phase 10 — audit summary (checkpoint `phase-10`, full detail in `AUDIT.md`)
+- Dead code eliminated (`questProgressFraction`, unused locals/imports); silent catches commented; toast timer cleanup on unmount; ESLint clean on touched modules.
+- All 10 phases verified: 150 tests, production build OK, 8-tab browser pass with zero console errors, save-integrity and sandbox isolation confirmed.
+- Honest limitations documented in §7 (re-fight farming, grade pooling for variant ids, prettier backlog, no human weeks-long playtest yet).
+- The game is feature-complete per the master roadmap: training → sagas → combat depth → equipment/endgame → God Engine → command center → polish → audit.
 
 ### Phase 9 — completed work (checkpoint `phase-9`)
 - **CSS system** (`styles.css`): unified transitions on all interactive elements, `:focus-visible` rings everywhere, custom selection color, thin themed scrollbars, `.card-hover` lift (boss cards, form cards), `.tab-active` glow, `.bar-animated` sheen on stat bars, `prefers-reduced-motion` respected, touch-action none on the arena, number-input spinners hidden.

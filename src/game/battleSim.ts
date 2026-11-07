@@ -27,13 +27,10 @@ export function simulateBossFight(game: GameState, boss: Boss, maxSeconds = 240)
   });
   const maxPlayerHp = battle.maxPlayerHp;
   const startKi = g.stats.ki;
-  let tick = 0;
   let now = 1000;
   let damageDealtTotal = 0;
   let damageTakenTotal = 0;
-  let lastPlayerHp = battle.playerHp;
-  let lastBossHp = battle.hp;
-  let blastOffset = 0;
+  let tick = 0;
   while (now < maxSeconds * 1000 && battle.phase !== "won" && battle.phase !== "lost") {
     tick++;
     if (battle.phase === "clash") {

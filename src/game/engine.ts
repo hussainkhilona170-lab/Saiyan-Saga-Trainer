@@ -206,11 +206,6 @@ function d_clamp(value: number | undefined): number {
   return typeof value === "number" && isFinite(value) && value >= 0 ? value : 0;
 }
 
-export function questProgressFraction(s: GameState, questId: string): number {
-  const summary = questSummary(s, questId);
-  return summary ? summary.progress / Math.max(1, summary.target) : 0;
-}
-
 export function questDone(s: GameState, id: string) {
   const q = QUESTS.find((x) => x.id === id);
   if (!q) return false;

@@ -41,6 +41,7 @@ export function AdminPanel({ onClose, onSpawn }: { onClose: () => void; onSpawn:
   const [section, setSection] = useState<Section>("overview");
   const [toast, setToast] = useState("");
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current); }, []);
   const pushToast = useCallback((message: string) => {
     setToast(message);
     if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -566,7 +567,7 @@ function ScenarioSection({ s, update, onSpawn, pushToast }: { s: GameState; upda
   const [error, setError] = useState("");
   const persist = (list: Scenario[]) => {
     setScenarios(list);
-    try { localStorage.setItem(SCENARIOS_KEY, serializeScenarioList(list)); } catch {}
+    try { localStorage.setItem(SCENARIOS_KEY, serializeScenarioList(list)); } catch { /* storage unavailable */ }
   };
   const bossOptions = bossIdSuggestions();
   return (
@@ -639,7 +640,7 @@ function ConsoleSection({ s, update, pushToast, onSpawn }: { s: GameState; updat
   const print = useCallback((line: string, okLine: boolean) => {
     setOutput((prev) => {
       const next = [...prev, { id: ++idRef.current, line, ok: okLine }].slice(-80);
-      try { localStorage.setItem("db-god-console-log", JSON.stringify(next)); } catch {}
+      try { localStorage.setItem("db-god-console-log", JSON.stringify(next)); } catch { /* storage unavailable */ }
       return next;
     });
   }, []);
@@ -666,7 +667,7 @@ function ConsoleSection({ s, update, pushToast, onSpawn }: { s: GameState; updat
             const rawList = localStorage.getItem(SNAPSHOTS_KEY);
             const list = rawList ? [...parseSnapshotList(rawList), snap].slice(-50) : [snap];
             localStorage.setItem(SNAPSHOTS_KEY, JSON.stringify(list));
-          } catch {}
+          } catch { /* storage unavailable */ }
         });
         print(result.message, true);
       } else {
@@ -677,7 +678,7 @@ function ConsoleSection({ s, update, pushToast, onSpawn }: { s: GameState; updat
     }
     setHistory((h) => {
       const next = [raw, ...h.filter((x) => x !== raw)].slice(0, 50);
-      try { localStorage.setItem("db-god-console-history", JSON.stringify(next)); } catch {}
+      try { localStorage.setItem("db-god-console-history", JSON.stringify(next)); } catch { /* storage unavailable */ }
       return next;
     });
     setCmd("");
@@ -720,7 +721,7 @@ function ConsoleSection({ s, update, pushToast, onSpawn }: { s: GameState; updat
       </div>
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs text-muted-foreground">⚠ Destructive commands require confirmation. Console history persists locally.</p>
-        <button className="text-xs text-muted-foreground underline" onClick={() => { setOutput([]); try { localStorage.removeItem("db-god-console-log"); } catch {} }}>Clear output</button>
+        <button className="text-xs text-muted-foreground underline" onClick={() => { setOutput([]); try { localStorage.removeItem("db-god-console-log"); } catch { /* storage unavailable */ } }}>Clear output</button>
       </div>
     </div>
   );
@@ -777,7 +778,7 @@ function SnapshotsSection({ s, slot, restore }: { s: GameState; slot: string; re
   const [name, setName] = useState("");
   const persist = (list: Snapshot[]) => {
     setSnapshots(list);
-    try { localStorage.setItem(SNAPSHOTS_KEY, JSON.stringify(list.slice(-50))); } catch {}
+    try { localStorage.setItem(SNAPSHOTS_KEY, JSON.stringify(list.slice(-50))); } catch { /* storage unavailable */ }
   };
   return (
     <div className="space-y-3">

@@ -3,7 +3,7 @@
 - [x] Add optional synthesized battle sound effects.
 - [x] Rebuild the battle arena around the uploaded anime-fighter reference: richer character silhouettes, cinematic stage, impact VFX, and layered sound.
 - [x] Add PC-first keyboard and mouse controls for melee combos, ki volleys, vanish movement, charging, and Kamehameha-style blasts.
-- [ ] Verify battle controls and visuals in the live preview, including keyboard and mouse interactions.
+- [x] Verify battle controls and visuals in the live preview, including keyboard and mouse interactions.
 - [x] Phase 1 — Engine foundations (pure rules module, action dispatcher, safe save loading, tests)
 - [x] Phase 2 — Progression overhaul
 - [x] Phase 3 — Save/data integrity
