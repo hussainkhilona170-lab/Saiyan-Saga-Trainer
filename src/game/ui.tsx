@@ -147,7 +147,7 @@ function ScoutCard() {
 
 /* ---------- Turbo Clicker — single insane-speed auto clicker (1ms buffer) ---------- */
 
-const INSANE_CPS = 1000;
+const CLICKS_PER_SEC = 100;
 
 function TurboClicker() {
   const { s, train, update } = useGame();
@@ -167,8 +167,8 @@ function TurboClicker() {
     // meter only counts gains that actually landed.
     const canClick = () => sRef.current.godMode || sRef.current.stamina >= 1;
     // Batch many clicks into a single state update so the UI keeps painting
-    // at "super fast" rates (per-click setState at 1ms froze the tab).
-    const BATCH = 50;
+    // at high speed.
+    const BATCH = 5;
     const TICK_MS = 50;
     const clicker = setInterval(() => {
       if (!canClick()) return;
@@ -197,7 +197,7 @@ function TurboClicker() {
   return (
     <Card className={on ? "border-primary" : ""}>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="font-display text-2xl">⚡ Turbo Clicker — 1000/s</div>
+        <div className="font-display text-2xl">⚡ Turbo Clicker — 100/s</div>
         <Btn onClick={() => setOn((v) => !v)} className={on ? "bg-destructive" : ""}>{on ? "■ STOP" : "▶ START"}</Btn>
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-2">

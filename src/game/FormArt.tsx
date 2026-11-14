@@ -67,10 +67,17 @@ const fallback = (formId: string, aura?: string): FormCfg => ({
   hairPath: "M14 30 Q16 12 32 9 Q48 12 50 30 Q46 18 40 16 Q36 12 32 11 Q28 12 24 16 Q18 18 14 30 Z",
 });
 
+const CANON_FORMS = new Set(["base", "kaioken", "ssj1", "ssj2", "ssj3", "ssj4", "god", "blue", "ui"]);
+
 export function FormArt({ formId, hair, aura, size = 72, className = "" }: FormArtProps): ReactElement {
+  const uid = `fa${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
+  if (CANON_FORMS.has(formId)) {
+    return (
+      <img src={`/forms/${formId}.png`} width={size} height={size} alt="" aria-hidden="true" className={`select-none ${className}`} style={{ imageRendering: "pixelated", objectFit: "contain" }} />
+    );
+  }
   const base = FORMS[formId] ?? fallback(formId, aura);
   const cfg = { ...base, hair: hair ?? base.hair, aura: aura ?? base.aura };
-  const uid = `fa${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const isSsj4 = cfg.extra === "ssj4";
   return (
     <svg viewBox="0 0 64 64" width={size} height={size} className={`select-none ${className}`} aria-hidden="true" focusable="false">
