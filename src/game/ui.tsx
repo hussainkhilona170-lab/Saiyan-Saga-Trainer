@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { BOSSES, FORMS, LOCATIONS, PASSES, QUESTS, SAGA_ORDER, TOURNAMENT, TRAININGS, WISHES, EQUIPMENT, CONSUMABLES, TECHNIQUES, TECHNIQUE_RANKS, RAID_BOSSES, ENDLESS_MODIFIERS, fmt, type Boss, type StatKey, type EndlessModifierId } from "./data";
-import { allForms, applyAction, applyBattleRewards, applyShadowRewards, applyTournamentRewards, applySurvivalRewards, applyRaidRewards, consumeItem, effectiveTrainingGain, endlessBoss, equipmentBonus, techniqueRank, bumpTechniqueUse, battleGrade, CUSTOM_FORM_MAX_MULT, findForm, battleClashDelay, battleClashPressure, canUnlockForm, formMult, gravMult, initialBattleState, levelForXp, maxGravityForLevel, powerLevel, questSummary, sagaQuests, sagaStatus, rankForLevel, resolveBattleAction, shadowDummyBoss, SHADOW_REWARD_MULT, SHADOW_ZENKAI_HP_FRACTION, SHADOW_ZENKAI_MULT, xpRequiredForLevel, type BattleState, type GameState } from "./engine";
+import { allForms, applyAction, applyBattleRewards, applyShadowRewards, applyTournamentRewards, applySurvivalRewards, applyRaidRewards, consumeItem, effectiveTrainingGain, endlessBoss, equipmentBonus, techniqueRank, bumpTechniqueUse, battleGrade, CUSTOM_FORM_MAX_MULT, findForm, battleClashDelay, battleClashPressure, canUnlockForm, formMult, gravMult, initialBattleState, levelForXp, maxGravityForLevel, powerLevel, questSummary, sagaQuests, sagaStatus, rankForLevel, resolveBattleAction, shadowDummyBoss, SHADOW_REWARD_MULT, SHADOW_ZENKAI_HP_FRACTION, SHADOW_ZENKAI_MULT, xpRequiredForLevel, formLevel, type BattleState, type GameState } from "./engine";
 import { registerBattleHandler, type BattleCommand } from "./battleBus";
 import { useBattleControls } from "./controls";
 import { useGame } from "./store";
@@ -238,7 +238,20 @@ export function FormsTab() {
               <div className="transition-transform duration-150 hover:scale-105" title={f.name}>
                 <FormArt formId={f.id} hair={f.hair} aura={f.aura} size={64} />
               </div>
-              <div className="flex-1"><div className="font-display text-xl">{f.name}</div><div className="text-sm text-muted-foreground">×{fmt(f.mult)} power · {f.custom ? "Custom form" : `Level ${f.levelReq}`}</div></div>
+              <div className="flex-1"><div className="font-display text-xl">{f.name}</div><div className="text-sm text-muted-foreground">×{fmt(f.mult)} power · {f.custom ? "Custom form" : `Level ${f.levelReq}`}</div>
+                {owned && f.id !== "base" && (() => {
+                  const lvl = formLevel(s.formXp?.[f.id] ?? 0);
+                  const xp = s.formXp?.[f.id] ?? 0;
+                  const next = lvl >= 10 ? 0 : (lvl * 100) - xp + 100; // xp to next level
+                  const pct = lvl >= 10 ? 100 : ((xp - (lvl - 1) * 100) / 100) * 100;
+                  return (
+                    <div className="mt-1">
+                      <div className="text-xs text-muted-foreground">Form Lv {lvl} · +{(lvl - 1) * 2}% power{lvl >= 10 ? " (MAX)" : ""}</div>
+                      <div className="mt-0.5 h-1.5 w-full overflow-hidden rounded-full bg-muted"><div className="h-full bg-chart-2 transition-all" style={{ width: `${Math.max(0, Math.min(100, pct))}%` }} /></div>
+                    </div>
+                  );
+                })()}
+              </div>
               {f.custom && <button className="text-sm text-destructive underline" onClick={() => { if (confirm(`Delete ${f.name}?`)) update((d) => applyAction(d, { type: "DELETE_FORM", formId: f.id })); }}>Delete</button>}
             </div>
             <div className="mt-3">

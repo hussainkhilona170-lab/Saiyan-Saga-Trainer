@@ -40,6 +40,7 @@ export type GameState = {
   infiniteKi: boolean;
   customTechniques: CustomTechnique[];
   adminEvents: AdminEvent[];
+  formXp: Record<string, number>;
 };
 
 export type AdminEvent = { id: string; at: number; action: string; target: string; previousValue: string; newValue: string; outcome: "ok" | "failed" | "blocked"; detail?: string };
@@ -65,6 +66,7 @@ export const initialState: GameState = {
   infiniteKi: false,
   customTechniques: [],
   adminEvents: [],
+  formXp: {},
 };
 
 export const MAX_SAVE_NUMBER = 1e18;
@@ -113,7 +115,7 @@ export function bumpTechniqueUse(d: GameState, id: string, amount = 1): void {
 
 export const allForms = (s: GameState): Form[] => [...FORMS, ...(s.customForms ?? [])];
 export const findForm = (s: GameState, id: string) => allForms(s).find((f) => f.id === id);
-export const formMult = (s: GameState) => findForm(s, s.activeForm)?.mult ?? 1;
+export const formMult = (s: GameState) => (findForm(s, s.activeForm)?.mult ?? 1) * (1 + 0.02 * (formLevel(s.formXp?.[s.activeForm] ?? 0) - 1));
 export const gravMult = (s: GameState) => Math.min(1e6, 1 + (s.gravity - 1) * 0.25);
 export const powerLevel = (s: GameState) => {
   const equip = equipmentBonus(s);
@@ -135,6 +137,11 @@ export function levelForXp(xp: number): number {
   let level = 1;
   while (level < 100 && xp >= xpRequiredForLevel(level + 1)) level++;
   return level;
+}
+
+/** Form mastery: level from accumulated form XP (100 XP per level, cap 10). */
+export function formLevel(xp: number): number {
+  return Math.min(10, 1 + Math.floor(Math.max(0, xp) / 100));
 }
 
 export function rankForLevel(level: number): string {
@@ -747,6 +754,7 @@ export function applyBattleRewards(game: GameState, boss: Boss, foundDragonBall:
   logTransaction(game, "credit", "zeni", zeniGain, `Boss victory — ${boss.name}`);
   logTransaction(game, "credit", "tp", boss.tp, `Boss victory — ${boss.name}`);
   grantExperience(game, battleExperienceReward(boss));
+  grantFormXp(game, game.activeForm, 20);
 }
 
 export function grantExperience(state: GameState, amount: number): void {
@@ -755,6 +763,13 @@ export function grantExperience(state: GameState, amount: number): void {
   // Gravity adapts with the body: leveling up raises the chamber automatically.
   if (nextLevel > state.level) state.gravity = Math.max(state.gravity, maxGravityForLevel(nextLevel));
   state.level = nextLevel;
+}
+
+/** Grant XP to a form's mastery (no-op for base). */
+export function grantFormXp(state: GameState, formId: string, amount: number): void {
+  if (!formId || formId === "base" || formId.startsWith("custom-")) return;
+  if (!state.formXp) state.formXp = {};
+  state.formXp[formId] = clampSaveNumber((state.formXp[formId] ?? 0) + Math.max(0, Math.floor(amount)), 0);
 }
 
 function applyTraining(state: GameState, stat: StatKey, rawGain: number, xpScale = 1): number {
@@ -787,6 +802,7 @@ export function applyAction(d: GameState, a: GameAction): void {
       d.zeni = clampSaveNumber(d.zeni + Math.ceil(g * 0.75 * (d.passes.includes("vip") ? 1.5 : 1)), d.zeni);
       if ((a.rand ?? Math.random()) < 0.002) grantBall(d);
       bumpQuestProgress(d, "train", 1, a.stat);
+      grantFormXp(d, d.activeForm, 1);
       return;
     }
     case "TICK": {
@@ -797,6 +813,7 @@ export function applyAction(d: GameState, a: GameAction): void {
         const rawGain = trainingGain(d);
         applyTraining(d, d.autoTarget, rawGain * 2, 0.25);
         d.zeni = clampSaveNumber(d.zeni + Math.ceil(rawGain), d.zeni);
+        grantFormXp(d, d.activeForm, 1);
       }
       return;
     }
@@ -1068,6 +1085,15 @@ export function hydrate(raw: unknown): GameState {
   }
   out.survivalBest = Math.max(0, Math.min(9999, Math.floor(clampSaveNumber(r.survivalBest, 0, 9999))));
   out.infiniteKi = r.infiniteKi === true;
+  // Form mastery XP: clamp per-form.
+  out.formXp = {};
+  if (r.formXp && typeof r.formXp === "object") {
+    for (const k of Object.keys(r.formXp)) {
+      if (typeof k === "string" && k.length <= 32) {
+        out.formXp[k] = clampSaveNumber((r.formXp as Record<string, unknown>)[k], 0, 100000);
+      }
+    }
+  }
   // Custom techniques: strict shape enforcement — they execute in real combat.
   const TECH_SCALES: readonly CustomTechniqueScale[] = ["ki", "strength", "agility", "defense"];
   out.customTechniques = [];
