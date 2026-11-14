@@ -170,7 +170,6 @@ export function executeAdminAction(d: GameState, action: AdminAction, at = Date.
     case "SET_GRAVITY": {
       const prev = d.gravity;
       d.gravity = Math.max(1, Math.min(1000, Math.floor(Number.isFinite(action.gravity) ? action.gravity : 1)));
-      d.gravityProgress = 0;
       record(d, action.type, "gravity", prev, d.gravity, "ok", at);
       return ok(`Gravity set to ${d.gravity}×`);
     }

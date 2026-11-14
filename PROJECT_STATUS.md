@@ -1,6 +1,6 @@
 # Dragon Ball RPG — PROJECT STATUS
 
-**Last updated:** 2026-11-14 — post-phase-10 audit (see `AUDIT.md` "Post-phase-10 audit — 2026-11-14")
+**Last updated:** 2026-11-14 — post-phase-10 audit + user feedback round 2 (Turbo Clicker, automatic gravity)
 **Workspace:** `C:\Users\Administrator\Documents\GitHub\Saiyan-Saga-Trainer` (git repo, Lovable-connected — see `AGENTS.md`: do not rewrite published history)
 **Runtime note:** Node v24 is installed at `C:\Program Files\nodejs`. On Windows PowerShell, prefix calls with `Set-ExecutionPolicy -Scope Process Bypass -Force` and invoke `& "C:\Program Files\nodejs\npm.cmd" ...` (npm.ps1 is blocked by default policy).
 
@@ -25,7 +25,7 @@ The codebase is **real and working**, not a mock-up. It builds clean, and all **
 - Stats: strength / agility / ki / defense; level 1–100 via quadratic XP curve `xpRequiredForLevel`
 - Rank ladder (Novice → Fighter → Elite → Master → Ascendant → Divine → Legend)
 - Stat soft caps `100 + (level-1)*40`, mastery 0–100% with mastery-based training multipliers
-- Training actions cost stamina (1 normal / 2 gravity; god mode free), gravity levels after `gravity×25` reps, `gravMult = 1 + (gravity-1)*0.25`
+- Training actions cost stamina (1 normal; god mode free), `gravMult = 1 + (gravity-1)*0.25`. Applied per-click gain = raw multipliers × mastery bonus ÷ (1 + stat/statSoftCap(level)) — a deliberate soft cap. Gravity is fully automatic: `maxGravityForLevel = 1 + floor(level/2)` (one 10G step per 2 levels, Lv 100 → 510G), applied on every level-up — no manual gravity training; God Engine `SET_GRAVITY` overrides directly and is never lowered by level-ups
 - Power Level = `(STR+AGI+KI+DEF) × gravMult × formMult × 10`
 - Location training multipliers (Roshi's Island ×1, Korin ×3, HTC ×10, King Kai ×40, Beerus ×150)
 - 9 transformations (base → Ultra Instinct) + custom-form creator (cap 5000×), `canUnlockForm` gates (level/PL/zeni/UI pass)
@@ -121,6 +121,12 @@ src/test/engine.test.ts (+ app-routing.test.tsx) — 23 passing tests
 - **Accuracy/hygiene:** battle simulator now matches live combat math (form × gravity HP, real clash pressure); 6 `no-case-declarations` fixed by bracing BLAST/ULTIMATE/VANISH; extreme-number clamps on TICK/training/XP/shadow-reward writes; `FormArt` unique SVG ids per instance; **impure state updaters fixed** (God Engine toast/console output ran setState inside the `update()` updater — React renders updaters during the render phase; now previewed on a throwaway clone and dispatched pure); stale "phase 8" build text updated.
 - **Verified:** 155 tests pass (9 files), `tsc --noEmit` clean, production build OK, ESLint 0 errors (13 pre-existing `react-refresh` warnings), live browser: all 8 tabs + full God Engine with 0 console errors/warnings, Lighthouse 1.00/1.00/1.00.
 - **Honest note:** there is **no save-import UI** — Settings & Recovery offers export + backup restore only (console/scenario import paths exist separately).
+
+### User feedback round 2 — 2026-11-14: Turbo Clicker + automatic gravity + honest gain meter
+- **Turbo Clicker** (Train tab card): single insane-speed auto-clicker — one START/STOP button clicking at ~1000/s (1ms buffer; the browser clamps setInterval to ~4ms, so effectively ~250/s). Stat picker (STR/AGI/KI/DEF) retained; speed picker and FAST/TURBO presets removed. Clicks are batched 50-at-a-time into a single state update so the UI keeps painting at high speed. Live "+X/s" meter accumulates gains over a 1-second window (per-click gains can be sub-1) plus a session total; stamina-aware — engine no-ops are not counted; tick sound throttled to ≥200 ms; session-only state that stops when you leave the tab. Pure UI dispatcher — no engine change.
+- **Gravity rework** (user: "no training for gravity, bump it higher as the level increases"): manual gravity training removed entirely. `TRAIN_GRAVITY`, `trainGravity` and the `gravityProgress` field are gone; `grantExperience` snaps `gravity = max(gravity, maxGravityForLevel(nextLevel))` on every level-up. Saves lagging the curve catch up on their next level-up; a higher gravity (God Engine `SET_GRAVITY` override) is never lowered. Train tab shows a passive Gravity Chamber card with the next-step hint. Verified live: Lv 25 → 130G, Lv 33 → 170G — exactly on the curve.
+- **Honest gain reporting fix** (user: meter showed "+1.00M /s" but stats barely moved): `store.train()` returned the RAW `trainingGain` multiplier product while the engine applies the soft-capped `effectiveTrainingGain` (×(1 + mastery/200) ÷ (1 + stat/cap)) — a ~÷230 discrepancy at high stats. `train()` now returns the applied gain, so the Turbo meter and click floaters match the stat growth the player observes. The soft cap itself is intentional (progression brake; mastery and level-ups raise the yield).
+- **Verified:** 155 tests pass, `tsc --noEmit` clean, ESLint 0 errors, production build OK, live browser console clean after a full reload.
 
 ### Phase 3 — completed work (checkpoint `phase-3`)
 - All save writes go through the versioned envelope (`encodeSlot`/`sealSave`); sandbox clones, slot switching, export and snapshots included.

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { BOSSES, FORMS, LOCATIONS, PASSES, QUESTS, SAGA_ORDER, TOURNAMENT, TRAININGS, WISHES, EQUIPMENT, CONSUMABLES, TECHNIQUES, TECHNIQUE_RANKS, RAID_BOSSES, ENDLESS_MODIFIERS, fmt, type Boss, type StatKey, type EndlessModifierId } from "./data";
-import { allForms, applyAction, applyBattleRewards, applyShadowRewards, applyTournamentRewards, applySurvivalRewards, applyRaidRewards, endlessBoss, equipmentBonus, techniqueRank, bumpTechniqueUse, consumeItem, battleGrade, CUSTOM_FORM_MAX_MULT, findForm, battleClashDelay, battleClashPressure, canUnlockForm, formMult, gravMult, initialBattleState, levelForXp, powerLevel, questSummary, sagaQuests, sagaStatus, rankForLevel, resolveBattleAction, shadowDummyBoss, SHADOW_REWARD_MULT, SHADOW_ZENKAI_HP_FRACTION, SHADOW_ZENKAI_MULT, xpRequiredForLevel, type BattleState } from "./engine";
+import { allForms, applyAction, applyBattleRewards, applyShadowRewards, applyTournamentRewards, applySurvivalRewards, applyRaidRewards, consumeItem, effectiveTrainingGain, endlessBoss, equipmentBonus, techniqueRank, bumpTechniqueUse, battleGrade, CUSTOM_FORM_MAX_MULT, findForm, battleClashDelay, battleClashPressure, canUnlockForm, formMult, gravMult, initialBattleState, levelForXp, maxGravityForLevel, powerLevel, questSummary, sagaQuests, sagaStatus, rankForLevel, resolveBattleAction, shadowDummyBoss, SHADOW_REWARD_MULT, SHADOW_ZENKAI_HP_FRACTION, SHADOW_ZENKAI_MULT, xpRequiredForLevel, type BattleState } from "./engine";
 import { registerBattleHandler, type BattleCommand } from "./battleBus";
 import { useBattleControls } from "./controls";
 import { useGame } from "./store";
@@ -64,9 +64,12 @@ function TrainButton({ t }: { t: (typeof TRAININGS)[number] }) {
 }
 
 export function TrainTab() {
-  const { s, update, trainGravity } = useGame();
-  const { add, layer } = useFloats();
+  const { s, update } = useGame();
   const pl = powerLevel(s);
+  // Gravity adapts automatically: one 10G step per 2 levels (curve), applied on
+  // level-up. Saves whose gravity lags the curve snap up on the next level-up.
+  const gravCurve = maxGravityForLevel(s.level);
+  const gravLagging = s.gravity < gravCurve;
   return (
     <div className="space-y-4">
       <Card>
@@ -78,14 +81,25 @@ export function TrainTab() {
       </Card>
       <p className="text-sm text-muted-foreground">Click rapidly or hold a button to train. Training uses stamina, which refills on its own.</p>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">{TRAININGS.map((t) => <TrainButton key={t.id} t={t} />)}</div>
-      <button onClick={(e) => { trainGravity(); add(e, "G↑"); }} className="relative w-full select-none rounded-xl border-2 border-destructive/50 bg-secondary p-4 text-left active:scale-[0.98]">
-        <div className="flex items-center justify-between">
-          <div><span className="text-2xl">🌀</span> <span className="font-display text-xl">Gravity Chamber — {s.gravity * 10}G</span>
-            <div className="text-sm text-muted-foreground">Overall multiplier ×{gravMult(s).toFixed(2)}</div></div>
+      <TurboClicker />
+      <Card className="border-destructive/40">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <span className="text-2xl">🌀</span> <span className="font-display text-xl">Gravity Chamber — {s.gravity * 10}G</span>
+            <div className="text-sm text-muted-foreground">Overall training multiplier ×{gravMult(s).toFixed(2)}</div>
+          </div>
+          <div className="text-right text-xs text-muted-foreground">
+            <div className="font-display text-lg text-chart-2">+{(gravLagging ? gravCurve : s.gravity + 1) * 10}G</div>
+            <div>{gravLagging ? `adapts at Lv ${s.level + 1}` : 2 * s.gravity > 100 ? "chamber maximum" : `unlocks at Lv ${2 * s.gravity}`}</div>
+          </div>
         </div>
-        <Bar value={s.gravityProgress} max={s.gravity * 25} className="mt-2 bg-destructive" />
-        {layer}
-      </button>
+        <p className="mt-2 text-xs text-muted-foreground">
+          {gravLagging
+            ? `Your body is catching up — your next level-up adapts you to ${gravCurve * 10}G.`
+            : "Your body adapts on its own — gravity steps up automatically as you level."}{" "}
+          No training needed.
+        </p>
+      </Card>
       {s.passes.includes("auto") && (
         <Card><span className="font-display">Auto-Train target: </span>
           {TRAININGS.map((t) => (
@@ -127,6 +141,78 @@ function ScoutCard() {
         setResult(r < 0.05 ? "You found a DRAGON BALL! 🟠" : r < 0.22 ? "The scouts recovered a hidden cache of Zeni." : "The scouts found nothing of value — but the trek sharpened you.");
       }}>Scout the area (2 stamina)</Btn>
       {result && <p className="mt-2 text-sm text-chart-2" role="status">{result}</p>}
+    </Card>
+  );
+}
+
+/* ---------- Turbo Clicker — single insane-speed auto clicker (1ms buffer) ---------- */
+
+const INSANE_CPS = 1000;
+
+function TurboClicker() {
+  const { s, train, update } = useGame();
+  const sRef = useRef(s);
+  sRef.current = s;
+  const [on, setOn] = useState(false);
+  const [stat, setStat] = useState<StatKey>("strength");
+  const [meter, setMeter] = useState(0);
+  const [total, setTotal] = useState(0);
+  const gained = useRef(0);
+  const lastSound = useRef(0);
+  useEffect(() => {
+    if (!on) return;
+    gained.current = 0;
+    setMeter(0);
+    // The engine no-ops TRAIN_STAT without stamina; skip those calls so the
+    // meter only counts gains that actually landed.
+    const canClick = () => sRef.current.godMode || sRef.current.stamina >= 1;
+    // Batch many clicks into a single state update so the UI keeps painting
+    // at "super fast" rates (per-click setState at 1ms froze the tab).
+    const BATCH = 50;
+    const TICK_MS = 50;
+    const clicker = setInterval(() => {
+      if (!canClick()) return;
+      let batchGain = 0;
+      update((d) => {
+        for (let i = 0; i < BATCH; i++) {
+          if (!d.godMode && d.stamina < 1) break;
+          batchGain += effectiveTrainingGain(d, stat);
+          applyAction(d, { type: "TRAIN_STAT", stat });
+        }
+      });
+      gained.current += batchGain;
+      if (Date.now() - lastSound.current > 200) { playBattleSound("tick"); lastSound.current = Date.now(); }
+    }, TICK_MS);
+    // One-second window: per-click gains can be sub-1 at high stats, so a
+    // shorter window would round to 0.
+    const meterTimer = setInterval(() => {
+      setMeter(gained.current);
+      setTotal((t) => t + gained.current);
+      gained.current = 0;
+    }, 1000);
+    return () => { clearInterval(clicker); clearInterval(meterTimer); };
+  }, [on, stat, train, update]);
+  const free = s.godMode || s.stamina >= 1;
+  const rate = meter >= 1000 ? fmt(meter) : meter.toFixed(1);
+  return (
+    <Card className={on ? "border-primary" : ""}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="font-display text-2xl">⚡ Turbo Clicker — 1000/s</div>
+        <Btn onClick={() => setOn((v) => !v)} className={on ? "bg-destructive" : ""}>{on ? "■ STOP" : "▶ START"}</Btn>
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        {TRAININGS.map((t) => (
+          <button key={t.id} onClick={() => setStat(t.stat as StatKey)} aria-pressed={stat === t.stat} className={`rounded px-3 py-1 text-sm font-display ${stat === t.stat ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>{t.icon} {t.name}</button>
+        ))}
+      </div>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="font-display text-3xl text-primary" aria-live="polite">{on ? `+${rate} /s` : "—"}</div>
+        <p className="text-right text-xs text-muted-foreground">
+          {total > 0 && <span className="mr-2 text-chart-2">Session total: +{fmt(total)} {TRAININGS.find((t) => t.stat === stat)?.name ?? stat}</span>}
+          {on && !free ? "⏳ Waiting for stamina…" : s.godMode ? "God Mode: unlimited clicks." : on ? "Running on stamina." : "Insane-speed auto-clicker (1ms buffer)."}
+          {!s.godMode && " Stamina gates gains and refills on its own — God Mode (Ctrl+Shift+A) trains free."}
+        </p>
+      </div>
     </Card>
   );
 }

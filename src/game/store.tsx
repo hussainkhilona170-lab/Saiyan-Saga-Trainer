@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { BOSSES, type Boss, type StatKey } from "./data";
-import { applyAction, hydrate, initialState as initial, trainingGain, type GameState } from "./engine";
+import { applyAction, effectiveTrainingGain, hydrate, initialState as initial, type GameState } from "./engine";
 import { backupKey, encodeSlot, resolveInitialLoad, slotKey, type SlotKind } from "./persistence";
 
 export type { GameState } from "./engine";
@@ -14,7 +14,6 @@ type Ctx = {
   recoveredFromBackup: boolean;
   update: (fn: (d: GameState) => void) => void;
   train: (stat: StatKey) => number;
-  trainGravity: () => void;
   reset: () => void;
   switchSlot: (target: SaveSlot) => void;
   restore: (state: unknown) => void;
@@ -113,12 +112,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const train = useCallback((stat: StatKey) => {
-    const g = trainingGain(ref.current);
+    // Report what the engine will actually apply (soft cap + mastery), not the
+    // raw multiplier product — the Turbo meter and click floaters must match
+    // the stat growth the player actually observes.
+    const applied = effectiveTrainingGain(ref.current, stat);
     update((d) => applyAction(d, { type: "TRAIN_STAT", stat }));
-    return g;
+    return applied;
   }, [update]);
-
-  const trainGravity = useCallback(() => update((d) => applyAction(d, { type: "TRAIN_GRAVITY" })), [update]);
 
   // Switch save slots: persists the current slot, loads the target one.
   // A fresh sandbox starts as a clone of the main save; both stay isolated.
@@ -170,7 +170,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     setS(structuredClone(initial));
   }, []);
 
-  return <GameCtx.Provider value={{ s, slot, recoveredFromBackup, update, train, trainGravity, reset, switchSlot, restore, shake, triggerShake }}>{children}</GameCtx.Provider>;
+  return <GameCtx.Provider value={{ s, slot, recoveredFromBackup, update, train, reset, switchSlot, restore, shake, triggerShake }}>{children}</GameCtx.Provider>;
 }
 
 export function useGame() {

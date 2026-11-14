@@ -116,7 +116,6 @@ export function applyScenarioBuild(d: GameState, build: ScenarioBuild): string {
   d.level = Math.max(d.level, levelForXp(d.xp));
   for (const k of STAT_KEYS) d.mastery[k] = Math.max(0, Math.min(100, build.mastery[k]));
   d.gravity = Math.max(1, Math.min(1000, Math.floor(build.gravity)));
-  d.gravityProgress = 0;
   // Re-register scenario-carried custom transformations so custom-form scenarios work on any save.
   const carried = parseCustomForms(build.customForms);
   for (const form of carried) {

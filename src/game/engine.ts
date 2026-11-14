@@ -13,7 +13,6 @@ export type GameState = {
   stamina: number;
   maxStamina: number;
   gravity: number;
-  gravityProgress: number;
   zeni: number;
   tp: number;
   dragonBalls: number;
@@ -48,7 +47,7 @@ export type AdminEvent = { id: string; at: number; action: string; target: strin
 export const initialState: GameState = {
   stats: { strength: 1, agility: 1, ki: 1, defense: 1 }, level: 1, xp: 0,
   mastery: { strength: 0, agility: 0, ki: 0, defense: 0 },
-  stamina: 100, maxStamina: 100, gravity: 1, gravityProgress: 0,
+  stamina: 100, maxStamina: 100, gravity: 1,
   zeni: 0, tp: 0, dragonBalls: 0,
   forms: ["base"], customForms: [], activeForm: "base", location: "roshi",
   passes: [], defeated: [], quests: [], autoTarget: "strength",
@@ -150,6 +149,11 @@ export function rankForLevel(level: number): string {
 
 export const statSoftCap = (level: number) => 100 + (Math.max(1, level) - 1) * 40;
 
+/** Gravity chamber level the body has adapted to at a given level — one 10G step
+ *  per 2 levels (Lv 1 → 10G, Lv 2 → 20G, Lv 100 → 510G). Applied automatically on
+ *  level-up; there is no manual gravity training. */
+export const maxGravityForLevel = (level: number) => 1 + Math.floor(Math.max(1, Math.floor(level)) / 2);
+
 export function effectiveTrainingGain(s: GameState, stat: StatKey, rawGain = trainingGain(s)): number {
   const cap = statSoftCap(s.level);
   return rawGain * (1 + Math.min(100, Math.max(0, s.mastery[stat])) / 200) / (1 + Math.max(0, s.stats[stat]) / cap);
@@ -227,7 +231,6 @@ export function sagaStatus(s: GameState, saga: string): SagaStatus {
 
 export type GameAction =
   | { type: "TRAIN_STAT"; stat: StatKey; rand?: number }
-  | { type: "TRAIN_GRAVITY" }
   | { type: "TICK" }
   | { type: "CLAIM_QUEST"; questId: string }
   | { type: "FORCE_CLAIM_QUEST"; questId: string }
@@ -748,7 +751,10 @@ export function applyBattleRewards(game: GameState, boss: Boss, foundDragonBall:
 
 export function grantExperience(state: GameState, amount: number): void {
   state.xp = clampSaveNumber(state.xp + Math.max(0, Math.floor(amount)), state.xp);
-  state.level = levelForXp(state.xp);
+  const nextLevel = levelForXp(state.xp);
+  // Gravity adapts with the body: leveling up raises the chamber automatically.
+  if (nextLevel > state.level) state.gravity = Math.max(state.gravity, maxGravityForLevel(nextLevel));
+  state.level = nextLevel;
 }
 
 function applyTraining(state: GameState, stat: StatKey, rawGain: number, xpScale = 1): number {
@@ -781,14 +787,6 @@ export function applyAction(d: GameState, a: GameAction): void {
       d.zeni = clampSaveNumber(d.zeni + Math.ceil(g * 0.75 * (d.passes.includes("vip") ? 1.5 : 1)), d.zeni);
       if ((a.rand ?? Math.random()) < 0.002) grantBall(d);
       bumpQuestProgress(d, "train", 1, a.stat);
-      return;
-    }
-    case "TRAIN_GRAVITY": {
-      if (d.stamina < 2 && !d.godMode) return;
-      if (!d.godMode) d.stamina -= 2;
-      d.gravityProgress += d.passes.includes("x2") ? 2 : 1;
-      if (d.gravityProgress >= d.gravity * 25) { d.gravityProgress = 0; d.gravity++; }
-      grantExperience(d, 3);
       return;
     }
     case "TICK": {
@@ -981,7 +979,7 @@ export function hydrate(raw: unknown): GameState {
   out.maxStamina = Math.max(1, Math.min(MAX_SAVE_NUMBER, clampSaveNumber(r.maxStamina, 100)));
   out.stamina = Math.max(0, Math.min(out.maxStamina, clampSaveNumber(r.stamina, base.stamina, out.maxStamina)));
   out.gravity = Math.max(1, Math.min(1000, Math.floor(clampSaveNumber(r.gravity, 1, 1000))));
-  out.gravityProgress = Math.max(0, Math.min(out.gravity * 25, clampSaveNumber(r.gravityProgress, 0, out.gravity * 25)));
+  // gravityProgress was removed — gravity now adapts automatically on level-up.
   if (typeof out.autoTarget !== "string" || !(out.autoTarget in base.stats)) out.autoTarget = base.autoTarget;
   out.godMode = r.godMode === true;
   out.infiniteZeni = r.infiniteZeni === true;

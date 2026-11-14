@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { applyAction, applyShadowRewards, battleClashDelay, canUnlockForm, effectiveTrainingGain, hydrate, initialState, levelForXp, openSave, powerLevel, rankForLevel, sealSave, shadowDummyBoss, SHADOW_REWARD_MULT, SHADOW_ZENKAI_MULT, xpRequiredForLevel } from "@/game/engine";
+import { applyAction, applyShadowRewards, battleClashDelay, canUnlockForm, effectiveTrainingGain, grantExperience, hydrate, initialState, levelForXp, maxGravityForLevel, openSave, powerLevel, rankForLevel, sealSave, shadowDummyBoss, SHADOW_REWARD_MULT, SHADOW_ZENKAI_MULT, xpRequiredForLevel } from "@/game/engine";
 
 const fresh = () => structuredClone(initialState);
 
@@ -13,9 +13,22 @@ describe("engine", () => {
     const d = fresh(); d.stamina = 0; applyAction(d, { type: "TRAIN_STAT", stat: "ki", rand: 1 });
     expect(d.stats.ki).toBe(1);
   });
-  it("gravity levels up after gravity×25 progress", () => {
-    const d = fresh(); for (let i = 0; i < 25; i++) applyAction(d, { type: "TRAIN_GRAVITY" });
-    expect(d.gravity).toBe(2);
+  it("gravity adapts automatically as level increases — no manual training", () => {
+    expect(maxGravityForLevel(1)).toBe(1);
+    expect(maxGravityForLevel(2)).toBe(2);
+    expect(maxGravityForLevel(3)).toBe(2);
+    expect(maxGravityForLevel(20)).toBe(11);
+    expect(maxGravityForLevel(100)).toBe(51);
+    // Leveling to 5 snaps gravity to the curve (3 → 30G).
+    const d = fresh();
+    grantExperience(d, xpRequiredForLevel(5));
+    expect(d.level).toBe(5);
+    expect(d.gravity).toBe(3);
+    // A higher gravity is never lowered by leveling (God Engine overrides persist).
+    const g = fresh(); g.gravity = 10;
+    grantExperience(g, xpRequiredForLevel(2));
+    expect(g.level).toBe(2);
+    expect(g.gravity).toBe(10);
   });
   it("hydrate keeps old save progress and repairs bad fields", () => {
     const s = hydrate({ zeni: 500, stats: { strength: 99, agility: "x" }, forms: null });
