@@ -278,6 +278,7 @@ export type BattleState = {
   guardCdUntil: number;
   exposedUntil: number;
   overloadedUntil: number;
+  weakPointHit: boolean;
   /** Boss phase derived from remaining HP (1 = opener, 2 = enraged, 3 = critical). */
   phaseNumber: 1 | 2 | 3;
   bossSpecialAt: number;
@@ -292,7 +293,7 @@ export type BattleState = {
 export const initialBattleState: BattleState = {
   boss: null, phase: "idle", hp: 0, playerHp: 0, maxPlayerHp: 0, ki: 0,
   clashProgress: 50, clashCount: 0, combo: 0, lastPunchAt: 0, message: "",
-  guardUntil: 0, guardCdUntil: 0, exposedUntil: 0, overloadedUntil: 0,
+  guardUntil: 0, guardCdUntil: 0, exposedUntil: 0, overloadedUntil: 0, weakPointHit: false,
   phaseNumber: 1, bossSpecialAt: 0,
   meleeStreak: 0, kiStreak: 0, adaptMeleeUntil: 0,
   cooldowns: {},
@@ -337,7 +338,13 @@ export function resolveBattleAction(battle: BattleState, game: GameState, action
   const damageBoss = (rawDamage: number) => {
     if (!boss) return;
     const exposed = now > 0 && now < next.exposedUntil;
-    next.hp -= rawDamage * (exposed ? 2 : 1);
+    let mult = exposed ? 2 : 1;
+    if (exposed && !next.weakPointHit) {
+      mult = 3;
+      next.weakPointHit = true;
+      if (boss) next.message = `🎯 WEAK POINT! ${boss.weakPoint ?? "core"} hit!`;
+    }
+    next.hp -= rawDamage * mult;
     if (next.hp <= 0) return; // resolvePlayerDamage sets the win message; no phase surge after death
     refreshPhase();
   };
@@ -350,6 +357,7 @@ export function resolveBattleAction(battle: BattleState, game: GameState, action
       if (now > 0 && wasSurge) {
         next.exposedUntil = Math.max(next.exposedUntil, now + 5000);
         next.bossSpecialAt = Math.max(next.bossSpecialAt, now + 2000);
+        next.weakPointHit = false;
         next.message = `⚠ ${boss.name}'s power surges — EXPOSED! Strike now!`;
       }
     }
@@ -522,6 +530,7 @@ export function resolveBattleAction(battle: BattleState, game: GameState, action
         if (parried) {
           damage = 0;
           next.exposedUntil = Math.max(next.exposedUntil, now + 2500);
+          next.weakPointHit = false;
           next.message = `PARRY! ${boss.name} is overexposed — strike now!`;
         } else if (boss.signature && next.phaseNumber >= 2 && now > 0 && now >= next.bossSpecialAt) {
           damage = boss.atk * scale * boss.signature.mult;

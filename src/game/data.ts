@@ -28,14 +28,14 @@ export const MAX_CUSTOM_TECHNIQUE_MULT = 50;
 
 export type BossSignature = { name: string; mult: number };
 export type EndlessModifierId = "none" | "aggression" | "heavyweight";
-export type Boss = { id: string; name: string; hp: number; atk: number; zeni: number; tp: number; req: number; emoji: string; tournament?: number; signature?: BossSignature; endlessModifier?: EndlessModifierId };
+export type Boss = { id: string; name: string; hp: number; atk: number; zeni: number; tp: number; req: number; emoji: string; tournament?: number; signature?: BossSignature; endlessModifier?: EndlessModifierId; weakPoint?: string };
 export const BOSSES: Boss[] = [
-  { id: "raditz", name: "Raditz", hp: 1500, atk: 10, zeni: 3000, tp: 10, req: 0, emoji: "🦹", signature: { name: "Double Sunday", mult: 2.1 } },
-  { id: "vegeta", name: "Vegeta", hp: 25000, atk: 60, zeni: 30000, tp: 30, req: 2000, emoji: "👑", signature: { name: "Final Flash", mult: 2.4 } },
-  { id: "frieza", name: "Frieza", hp: 400000, atk: 600, zeni: 300000, tp: 80, req: 35000, emoji: "👽", signature: { name: "Death Beam", mult: 2.4 } },
-  { id: "cell", name: "Perfect Cell", hp: 7.5e6, atk: 7500, zeni: 4e6, tp: 200, req: 8e5, emoji: "🦗", signature: { name: "Perfect Beam Barrage", mult: 2.6 } },
-  { id: "buu", name: "Kid Buu", hp: 1e8, atk: 8e4, zeni: 6e7, tp: 400, req: 1.5e7, emoji: "🍬", signature: { name: "Planet Buster", mult: 2.8 } },
-  { id: "beerus", name: "Beerus", hp: 2e9, atk: 1.2e6, zeni: 2e9, tp: 1000, req: 2.5e8, emoji: "🐱", signature: { name: "Hakai", mult: 3.0 } },
+  { id: "raditz", name: "Raditz", hp: 1500, atk: 10, zeni: 3000, tp: 10, req: 0, emoji: "🦹", signature: { name: "Double Sunday", mult: 2.1 }, weakPoint: "tail" },
+  { id: "vegeta", name: "Vegeta", hp: 25000, atk: 60, zeni: 30000, tp: 30, req: 2000, emoji: "👑", signature: { name: "Final Flash", mult: 2.4 }, weakPoint: "pride" },
+  { id: "frieza", name: "Frieza", hp: 400000, atk: 600, zeni: 300000, tp: 80, req: 35000, emoji: "👽", signature: { name: "Death Beam", mult: 2.4 }, weakPoint: "tail" },
+  { id: "cell", name: "Perfect Cell", hp: 7.5e6, atk: 7500, zeni: 4e6, tp: 200, req: 8e5, emoji: "🦗", signature: { name: "Perfect Beam Barrage", mult: 2.6 }, weakPoint: "core" },
+  { id: "buu", name: "Kid Buu", hp: 1e8, atk: 8e4, zeni: 6e7, tp: 400, req: 1.5e7, emoji: "🍬", signature: { name: "Planet Buster", mult: 2.8 }, weakPoint: "antenna" },
+  { id: "beerus", name: "Beerus", hp: 2e9, atk: 1.2e6, zeni: 2e9, tp: 1000, req: 2.5e8, emoji: "🐱", signature: { name: "Hakai", mult: 3.0 }, weakPoint: "forehead" },
 ];
 
 export const LOCATIONS = [
