@@ -401,7 +401,7 @@ export function resolveBattleAction(battle: BattleState, game: GameState, action
     case "RESET_COMBO":
       if (action.now - next.lastPunchAt >= 1100) next.combo = 0;
       return next;
-    case "BLAST":
+    case "BLAST": {
       if (next.phase !== "active" || !boss) return next;
       const blastCost = techniqueRank(game, "blast") >= 2 ? 15 : 20;
       if (!game.infiniteKi && next.ki < blastCost) return next;
@@ -418,7 +418,8 @@ export function resolveBattleAction(battle: BattleState, game: GameState, action
       resolvePlayerDamage();
       refreshPhase();
       return next;
-    case "ULTIMATE":
+    }
+    case "ULTIMATE": {
       if (next.phase !== "active" || !boss || (!game.infiniteKi && next.ki < 100)) return next;
       if (!game.infiniteKi) next.ki = 0;
       next.kiStreak += 1;
@@ -431,7 +432,8 @@ export function resolveBattleAction(battle: BattleState, game: GameState, action
       resolvePlayerDamage();
       refreshPhase();
       return next;
-    case "VANISH":
+    }
+    case "VANISH": {
       if (next.phase !== "active" || !boss) return next;
       const vanishCost = techniqueRank(game, "vanish") >= 2 ? 12 : 15;
       if (!game.infiniteKi && next.ki < vanishCost) return next;
@@ -445,6 +447,7 @@ export function resolveBattleAction(battle: BattleState, game: GameState, action
       resolvePlayerDamage();
       refreshPhase();
       return next;
+    }
     case "PERFECT_GUARD": {
       if (next.phase !== "active" || !boss || now <= 0) return next;
       if (now < next.guardCdUntil) {
@@ -487,9 +490,8 @@ export function resolveBattleAction(battle: BattleState, game: GameState, action
       if (!game.infiniteKi && next.ki < tech.kiCost) return next;
       if (!game.infiniteKi) next.ki -= tech.kiCost;
       const statTotal = tech.scale === "ki" ? game.stats.ki : tech.scale === "strength" ? game.stats.strength : tech.scale === "agility" ? game.stats.agility : game.stats.defense;
-      const exposed = nowMs > 0 && nowMs < next.exposedUntil;
-      const damage = statTotal * tech.mult * multiplier * (exposed ? 2 : 1);
-      damageBoss(damage);
+      // EXPOSED doubling is applied inside damageBoss for every attack — don't apply it twice here.
+      damageBoss(statTotal * tech.mult * multiplier);
       if (next.phase === "active") next.message = `${tech.name}!`;
       if (nowMs > 0) next.cooldowns = { ...next.cooldowns, [tech.id]: nowMs + tech.cooldownMs };
       resolvePlayerDamage();
@@ -577,7 +579,25 @@ function resolveClashLoss(battle: BattleState, boss: Boss | null): void {
   }
 }
 
+/** Saga rank of a boss — drives clash pressure/delay scaling. Variant ids
+ *  (endless-N, tournament-*, raid-*) resolve to the rank of their template. */
 export function battleSagaRank(boss: Boss): number {
+  const direct = BOSSES.findIndex((entry) => entry.id === boss.id);
+  if (direct >= 0) return direct;
+  if (typeof boss.tournament === "number") {
+    const round = TOURNAMENT[boss.tournament];
+    const idx = round ? BOSSES.findIndex((entry) => entry.id === round.bossId) : -1;
+    if (idx >= 0) return idx;
+  }
+  const endless = /^endless-(\d+)$/.exec(boss.id);
+  if (endless) {
+    const wave = Math.max(1, Math.floor(Number(endless[1])));
+    const baseId = ENDLESS_ROSTER[(wave - 1) % ENDLESS_ROSTER.length]!;
+    const idx = BOSSES.findIndex((entry) => entry.id === baseId);
+    if (idx >= 0) return idx;
+  }
+  const raid = RAID_BOSSES.find((r) => r.base.id === boss.id);
+  if (raid) return BOSSES.length - 1; // raids sit at end-of-roster clash pressure
   return Math.max(0, BOSSES.findIndex((entry) => entry.id === boss.id));
 }
 
@@ -618,7 +638,7 @@ export function shadowDummyBoss(s: GameState): Boss {
  *  (×SHADOW_ZENKAI_MULT plus a full stamina refill) when the player barely survived. */
 export function applyShadowRewards(game: GameState, zenkai: boolean): void {
   const factor = zenkai ? SHADOW_ZENKAI_MULT : SHADOW_REWARD_MULT;
-  for (const k of ["strength", "agility", "ki", "defense"] as StatKey[]) game.stats[k] *= factor;
+  for (const k of ["strength", "agility", "ki", "defense"] as StatKey[]) game.stats[k] = clampSaveNumber(game.stats[k] * factor, game.stats[k]);
   if (zenkai) game.stamina = game.maxStamina;
   grantExperience(game, 60);
 }
@@ -727,13 +747,13 @@ export function applyBattleRewards(game: GameState, boss: Boss, foundDragonBall:
 }
 
 export function grantExperience(state: GameState, amount: number): void {
-  state.xp += Math.max(0, Math.floor(amount));
+  state.xp = clampSaveNumber(state.xp + Math.max(0, Math.floor(amount)), state.xp);
   state.level = levelForXp(state.xp);
 }
 
 function applyTraining(state: GameState, stat: StatKey, rawGain: number, xpScale = 1): number {
   const gain = effectiveTrainingGain(state, stat, rawGain);
-  state.stats[stat] += gain;
+  state.stats[stat] = clampSaveNumber(state.stats[stat] + gain, state.stats[stat]);
   const cap = statSoftCap(state.level);
   state.mastery[stat] = Math.min(100, state.mastery[stat] + Math.min(0.3, 0.05 + gain / (cap * 20)));
   const xp = Math.max(1, Math.floor((2 + Math.log10(1 + Math.max(0, gain)) * 2) * xpScale));
@@ -778,7 +798,7 @@ export function applyAction(d: GameState, a: GameAction): void {
       if (d.passes.includes("auto")) {
         const rawGain = trainingGain(d);
         applyTraining(d, d.autoTarget, rawGain * 2, 0.25);
-        d.zeni += Math.ceil(rawGain);
+        d.zeni = clampSaveNumber(d.zeni + Math.ceil(rawGain), d.zeni);
       }
       return;
     }

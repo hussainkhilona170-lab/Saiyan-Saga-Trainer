@@ -1,6 +1,6 @@
 // Combat-ready SVG portraits for every transformation — actual artwork, not colored dots.
 // Style: front-facing chibi portrait with form-specific hair silhouettes, eyes and auras.
-import type { ReactElement } from "react";
+import { useId, type ReactElement } from "react";
 
 type FormArtProps = {
   formId: string;
@@ -37,9 +37,11 @@ const fallback = (_formId: string, aura?: string | undefined): FormCfg => ({
 export function FormArt({ formId, hair, aura, size = 72, className = "" }: FormArtProps): ReactElement {
   const base = FORMS[formId] ?? fallback(formId, aura);
   const cfg = { ...base, hair: hair ?? base.hair, aura: aura ?? base.aura };
-  const uid = `fa-${formId.replace(/[^a-z0-9]/gi, "") || "custom"}-${cfg.aura.replace(/[^a-z0-9]/gi, "")}`;
+  // Gradient/filter ids must be unique per instance: the same form can render in the
+  // header, the Forms grid and the God Engine lab at the same time.
+  const uid = `fa${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   return (
-    <svg viewBox="0 0 64 64" width={size} height={size} className={`select-none ${className}`} role="img" aria-label={`${formId} portrait`}>
+    <svg viewBox="0 0 64 64" width={size} height={size} className={`select-none ${className}`} aria-hidden="true" focusable="false">
       <defs>
         <radialGradient id={`${uid}-aura`} cx="50%" cy="58%" r="55%">
           <stop offset="0%" stopColor={cfg.aura} stopOpacity="0.85" />

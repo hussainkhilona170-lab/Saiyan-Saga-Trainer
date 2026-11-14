@@ -86,3 +86,39 @@ All 8 tabs (Train · Battle · Forms · Quests · Shop · Tournament · Inventor
 `baseline` (23 tests) → `phase-3` (46) → `phase-4` (65) → `phase-5` (87) → `phase-6` (110) → `phase-7` (139) → `phase-8` (150) → `phase-9` → `phase-10`
 
 `git checkout <tag>` restores any checkpoint byte-for-byte.
+
+---
+
+# Post-phase-10 audit — 2026-11-14
+
+**Tests:** 9 files / **155 passed** · **Build:** OK (client + SSR + Nitro) · **tsc:** clean · **ESLint:** 0 errors (13 pre-existing `react-refresh` warnings) · **Console:** all 8 tabs + full God Engine, **0 errors / 0 warnings** · **Lighthouse:** 1.00 / 1.00 / 1.00, 0 failures
+
+A fresh full audit after the 2026-11-07 user-feedback round (`e22b983`). Same rules as before: engine stays React-free, UI dispatches only, battle commands only via `battleBus`; the ~440 pre-existing `prettier/prettier` line-ending noise is environmental (Windows checkout, `core.autocrlf=true`) and deliberately untouched — this audit ran with `--rule "prettier/prettier: off"` for real findings.
+
+## Bugs found & fixed
+
+1. **Custom techniques double-dipped EXPOSED (×4 damage)** — `CUSTOM_TECHNIQUE` applied its own `(exposed ? 2 : 1)` *and* `damageBoss` doubled again. The tech case now deals raw damage and leaves the doubling to `damageBoss` (regression test: exposed hit === 2 × normal hit, exactly).
+2. **Variant boss ids broke saga scaling** — `battleSagaRank` only matched raw roster ids, so `endless-N`, `tournament-r*` and `raid-*` bosses all resolved to rank 0: trivial beam-clash pressure (9/s) and the maximum clash delay everywhere. Now: tournament variants resolve via `boss.tournament` index → template id; endless waves map through `ENDLESS_ROSTER` rotation (wave 7 wraps to wave 1); raids sit at end-of-roster pressure (`BOSSES.length - 1`). Regression test covers ranks + derived `battleClashPressure`/`battleClashDelay` for all three families (the old test asserted the *template*'s rank, not the variant's — intent fixed).
+3. **"Restore from backup" wiped the save to defaults** — God Engine Settings fed the versioned envelope `{ v, data }` straight into `hydrate()`, which repairs it into a *default* state. Backup restore now goes through the same boot parser as normal load (`resolveInitialLoad(null, text).state`) and aborts with a toast when validation fails; export filename now names the active slot (`dragon-ball-rpg-{slot}-save.json`) and the backup panel reflects the current slot.
+4. **Battle HUD used live max HP instead of the battle-start snapshot** — Auto-Train (x2 pass) can raise DEF mid-fight, which grew the HP bar's denominator while `maxPlayerHp` was fixed at battle start. HP bar, arena overlay, senzu "full HP" gate and the victory grade all read `battle.maxPlayerHp` now. Outcome effect deps corrected (two stale `eslint-disable-line`s removed, missing deps added).
+5. **Parry mastery farmed from refused guards** — `runParry` bumped `parry` technique uses even when the guard was on cooldown and refused; the bump now sits behind the cooldown check.
+6. **Battle simulator accuracy** — `battleSim.ts` now uses the live player-HP formula (`(100 + DEF×20) × formMult × gravMult`), the real `battleClashPressure(boss)` in clash ticks (was hard-coded `9`), and the dead `startKi` local is gone. Automated Battle Tester estimates now match the arena's math.
+7. **Lint hygiene** — 6 `no-case-declarations` errors fixed by bracing the `BLAST`/`ULTIMATE`/`VANISH` cases in `engine.ts`; `prefer-const` in `combat-depth.test.ts`; an unnecessary `eslint-disable` in `balance-audit.test.ts` removed.
+8. **Extreme-number clamps on hot paths** — `TICK` zeni, `applyTraining` stat writes, `grantExperience` XP and `applyShadowRewards` stat multiplies now saturate via `clampSaveNumber` instead of free-floating growth toward `Infinity`.
+9. **FormArt duplicate SVG gradient ids** — two instances of the same form in one tree shared ids (`fa-<form>-<aura>`); ids are now `useId()`-based and unique per instance, and the portrait is `aria-hidden` decorative (it duplicated the adjacent text label).
+10. **Stale build text** — God Engine "About this build" said "phase 8"; now reflects the post-audit build.
+11. **Impure state updaters (setState-during-render)** — two God Engine paths called a setState *inside* the `update()` callback (`act` → `pushToast`, console → `print`); React executes updaters during the render phase, which surfaced as `Cannot update a component (AdminPanel) while rendering a different component (GameProvider)` in the console. Fixed by keeping updaters pure: the message is previewed on a throwaway `structuredClone` in the handler, then the real write dispatches; the snapshot branch now runs entirely in the handler (snapshots never touch the game draft). Verified live: admin action + console `player.inspect`/`help` with 0 console errors.
+
+## Verification (2026-11-14)
+
+- `npx vitest run` → 9 files / **155 passed** (154 prior + EXPOSED regression; variant-rank test replaces the template-only one).
+- `npx tsc --noEmit` → clean. `npm run build` → OK (client + SSR + Nitro).
+- `npx eslint src --rule "prettier/prettier: off"` → **0 errors**, 13 warnings — all pre-existing `react-refresh/only-export-components` (baseline unchanged).
+- Live Chromium session (game running, user playing): all 8 tabs render, God Engine opens (5-title-taps and Ctrl+Shift+A), all panel sections verified, **0 console errors / 0 warnings**.
+- Lighthouse: Accessibility **1.00**, Best Practices **1.00**, SEO **1.00**, 0 failures.
+
+## Honest notes
+
+- **No save *import* UI exists** — Settings & Recovery has export (versioned JSON) and backup restore, but no file-pick import path (the 2026-11-07 audit §7.3 overstated this; the console/parser can still apply states, and scenarios import/export exists separately).
+- Tournament/endless grades still pool under variant ids (by design, unchanged).
+- Prettier backlog unchanged: pre-existing formatting-only diffs, not touched.

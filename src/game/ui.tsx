@@ -235,6 +235,9 @@ export function BattleTab({ customBoss }: { customBoss: Boss | null }) {
   const { add, layer } = useFloats();
   const fm = formMult(s) * gravMult(s);
   const maxP = (100 + s.stats.defense * 20) * fm;
+  // Player HP ceiling was snapshotted at battle start; the live maxP can drift
+  // (Auto-Train raises DEF mid-fight), so the HUD always reads the snapshot.
+  const battleMaxHp = battle.maxPlayerHp || maxP;
   const sRef = useRef(s); sRef.current = s;
   const form = findForm(s, s.activeForm) ?? { id: "base", name: "Base Form", mult: 1, req: 0, cost: 0, aura: "transparent", levelReq: 1, hair: undefined };
 
@@ -321,7 +324,7 @@ export function BattleTab({ customBoss }: { customBoss: Boss | null }) {
     if (!boss || (battle.phase !== "active" && battle.phase !== "clash")) return;
     const t = setInterval(() => dispatchBattle({ type: "ENEMY_TICK", playerMaxHp: maxP, now: Date.now() }), 1000);
     return () => clearInterval(t);
-  }, [boss, battle.phase, maxP]); // eslint-disable-line
+  }, [boss, battle.phase, maxP]);
 
   useEffect(() => {
     if (!clashActive) {
@@ -339,7 +342,7 @@ export function BattleTab({ customBoss }: { customBoss: Boss | null }) {
       if (clashIntervalRef.current) clearInterval(clashIntervalRef.current);
       clashIntervalRef.current = null;
     };
-  }, [clashActive, boss]); // eslint-disable-line
+  }, [clashActive, boss]);
 
   useEffect(() => {
     if (!boss || battle.phase === "active" || battle.phase === "clash" || battle.phase === "idle") return;
@@ -352,10 +355,10 @@ export function BattleTab({ customBoss }: { customBoss: Boss | null }) {
     clashTapRef.current = null;
     if (battle.phase === "won") {
       const wonBoss = boss;
-      const grade = battleGrade(Math.max(0, battle.playerHp) / Math.max(1, maxP));
+      const grade = battleGrade(Math.max(0, battle.playerHp) / Math.max(1, battle.maxPlayerHp || maxP));
       update((d) => applyAction(d, { type: "RECORD_BOSS_GRADE", bossId: wonBoss.id, grade }));
       if (wonBoss.id === "shadow-self") {
-        const zenkai = battle.playerHp / Math.max(1, maxP) < SHADOW_ZENKAI_HP_FRACTION;
+        const zenkai = battle.playerHp / Math.max(1, battle.maxPlayerHp || maxP) < SHADOW_ZENKAI_HP_FRACTION;
         const factor = zenkai ? SHADOW_ZENKAI_MULT : SHADOW_REWARD_MULT;
         update((d) => applyShadowRewards(d, zenkai));
         if (soundOn) playBattleSound("win");
@@ -385,7 +388,7 @@ export function BattleTab({ customBoss }: { customBoss: Boss | null }) {
       if (soundOn) playBattleSound("lose");
       setBattle((current) => ({ ...current, boss: null, phase: "idle" }));
     }
-  }, [battle.phase, battle.clashCount, boss, update, soundOn]);
+  }, [battle.phase, battle.clashCount, battle.playerHp, battle.maxPlayerHp, boss, maxP, update, soundOn]);
 
   useEffect(() => {
     if (!clashActive || !battle.message.startsWith("Beam clash won!")) return;
@@ -442,6 +445,7 @@ export function BattleTab({ customBoss }: { customBoss: Boss | null }) {
   };
   const runParry = () => {
     if (!boss || clashActive) return;
+    if (Date.now() < battle.guardCdUntil) return; // refused guards don't train the technique
     dispatchBattle({ type: "PERFECT_GUARD", now: Date.now(), uiForm: sRef.current.activeForm === "ui" });
     update((d) => bumpTechniqueUse(d, "parry"));
     if (soundOn) playBattleSound("charge");
@@ -507,8 +511,8 @@ export function BattleTab({ customBoss }: { customBoss: Boss | null }) {
       </div>
       <div className="flex justify-between text-sm"><span>Opponent • {fmt(Math.max(0, hp))} HP {boss.signature ? <span className="text-muted-foreground">· ⚡ {boss.signature.name}</span> : null}</span><span>You • {fmt(Math.max(0, php))} HP</span></div>
       {battle.phase !== "idle" && <div className="text-center font-display text-xs uppercase tracking-wide text-destructive">{battle.phaseNumber === 3 ? "Critical Phase — enemy at full fury" : battle.phaseNumber === 2 ? "Enraged Phase — enemy hits harder" : "Opening Phase"}{Date.now() < battle.exposedUntil && <span className="ml-2 text-chart-2">⚠ EXPOSED ×2</span>}</div>}
-      <div className="grid grid-cols-2 gap-2"><Bar value={hp} max={boss.hp} className="bg-destructive" /><Bar value={php} max={maxP} className="bg-chart-2" /></div>
-      <StickmanArena boss={boss} formName={form.name} aura={form.aura} hair={form.hair} darkAura={s.darkAura} action={action} actionTick={actionTick} clashActive={clashActive} clashProgress={clashProgress} playerHp={php} playerMaxHp={maxP} bossHp={hp} onArenaClick={() => runPunch()} onArenaAltClick={runVanish} />
+      <div className="grid grid-cols-2 gap-2"><Bar value={hp} max={boss.hp} className="bg-destructive" /><Bar value={php} max={battleMaxHp} className="bg-chart-2" /></div>
+      <StickmanArena boss={boss} formName={form.name} aura={form.aura} hair={form.hair} darkAura={s.darkAura} action={action} actionTick={actionTick} clashActive={clashActive} clashProgress={clashProgress} playerHp={php} playerMaxHp={battleMaxHp} bossHp={hp} onArenaClick={() => runPunch()} onArenaAltClick={runVanish} />
       {clashActive && <div className="space-y-2 border-l-2 border-primary pl-3" role="status">
         <div className="flex items-center justify-between gap-2 font-display text-sm"><span>BEAM STRUGGLE</span><span>{Math.ceil(Math.max(0, 8 - (Date.now() - clashStartedRef.current) / 1000))}s</span></div>
         <Bar value={clashProgress} max={100} className="bg-primary" />
@@ -527,7 +531,7 @@ export function BattleTab({ customBoss }: { customBoss: Boss | null }) {
         {layer}
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <button type="button" onClick={() => runUseConsumable("senzu")} disabled={(s.inventory["senzu"] ?? 0) <= 0 || clashActive || battle.phase !== "active" || php >= maxP} title="Senzu Bean — full HP" className="rounded border border-border px-3 py-2 text-sm disabled:opacity-40">🫘 Senzu ×{s.inventory["senzu"] ?? 0}</button>
+        <button type="button" onClick={() => runUseConsumable("senzu")} disabled={(s.inventory["senzu"] ?? 0) <= 0 || clashActive || battle.phase !== "active" || php >= battleMaxHp} title="Senzu Bean — full HP" className="rounded border border-border px-3 py-2 text-sm disabled:opacity-40">🫘 Senzu ×{s.inventory["senzu"] ?? 0}</button>
         <button type="button" onClick={() => runUseConsumable("tonic")} disabled={(s.inventory["energy-tonic"] ?? 0) <= 0 || clashActive || battle.phase !== "active" || ki >= 100} title="Energy Tonic — full Ki" className="rounded border border-border px-3 py-2 text-sm disabled:opacity-40">🧪 Tonic ×{s.inventory["energy-tonic"] ?? 0}</button>
         <span className="ml-auto text-xs text-muted-foreground" title="Technique mastery ranks">Mastery: 👊{techniqueRank(s, "punch")} 🥊{techniqueRank(s, "heavy")} 💥{techniqueRank(s, "blast")} 🌊{techniqueRank(s, "ultimate")} 💨{techniqueRank(s, "vanish")} ⚡{techniqueRank(s, "charge")} 🛡️{techniqueRank(s, "parry")}</span>
       </div>

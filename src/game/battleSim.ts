@@ -1,7 +1,8 @@
 // Deterministic boss-fight simulation for the God Engine's automated tester.
 // Same inputs → same outputs. NOT a substitute for a live canvas battle: RNG-free, no human reflexes.
 import {
-  battleGrade, initialBattleState, resolveBattleAction, type BattleState, type GameState, type BattleGrade,
+  battleClashPressure, battleGrade, formMult, gravMult, initialBattleState, resolveBattleAction,
+  type BattleState, type GameState, type BattleGrade,
 } from "./engine";
 import type { Boss } from "./data";
 
@@ -23,10 +24,11 @@ export function simulateBossFight(game: GameState, boss: Boss, maxSeconds = 240)
   let battle: BattleState = structuredClone(initialBattleState);
   battle = resolveBattleAction(battle, g, {
     type: "START_BATTLE", boss: structuredClone(boss),
-    playerMaxHp: Math.floor((100 + g.stats.defense * 20) * 1), initialKi: g.passes.includes("kicharge") ? 100 : 0,
+    // Same player-HP formula as the live BattleTab: base + DEF, scaled by form × gravity.
+    playerMaxHp: Math.floor((100 + g.stats.defense * 20) * formMult(g) * gravMult(g)),
+    initialKi: g.passes.includes("kicharge") ? 100 : 0,
   });
   const maxPlayerHp = battle.maxPlayerHp;
-  const startKi = g.stats.ki;
   let now = 1000;
   let damageDealtTotal = 0;
   let damageTakenTotal = 0;
@@ -36,7 +38,7 @@ export function simulateBossFight(game: GameState, boss: Boss, maxSeconds = 240)
     if (battle.phase === "clash") {
       battle = resolveBattleAction(battle, g, { type: "CLASH_PUSH", agility: g.stats.agility });
       // The clash drains the enemy every 100ms in the real arena; simulate the same pressure.
-      battle = resolveBattleAction(battle, g, { type: "CLASH_TICK", pressurePerSecond: 9 + Math.max(0, 0), deltaSeconds: 0.25, elapsedMs: tick * 250 });
+      battle = resolveBattleAction(battle, g, { type: "CLASH_TICK", pressurePerSecond: battleClashPressure(boss), deltaSeconds: 0.25, elapsedMs: tick * 250 });
       now += 250;
       continue;
     }

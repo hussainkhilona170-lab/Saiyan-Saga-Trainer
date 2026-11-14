@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { BOSSES, TOURNAMENT } from "@/game/data";
+import { BOSSES, ENDLESS_ROSTER } from "@/game/data";
+import { buildBossFromId } from "@/game/bossLibrary";
 import {
-  applyAction, battleGrade, battlePhaseOf, battleSagaRank, GRADE_ORDER, initialBattleState, initialState,
+  applyAction, battleClashDelay, battleClashPressure, battleGrade, battlePhaseOf, battleSagaRank, GRADE_ORDER, initialBattleState, initialState,
   phaseScale, resolveBattleAction, sealSave, openSave, hydrate, type BattleState,
 } from "@/game/engine";
 
@@ -197,16 +198,28 @@ describe("combat depth — integration sanity", () => {
 
   it("player death ends the fight and blocks further combat actions", () => {
     const g = game(); g.stats.defense = 0;
-    let s = bstate(); s.phaseNumber = 3; s.playerHp = 1;
+    const s = bstate(); s.phaseNumber = 3; s.playerHp = 1;
     const out = resolveBattleAction(s, g, { type: "ENEMY_TICK", playerMaxHp: 5000, now: 1000 });
     expect(out.phase).toBe("lost");
     const punched = resolveBattleAction(out, g, { type: "PUNCH", now: 2000 });
     expect(punched.phase).toBe("lost");
   });
 
-  it("battleClashDelay applies to tournament champs built from the roster", () => {
-    const draft = { ...TOURNAMENT[0]! };
-    expect(draft.bossId).toBe("raditz");
-    expect(battleSagaRank(BOSSES.find((b) => b.id === draft.bossId)!)).toBe(0);
+  it("variant boss ids resolve their template's saga rank (drives clash pressure/delay)", () => {
+    const rankOf = (id: string) => BOSSES.findIndex((b) => b.id === id);
+    // Sanity for the assertions below: beerus is not the roster's rank-0 boss.
+    expect(rankOf("beerus")).toBeGreaterThan(0);
+    // Tournament variants inherit the roster template's rank…
+    expect(battleSagaRank(buildBossFromId("tournament-r1")!)).toBe(rankOf("raditz"));
+    expect(battleSagaRank(buildBossFromId("tournament-r4")!)).toBe(rankOf("beerus"));
+    // …endless waves map through the rotating roster (wave 7 wraps back to wave 1)…
+    expect(battleSagaRank(buildBossFromId("endless-1")!)).toBe(rankOf("raditz"));
+    expect(battleSagaRank(buildBossFromId("endless-2")!)).toBe(rankOf("vegeta"));
+    expect(battleSagaRank(buildBossFromId("endless-7")!)).toBe(rankOf(ENDLESS_ROSTER[0]!));
+    // …and raids sit at end-of-roster clash pressure.
+    const raid = buildBossFromId("raid-broly")!;
+    expect(battleSagaRank(raid)).toBe(BOSSES.length - 1);
+    expect(battleClashPressure(raid)).toBe(9 + (BOSSES.length - 1) * 10);
+    expect(battleClashDelay(buildBossFromId("tournament-r4")!)).toBe(Math.max(6500, 11500 - rankOf("beerus") * 850));
   });
 });

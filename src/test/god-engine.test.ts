@@ -188,6 +188,17 @@ describe("god engine — custom techniques run on the real combat pipeline", () 
     expect(b2.ki).toBe(75);
   });
 
+  it("EXPOSED doubles custom-technique damage exactly once — no double-dip (×4)", () => {
+    const s = gameWithTech();
+    const plain = resolveBattleAction(battle(100), s, { type: "CUSTOM_TECHNIQUE", techniqueId: baseTech.id, now: 1000 });
+    const exposed = resolveBattleAction({ ...battle(100), exposedUntil: 99_999 }, s, { type: "CUSTOM_TECHNIQUE", techniqueId: baseTech.id, now: 1000 });
+    const normalHit = 1e8 - plain.hp;
+    const exposedHit = 1e8 - exposed.hp;
+    expect(normalHit).toBeGreaterThan(0);
+    // Exactly the damageBoss doubling — before the fix this was ×4 (tech ×2 + damageBoss ×2).
+    expect(exposedHit).toBe(normalHit * 2);
+  });
+
   it("CUSTOM_TECHNIQUE refuses with insufficient Ki and enforces infiniteKi override", () => {
     const s = gameWithTech();
     const b = resolveBattleAction(battle(10), s, { type: "CUSTOM_TECHNIQUE", techniqueId: baseTech.id, now: 1 });

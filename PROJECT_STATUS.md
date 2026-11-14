@@ -1,9 +1,8 @@
 # Dragon Ball RPG — PROJECT STATUS
 
-**Last updated:** After Phase 3 — Save & Data Integrity (checkpoint `phase-3`)
-**Workspace:** `C:\Users\Administrator\Documents\Default Project\saiyan-training-simulator` (extracted from `Downloads/saiyan-training-simulator.zip`)
-**Runtime note:** No system Node/npm/git. A portable Node 26.13.0 was extracted to `AppData\Local\Temp\opencode\node-v26.13.0-win-x64` and Git comes from GitHub Desktop (`resources/app/git/cmd/git.exe`). Prefix shell calls with
-`$env:PATH = "C:\Users\Administrator\AppData\Local\Temp\opencode\node-v26.13.0-win-x64;$env:PATH"` (and `Set-ExecutionPolicy -Scope Process Bypass`) to run `npm`, `npx`, `node`.
+**Last updated:** 2026-11-14 — post-phase-10 audit (see `AUDIT.md` "Post-phase-10 audit — 2026-11-14")
+**Workspace:** `C:\Users\Administrator\Documents\GitHub\Saiyan-Saga-Trainer` (git repo, Lovable-connected — see `AGENTS.md`: do not rewrite published history)
+**Runtime note:** Node v24 is installed at `C:\Program Files\nodejs`. On Windows PowerShell, prefix calls with `Set-ExecutionPolicy -Scope Process Bypass -Force` and invoke `& "C:\Program Files\nodejs\npm.cmd" ...` (npm.ps1 is blocked by default policy).
 
 ---
 
@@ -115,10 +114,13 @@ src/test/engine.test.ts (+ app-routing.test.tsx) — 23 passing tests
 - [x] Phase 8 — GOD ENGINE interface & command center (checkpoint `phase-8`)
 - [x] Phase 9 — Visual & audio polish (checkpoint `phase-9`)
 - [x] Phase 10 — Final project audit (checkpoint `phase-10`, see AUDIT.md)
-- [ ] Phase 7 — God Engine foundations (full)
-- [ ] Phase 8 — God Engine interface & command center
-- [ ] Phase 9 — Visual & audio polish
-- [ ] Phase 10 — Final project audit
+- [x] Post-audit — user-feedback round (commit `e22b983`) + 2026-11-14 audit (see AUDIT.md)
+
+### Post-phase-10 audit — 2026-11-14 (full detail in `AUDIT.md`)
+- **Real bugs found and fixed:** custom techniques double-dipped EXPOSED (×4); variant boss ids (`endless-N` / `tournament-r*` / `raid-*`) all resolved to saga rank 0 (trivial clash pressure, wrong delays); God-Engine "Restore from backup" fed the versioned envelope into `hydrate()` and wiped the save to defaults; battle HUD used live max HP instead of the battle-start snapshot; parry mastery farmed from refused guards.
+- **Accuracy/hygiene:** battle simulator now matches live combat math (form × gravity HP, real clash pressure); 6 `no-case-declarations` fixed by bracing BLAST/ULTIMATE/VANISH; extreme-number clamps on TICK/training/XP/shadow-reward writes; `FormArt` unique SVG ids per instance; **impure state updaters fixed** (God Engine toast/console output ran setState inside the `update()` updater — React renders updaters during the render phase; now previewed on a throwaway clone and dispatched pure); stale "phase 8" build text updated.
+- **Verified:** 155 tests pass (9 files), `tsc --noEmit` clean, production build OK, ESLint 0 errors (13 pre-existing `react-refresh` warnings), live browser: all 8 tabs + full God Engine with 0 console errors/warnings, Lighthouse 1.00/1.00/1.00.
+- **Honest note:** there is **no save-import UI** — Settings & Recovery offers export + backup restore only (console/scenario import paths exist separately).
 
 ### Phase 3 — completed work (checkpoint `phase-3`)
 - All save writes go through the versioned envelope (`encodeSlot`/`sealSave`); sandbox clones, slot switching, export and snapshots included.
@@ -188,13 +190,12 @@ src/test/engine.test.ts (+ app-routing.test.tsx) — 23 passing tests
 - UI: new **Inventory** (shop / loadout / consumables / technique mastery) and **Endgame** (survival + raids) tabs — arena battle route reused.
 
 ## How to test each checkpoint (Windows, this machine)
-Node is not on PATH; use the portable copy under Temp. From `C:\Users\Administrator\Documents\Default Project\saiyan-training-simulator`:
+From `C:\Users\Administrator\Documents\GitHub\Saiyan-Saga-Trainer`:
 ```powershell
-$env:PATH = "C:\Users\Administrator\AppData\Local\Temp\opencode\node-v26.13.0-win-x64;$env:PATH"
 Set-ExecutionPolicy -Scope Process Bypass -Force
-npm run dev        # dev server with HMR (what you want for testing)
+& "C:\Program Files\nodejs\npm.cmd" run dev   # dev server with HMR (what you want for testing)
 ```
-Tests: `npx vitest run` · Types: `npx tsc --noEmit` · Build: `npm run build` · Checkout a checkpoint: `git checkout <tag>` (`baseline`, `phase-3`, `phase-4`, `phase-5`, `phase-6`).
+Tests: `npx vitest run` · Types: `npx tsc --noEmit` · Build: `npm run build` · Checkout a checkpoint: `git checkout <tag>` (`baseline`, `phase-3`, …, `phase-10`).
 
 ### Bug fixes made outside a phase
 - **God Engine 5-rapid-click access was unreachable** (all taps batched into one render) — fixed with a ref-based tap counter + 1.5 s window; verified in-browser.

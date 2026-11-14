@@ -16,7 +16,6 @@ const build = (level: number, stat: number, formId: string, gravity = 1): GameSt
 };
 const report = (label: string, buildState: GameState, bossIdx: number) => {
   const r = simulateBossFight(buildState, BOSSES[bossIdx]!, 240);
-  // eslint-disable-next-line no-console -- audit output, intentionally visible
   console.info(`[balance] ${label} vs ${BOSSES[bossIdx]!.name.padEnd(14)} → ${r.result.padEnd(7)} ${r.seconds}s (boss ${Math.floor(r.bossHpLeft)} left)`);
   return r;
 };

@@ -53,11 +53,12 @@ export function AdminPanel({ onClose, onSpawn }: { onClose: () => void; onSpawn:
     if (!skipConfirm && adminActionRequiresConfirmation(action)) {
       if (!window.confirm(`Confirm: ${action.type} — this cannot be undone.`)) return;
     }
-    update((d) => {
-      const result = executeAdminAction(d, action);
-      pushToast(result.message);
-    });
-  }, [update, pushToast]);
+    // State updaters run during React's render phase — calling pushToast (a
+    // setState) from inside one logs "cannot update a component while rendering".
+    // Preview the message on a throwaway clone; the real write lands in update().
+    pushToast(executeAdminAction(structuredClone(s), action).message);
+    update((d) => { executeAdminAction(d, action); });
+  }, [s, update, pushToast]);
 
   // Esc closes the panel (except while typing in a field).
   useEffect(() => {
@@ -674,17 +675,21 @@ function ConsoleSection({ s, update, pushToast, onSpawn }: { s: GameState; updat
         if (boss) { onSpawn(boss); print(result.message, true); } else print("Unknown boss.", false);
       } else if (result.action.type === "SNAPSHOT_CREATE") {
         const snapName = (result.action as { name: string }).name;
-        update((d) => {
-          try {
-            const snap = createSnapshot(d, snapName, "main");
-            const rawList = localStorage.getItem(SNAPSHOTS_KEY);
-            const list = rawList ? [...parseSnapshotList(rawList), snap].slice(-50) : [snap];
-            localStorage.setItem(SNAPSHOTS_KEY, JSON.stringify(list));
-          } catch { /* storage unavailable */ }
-        });
+        // Snapshots never touch the game draft — create from the current state
+        // in the handler (updaters must stay pure; storage I/O doesn't belong there).
+        try {
+          const snap = createSnapshot(s, snapName, "main");
+          const rawList = localStorage.getItem(SNAPSHOTS_KEY);
+          const list = rawList ? [...parseSnapshotList(rawList), snap].slice(-50) : [snap];
+          localStorage.setItem(SNAPSHOTS_KEY, JSON.stringify(list));
+        } catch { /* storage unavailable */ }
         print(result.message, true);
       } else {
-        update((d) => { const out = executeAdminAction(d, result.action!); print(out.message, out.ok); });
+        // Same purity rule as act(): never print (a setState) from inside the
+        // updater — preview the outcome on a throwaway clone, then dispatch.
+        const out = executeAdminAction(structuredClone(s), result.action!);
+        update((d) => { executeAdminAction(d, result.action!); });
+        print(out.message, out.ok);
       }
     } else {
       print(result.message, okLine);
@@ -900,22 +905,33 @@ function EventLogSection({ s, update }: { s: GameState; update: (fn: (d: GameSta
 /* ---------- Settings & Recovery ---------- */
 
 function SystemSection({ s, slot, switchSlot, reset, restore, update, pushToast }: { s: GameState; slot: string; switchSlot: (t: "main" | "sandbox") => void; reset: () => void; restore: (state: unknown) => void; update: (fn: (d: GameState) => void) => void; pushToast: (m: string) => void }) {
-  const exportSave = (which: "main" | "sandbox") => {
-    const blob = new Blob([exportSlotText(which === "sandbox" ? { ...s } : s)], { type: "application/json" });
-    // Note: exporting current live state — sandbox exports require switching to the sandbox first.
+  const currentSlot: "main" | "sandbox" = slot === "sandbox" ? "sandbox" : "main";
+  const exportSave = () => {
+    const blob = new Blob([exportSlotText({ ...s })], { type: "application/json" });
+    // Exports the live state of the ACTIVE slot (sandbox exports require being in the sandbox).
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `god-engine-${which}-save.json`;
+    a.download = `dragon-ball-rpg-${currentSlot}-save.json`;
     a.click();
     URL.revokeObjectURL(a.href);
   };
   const backupInfo = useMemo(() => {
     try {
-      const text = localStorage.getItem(backupKey("main"));
+      const text = localStorage.getItem(backupKey(currentSlot));
       const result = text ? resolveInitialLoad(null, text) : null;
       return result?.state ? { ok: true as const } : null;
     } catch { return null; }
-  }, []);
+  }, [currentSlot]);
+  const restoreBackup = () => {
+    if (!window.confirm(`Restore the ${currentSlot} backup? Your current ${currentSlot} save will be overwritten.`)) return;
+    try {
+      // Backups are versioned envelopes — run them through the same parser as boot, never raw hydrate.
+      const text = localStorage.getItem(backupKey(currentSlot));
+      const loaded = text ? resolveInitialLoad(null, text).state : null;
+      if (!loaded) { pushToast("Backup failed validation — aborted."); return; }
+      restore(loaded);
+    } catch { pushToast("Backup failed validation — aborted."); }
+  };
   return (
     <div className="space-y-3">
       <h2 className="font-display text-2xl">Settings & Recovery</h2>
@@ -931,20 +947,20 @@ function SystemSection({ s, slot, switchSlot, reset, restore, update, pushToast 
         <div className="font-display">Recovery</div>
         {backupInfo ? (
           <div className="mt-1">
-            <p className="text-xs text-chart-2">A backup of your main save exists.</p>
-            <Btn className="mt-1" onClick={() => { if (window.confirm("Restore the backup? Your current main save will be overwritten (a fresh backup of it is kept as -backup).")) { try { restore(JSON.parse(localStorage.getItem(backupKey("main"))!)); } catch { pushToast("Backup failed validation — aborted."); } } }}>Restore from backup</Btn>
+            <p className="text-xs text-chart-2">A backup of your {currentSlot} save exists.</p>
+            <Btn className="mt-1" onClick={restoreBackup}>Restore from backup</Btn>
           </div>
         ) : (
           <p className="mt-1 text-xs text-muted-foreground">No backup found. Export a copy now if you care about this save.</p>
         )}
         <div className="mt-2 grid grid-cols-1 gap-2">
-          <Btn onClick={() => exportSave("main")}>Export current save (versioned JSON)</Btn>
+          <Btn onClick={exportSave}>Export current save (versioned JSON)</Btn>
           <Btn onClick={() => { if (window.confirm("Wipe the CURRENT slot completely? This is your live save.")) reset(); }}>Wipe current slot</Btn>
         </div>
       </Card>
       <Card>
         <div className="font-display">About this build</div>
-        <p className="text-xs text-muted-foreground">Saiyan Training Sim — phase 8 (GOD ENGINE command center). Save version 2 · quest schema v2 · custom techniques on the live combat pipeline.</p>
+        <p className="text-xs text-muted-foreground">Saiyan Training Sim — post-audit build (10 phases + user-feedback round). Save version 2 · quest schema v2 · custom techniques on the live combat pipeline.</p>
       </Card>
     </div>
   );
