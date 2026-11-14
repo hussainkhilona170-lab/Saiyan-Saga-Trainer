@@ -148,8 +148,11 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 - `vite preview` cannot serve this nitro build — use `npm run dev`.
 - Node v24 at `C:\Program Files\nodejs`.
 
-### Plan document rule
-- **Every commit must update this PLAN.md**: completed features, in-progress work, upcoming features, bugs, open items, and instructions. Keep it current.
+### Commit versioning & push (mandatory)
+- Every commit message must be `PRE ALPHA X.Y` with an incrementing version number (0.1, 0.2, 0.3, …). Each commit increments the patch number by 1.
+- After every commit, push to `origin main` immediately (`git push origin main`).
+- PLAN.md must be updated on every commit (features, bugs, upcoming, instructions). Keep it current so any other AI/human can pick up.
+- Do not rewrite published history (no force push, rebase, amend, or squash of pushed commits).
 
 ## 8. Recoverable checkpoints
 
