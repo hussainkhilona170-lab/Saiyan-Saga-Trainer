@@ -1,5 +1,5 @@
 // Pure game rules: no React, no browser APIs. All state transitions live here.
-import { BOSSES, FORMS, LOCATIONS, PASSES, QUESTS, WISHES, SAGA_BONUSES, TOURNAMENT, EQUIPMENT, CONSUMABLES, TECHNIQUES, TECHNIQUE_RANKS, RAID_BOSSES, ENDLESS_ROSTER, ENDLESS_MODIFIERS, MAX_CUSTOM_TECHNIQUES, MAX_CUSTOM_TECHNIQUE_MULT, type Boss, type Form, type Quest, type QuestKind, type StatKey, type EndlessModifierId, type CustomTechniqueScale, type CustomTechnique } from "./data";
+import { BOSSES, FORMS, LOCATIONS, PASSES, QUESTS, WISHES, SAGA_BONUSES, TOURNAMENT, EQUIPMENT, CONSUMABLES, TECHNIQUES, TECHNIQUE_RANKS, RAID_BOSSES, ENDLESS_ROSTER, ENDLESS_MODIFIERS, MAX_CUSTOM_TECHNIQUES, MAX_CUSTOM_TECHNIQUE_MULT, ASCENSION_NODES, type AscensionNode, type Boss, type Form, type Quest, type QuestKind, type StatKey, type EndlessModifierId, type CustomTechniqueScale, type CustomTechnique } from "./data";
 
 export type TournamentBoss = Boss & { tournament?: number };
 
@@ -42,6 +42,8 @@ export type GameState = {
   adminEvents: AdminEvent[];
   formXp: Record<string, number>;
   prestige: number;
+  ascensionPoints: number;
+  ascensionNodes: string[];
 };
 
 export type AdminEvent = { id: string; at: number; action: string; target: string; previousValue: string; newValue: string; outcome: "ok" | "failed" | "blocked"; detail?: string };
@@ -69,6 +71,8 @@ export const initialState: GameState = {
   adminEvents: [],
   formXp: {},
   prestige: 0,
+  ascensionPoints: 0,
+  ascensionNodes: [],
 };
 
 export const MAX_SAVE_NUMBER = 1e18;
@@ -129,7 +133,7 @@ export const powerLevel = (s: GameState) => {
 export const trainingGain = (s: GameState) => {
   const loc = LOCATIONS.find((l) => l.id === s.location)?.mult ?? 1;
   const equip = equipmentBonus(s);
-  const gain = loc * gravMult(s) * (s.passes.includes("x2") ? 2 : 1) * Math.pow(formMult(s), 0.75) * (1 + equip.trainingMult) * (1 + 0.1 * (s.prestige ?? 0));
+  const gain = loc * gravMult(s) * (s.passes.includes("x2") ? 2 : 1) * Math.pow(formMult(s), 0.75) * (1 + equip.trainingMult) * (1 + 0.1 * (s.prestige ?? 0)) * (1 + ascensionTrainingMult(s));
   return Number.isFinite(gain) ? Math.min(gain, MAX_SAVE_NUMBER) : MAX_SAVE_NUMBER;
 };
 
@@ -251,6 +255,7 @@ export type GameAction =
   | { type: "UNEQUIP_ITEM"; itemId: string }
   | { type: "MAKE_WISH"; wishId: string }
   | { type: "PRESTIGE" }
+  | { type: "UNLOCK_ASCENSION_NODE"; nodeId: string }
   | { type: "SCOUT"; rand?: number }
   | { type: "TOURNAMENT_WIN"; round: number }
   | { type: "CLAIM_SAGA"; saga: string }
@@ -485,7 +490,7 @@ export function resolveBattleAction(battle: BattleState, game: GameState, action
     case "CHARGE":
       if (next.phase === "active" && boss) {
         const chargeMult = techniqueRank(game, "charge") >= 2 ? 1.25 : 1;
-        next.ki = Math.min(100, next.ki + action.amount * chargeMult);
+        next.ki = Math.min(100 + ascensionKiMax(game), next.ki + action.amount * chargeMult);
       }
       return next;
     case "USE_CONSUMABLE": {
@@ -494,7 +499,7 @@ export function resolveBattleAction(battle: BattleState, game: GameState, action
         next.playerHp = next.maxPlayerHp;
         next.message = "Senzu bean! You are fully restored.";
       } else {
-        next.ki = 100;
+        next.ki = 100 + ascensionKiMax(game);
         next.message = "Energy tonic! Ki floods through you.";
       }
       return next;
@@ -547,7 +552,7 @@ export function resolveBattleAction(battle: BattleState, game: GameState, action
         next.playerHp -= damage;
         resolvePlayerDefeat();
       }
-      if (game.passes.includes("kicharge") && next.playerHp > 0) next.ki = 100;
+      if (game.passes.includes("kicharge") && next.playerHp > 0) next.ki = 100 + ascensionKiMax(game);
       return next;
     case "CLASH_START":
       if (next.phase === "active" && boss) {
@@ -558,7 +563,7 @@ export function resolveBattleAction(battle: BattleState, game: GameState, action
       return next;
     case "CLASH_PUSH":
       if (next.phase !== "clash") return next;
-      next.clashProgress = Math.min(100, next.clashProgress + 3.5 + Math.min(4, Math.log10(action.agility + 1)));
+      next.clashProgress = Math.min(100, next.clashProgress + 3.5 + Math.min(4, Math.log10(action.agility + 1)) + ascensionClashPush(game));
       if (next.clashProgress >= 100) resolveClash(next, boss);
       refreshPhase();
       return next;
@@ -766,7 +771,7 @@ export function applyBattleRewards(game: GameState, boss: Boss, foundDragonBall:
   logTransaction(game, "credit", "zeni", zeniGain, `Boss victory — ${boss.name}`);
   logTransaction(game, "credit", "tp", boss.tp, `Boss victory — ${boss.name}`);
   grantExperience(game, battleExperienceReward(boss));
-  grantFormXp(game, game.activeForm, 20);
+  grantFormXp(game, game.activeForm, Math.round(20 * (1 + ascensionFormXpMult(game))));
 }
 
 export function grantExperience(state: GameState, amount: number): void {
@@ -783,6 +788,23 @@ export function grantFormXp(state: GameState, formId: string, amount: number): v
   if (!state.formXp) state.formXp = {};
   state.formXp[formId] = clampSaveNumber((state.formXp[formId] ?? 0) + Math.max(0, Math.floor(amount)), 0);
 }
+
+/** Sum of ascension node effects for a given key. */
+function ascensionSum(s: GameState, key: keyof AscensionNode["effect"]): number {
+  let sum = 0;
+  for (const id of s.ascensionNodes ?? []) {
+    const node = ASCENSION_NODES.find((n) => n.id === id);
+    if (node?.effect?.[key]) sum += (node.effect as Record<string, number>)[key as string] ?? 0;
+  }
+  return sum;
+}
+export const ascensionTrainingMult = (s: GameState) => ascensionSum(s, "trainingMult");
+export const ascensionStamina = (s: GameState) => ascensionSum(s, "stamina");
+export const ascensionGravity = (s: GameState) => ascensionSum(s, "gravity");
+export const ascensionFormXpMult = (s: GameState) => ascensionSum(s, "formXpMult");
+export const ascensionZeniMult = (s: GameState) => ascensionSum(s, "zeniMult");
+export const ascensionClashPush = (s: GameState) => ascensionSum(s, "clashPush");
+export const ascensionKiMax = (s: GameState) => ascensionSum(s, "kiMax");
 
 function applyTraining(state: GameState, stat: StatKey, rawGain: number, xpScale = 1): number {
   const gain = effectiveTrainingGain(state, stat, rawGain);
@@ -811,21 +833,21 @@ export function applyAction(d: GameState, a: GameAction): void {
       if (d.stamina < 1 && !d.godMode) return;
       if (!d.godMode) d.stamina -= 1;
       const g = applyTraining(d, a.stat, trainingGain(d));
-      d.zeni = clampSaveNumber(d.zeni + Math.ceil(g * 0.75 * (d.passes.includes("vip") ? 1.5 : 1)), d.zeni);
+      d.zeni = clampSaveNumber(d.zeni + Math.ceil(g * 0.75 * (d.passes.includes("vip") ? 1.5 : 1) * (1 + ascensionZeniMult(d))), d.zeni);
       if ((a.rand ?? Math.random()) < 0.002) grantBall(d);
       bumpQuestProgress(d, "train", 1, a.stat);
-      grantFormXp(d, d.activeForm, 1);
+      grantFormXp(d, d.activeForm, Math.round(1 * (1 + ascensionFormXpMult(d))));
       return;
     }
     case "TICK": {
-      d.maxStamina = Math.min(MAX_SAVE_NUMBER, 100 + Math.floor(d.stats.defense / 5) + Math.floor(d.maxStaminaBonus ?? 0) + (d.prestige ?? 0) * 10);
+      d.maxStamina = Math.min(MAX_SAVE_NUMBER, 100 + Math.floor(d.stats.defense / 5) + Math.floor(d.maxStaminaBonus ?? 0) + (d.prestige ?? 0) * 10 + ascensionStamina(d));
       const regen = (2 + d.maxStamina * 0.02) * (d.passes.includes("vip") ? 2 : 1);
       d.stamina = Math.min(d.maxStamina, d.stamina + regen);
       if (d.passes.includes("auto")) {
         const rawGain = trainingGain(d);
         applyTraining(d, d.autoTarget, rawGain * 2, 0.25);
-        d.zeni = clampSaveNumber(d.zeni + Math.ceil(rawGain), d.zeni);
-        grantFormXp(d, d.activeForm, 1);
+        d.zeni = clampSaveNumber(d.zeni + Math.ceil(rawGain * (1 + ascensionZeniMult(d))), d.zeni);
+        grantFormXp(d, d.activeForm, Math.round(1 * (1 + ascensionFormXpMult(d))));
       }
       return;
     }
@@ -949,6 +971,7 @@ export function applyAction(d: GameState, a: GameAction): void {
       if (d.level < 50) return;
       d.prestige = (d.prestige ?? 0) + 1;
       const p = d.prestige;
+      d.ascensionPoints = (d.ascensionPoints ?? 0) + 1;
       // Reset progress, keep prestige + permanent bonuses.
       d.stats = { strength: 1, agility: 1, ki: 1, defense: 1 };
       d.mastery = { strength: 0, agility: 0, ki: 0, defense: 0 };
@@ -977,6 +1000,17 @@ export function applyAction(d: GameState, a: GameAction): void {
       d.customTechniques = [];
       d.formXp = {};
       logTransaction(d, "credit", "zeni", 0, `Prestige ${p} — New Game+`);
+      return;
+    }
+    case "UNLOCK_ASCENSION_NODE": {
+      const node = ASCENSION_NODES.find((n) => n.id === a.nodeId);
+      if (!node) return;
+      if (d.ascensionNodes.includes(node.id)) return;
+      if ((d.ascensionPoints ?? 0) < node.cost) return;
+      // requires check
+      if (node.requires && !node.requires.every((r) => d.ascensionNodes.includes(r))) return;
+      d.ascensionPoints -= node.cost;
+      d.ascensionNodes.push(node.id);
       return;
     }
     case "SCOUT": {
@@ -1141,6 +1175,8 @@ export function hydrate(raw: unknown): GameState {
     }
   }
   out.prestige = Math.max(0, Math.min(100, Math.floor(clampSaveNumber(r.prestige, 0, 100))));
+  out.ascensionPoints = Math.max(0, Math.min(1000, Math.floor(clampSaveNumber(r.ascensionPoints, 0, 1000))));
+  out.ascensionNodes = Array.isArray(r.ascensionNodes) ? r.ascensionNodes.filter((x): x is string => typeof x === "string").slice(0, 64) : [];
   // Custom techniques: strict shape enforcement — they execute in real combat.
   const TECH_SCALES: readonly CustomTechniqueScale[] = ["ki", "strength", "agility", "defense"];
   out.customTechniques = [];

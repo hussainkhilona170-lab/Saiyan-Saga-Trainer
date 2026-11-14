@@ -161,6 +161,18 @@ export const RAID_BOSSES: RaidDef[] = [
   { id: "janemba", name: "Super Janemba", emoji: "👹", desc: "Unleashed from pride and greed — he ends the world twice over.", entry: 2e8, base: { id: "raid-janemba", name: "Super Janemba", hp: 9e10, atk: 9e6, zeni: 1e11, tp: 1200, req: 2e8, emoji: "👹", signature: { name: "Wasabi Split", mult: 3.4 } }, zeni: 1e11, tp: 1200, ballOnFirstClear: true },
 ];
 
+export type AscensionNode = { id: string; name: string; desc: string; cost: number; requires?: string[]; effect: { trainingMult?: number; stamina?: number; gravity?: number; formXpMult?: number; zeniMult?: number; clashPush?: number; kiMax?: number } };
+
+export const ASCENSION_NODES: AscensionNode[] = [
+  { id: "iron-body", name: "Iron Body", desc: "+8% training gains", cost: 1, effect: { trainingMult: 0.08 } },
+  { id: "deep-stamina", name: "Deep Stamina", desc: "+20 max stamina", cost: 1, effect: { stamina: 20 } },
+  { id: "heavy-gravity", name: "Heavy Gravity", desc: "+1 starting gravity per prestige", cost: 1, effect: { gravity: 1 } },
+  { id: "form-bond", name: "Form Bond", desc: "+25% form XP gain", cost: 1, effect: { formXpMult: 0.25 } },
+  { id: "zeni-flow", name: "Zeni Flow", desc: "+15% zeni from training", cost: 1, effect: { zeniMult: 0.15 } },
+  { id: "clash-mastery", name: "Clash Mastery", desc: "+1 clash progress per push", cost: 2, requires: ["iron-body"], effect: { clashPush: 1 } },
+  { id: "ki-reserve", name: "Ki Reserve", desc: "+15 max Ki", cost: 1, effect: { kiMax: 15 } },
+  { id: "ascendant", name: "Ascendant", desc: "Requires 4 nodes. +20% training, +2 gravity.", cost: 3, requires: ["iron-body", "heavy-gravity", "form-bond", "zeni-flow"], effect: { trainingMult: 0.2, gravity: 2 } },
+];
 export function fmt(n: number): string {
   if (!isFinite(n)) return "∞";
   const u = ["", "K", "M", "B", "T", "Qa", "Qi", "Sx"];

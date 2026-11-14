@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { BOSSES, FORMS, LOCATIONS, PASSES, QUESTS, SAGA_ORDER, TOURNAMENT, TRAININGS, WISHES, EQUIPMENT, CONSUMABLES, TECHNIQUES, TECHNIQUE_RANKS, RAID_BOSSES, ENDLESS_MODIFIERS, fmt, type Boss, type StatKey, type EndlessModifierId } from "./data";
-import { allForms, applyAction, applyBattleRewards, applyShadowRewards, applyTournamentRewards, applySurvivalRewards, applyRaidRewards, consumeItem, effectiveTrainingGain, endlessBoss, equipmentBonus, techniqueRank, bumpTechniqueUse, battleGrade, CUSTOM_FORM_MAX_MULT, findForm, battleClashDelay, battleClashPressure, canUnlockForm, formMult, gravMult, initialBattleState, levelForXp, maxGravityForLevel, powerLevel, questSummary, sagaQuests, sagaStatus, rankForLevel, resolveBattleAction, shadowDummyBoss, SHADOW_REWARD_MULT, SHADOW_ZENKAI_HP_FRACTION, SHADOW_ZENKAI_MULT, xpRequiredForLevel, formLevel, type BattleState, type GameState } from "./engine";
+import { BOSSES, FORMS, LOCATIONS, PASSES, QUESTS, SAGA_ORDER, TOURNAMENT, TRAININGS, WISHES, EQUIPMENT, CONSUMABLES, TECHNIQUES, TECHNIQUE_RANKS, RAID_BOSSES, ENDLESS_MODIFIERS, ASCENSION_NODES, fmt, type Boss, type StatKey, type EndlessModifierId } from "./data";
+import { allForms, applyAction, applyBattleRewards, applyShadowRewards, applyTournamentRewards, applySurvivalRewards, applyRaidRewards, consumeItem, effectiveTrainingGain, endlessBoss, equipmentBonus, techniqueRank, bumpTechniqueUse, battleGrade, CUSTOM_FORM_MAX_MULT, findForm, battleClashDelay, battleClashPressure, canUnlockForm, formMult, gravMult, initialBattleState, levelForXp, maxGravityForLevel, powerLevel, questSummary, sagaQuests, sagaStatus, rankForLevel, resolveBattleAction, shadowDummyBoss, SHADOW_REWARD_MULT, SHADOW_ZENKAI_HP_FRACTION, SHADOW_ZENKAI_MULT, xpRequiredForLevel, formLevel, ascensionTrainingMult, ascensionStamina, ascensionGravity, ascensionFormXpMult, ascensionZeniMult, ascensionClashPush, ascensionKiMax, type BattleState, type GameState } from "./engine";
 import { registerBattleHandler, type BattleCommand } from "./battleBus";
 import { useBattleControls } from "./controls";
 import { useGame } from "./store";
@@ -409,7 +409,7 @@ export function BattleTab({ customBoss }: { customBoss: Boss | null }) {
   function start(b: Boss) {
     if (clashIntervalRef.current) clearInterval(clashIntervalRef.current);
     outcomeHandledRef.current = "";
-    setBattle((current) => resolveBattleAction(current, sRef.current, { type: "START_BATTLE", boss: b, playerMaxHp: maxP, initialKi: sRef.current.passes.includes("kicharge") ? 100 : 0 }));
+    setBattle((current) => resolveBattleAction(current, sRef.current, { type: "START_BATTLE", boss: b, playerMaxHp: maxP, initialKi: (sRef.current.passes.includes("kicharge") ? 100 : 0) + ascensionKiMax(sRef.current) }));
   }
 
   useEffect(() => {
@@ -1021,6 +1021,36 @@ export function EndgameTab({ onFight }: { onFight: (boss: EndgameBoss) => void }
             playBattleSound("levelup");
             update((d) => applyAction(d, { type: "PRESTIGE" }));
           }}>{s.level < 50 ? `Need Lv 50 (now ${s.level})` : "Prestige"}</Btn>
+        </div>
+      </Card>
+
+      {/* Ascension skill tree */}
+      <Card className="border-chart-1/50">
+        <div className="mb-2 flex items-baseline justify-between">
+          <div className="font-display text-xl">🌳 Ascension Skill Tree</div>
+          <div className="text-sm text-muted-foreground">{s.ascensionPoints} point{s.ascensionPoints === 1 ? "" : "s"} available</div>
+        </div>
+        <div className="grid gap-2 md:grid-cols-2">
+          {ASCENSION_NODES.map((n) => {
+            const unlocked = s.ascensionNodes.includes(n.id);
+            const canAfford = (s.ascensionPoints ?? 0) >= n.cost;
+            const reqMet = !n.requires || n.requires.every((r) => s.ascensionNodes.includes(r));
+            return (
+              <div key={n.id} className={`rounded-lg border p-2 ${unlocked ? "border-chart-2 bg-chart-2/10" : "border-border"}`}>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="font-display text-sm">{n.name}</div>
+                  <div className="text-xs text-muted-foreground">cost {n.cost}</div>
+                </div>
+                <div className="text-xs text-muted-foreground">{n.desc}</div>
+                {!unlocked && (
+                  <Btn className="mt-1 w-full text-xs" disabled={!canAfford || !reqMet} onClick={() => update((d) => applyAction(d, { type: "UNLOCK_ASCENSION_NODE", nodeId: n.id }))}>
+                    {unlocked ? "Unlocked" : !reqMet ? "Locked" : canAfford ? "Unlock" : "Need points"}
+                  </Btn>
+                )}
+                {unlocked && <div className="mt-1 text-xs text-chart-2">✓ Unlocked</div>}
+              </div>
+            );
+          })}
         </div>
       </Card>
 
