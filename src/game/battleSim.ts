@@ -15,7 +15,7 @@ export type FightSimResult = {
   damageDealt: number;
   damageTaken: number;
   grade: BattleGrade | "F";
-  bossPhaseReached: 1 | 2 | 3;
+  bossPhaseReached: 1 | 2 | 3 | 4;
 };
 
 /** A sane, documented rotation: punch twice, fire a blast when Ki is high, ultimate at full Ki. Deterministic. */
