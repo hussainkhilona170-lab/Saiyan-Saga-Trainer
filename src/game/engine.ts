@@ -285,8 +285,9 @@ export type BattleState = {
   overloadedUntil: number;
   weakPointHit: boolean;
   /** Boss phase derived from remaining HP (1 = opener, 2 = enraged, 3 = critical). */
-  phaseNumber: 1 | 2 | 3;
+  phaseNumber: 1 | 2 | 3 | 4;
   bossSpecialAt: number;
+  enrageAt: number;
   /** Adaptive tracking — streaks of repeated strategies the boss can punish. */
   meleeStreak: number;
   kiStreak: number;
@@ -299,7 +300,7 @@ export const initialBattleState: BattleState = {
   boss: null, phase: "idle", hp: 0, playerHp: 0, maxPlayerHp: 0, ki: 0,
   clashProgress: 50, clashCount: 0, combo: 0, lastPunchAt: 0, message: "",
   guardUntil: 0, guardCdUntil: 0, exposedUntil: 0, overloadedUntil: 0, weakPointHit: false,
-  phaseNumber: 1, bossSpecialAt: 0,
+  phaseNumber: 1, bossSpecialAt: 0, enrageAt: 0,
   meleeStreak: 0, kiStreak: 0, adaptMeleeUntil: 0,
   cooldowns: {},
 };
@@ -322,10 +323,10 @@ export type CombatAction =
   | { type: "CLASH_TICK"; pressurePerSecond: number; deltaSeconds: number; elapsedMs: number }
   | { type: "FLEE" };
 
-export const phaseScale = (phaseNumber: 1 | 2 | 3): number => phaseNumber === 3 ? 1.7 : phaseNumber === 2 ? 1.35 : 1;
-export const battlePhaseOf = (bossHp: number, bossMaxHp: number): 1 | 2 | 3 => {
+export const phaseScale = (phaseNumber: 1 | 2 | 3 | 4): number => phaseNumber === 4 ? 2.0 : phaseNumber === 3 ? 1.7 : phaseNumber === 2 ? 1.35 : 1;
+export const battlePhaseOf = (bossHp: number, bossMaxHp: number): 1 | 2 | 3 | 4 => {
   const frac = bossMaxHp > 0 ? bossHp / bossMaxHp : 1;
-  return frac > 0.66 ? 1 : frac > 0.33 ? 2 : 3;
+  return frac > 0.66 ? 1 : frac > 0.33 ? 2 : frac > 0.10 ? 3 : 4;
 };
 export type BattleGrade = "S" | "A" | "B" | "C" | "D";
 export const battleGrade = (playerHpFraction: number): BattleGrade =>
@@ -526,6 +527,7 @@ export function resolveBattleAction(battle: BattleState, game: GameState, action
     case "ENEMY_TICK":
       if (next.phase !== "active" && next.phase !== "clash") return next;
       if (!boss) return next;
+      if (next.enrageAt === 0 && now > 0) next.enrageAt = now + 60000;
       if (!game.godMode) {
         const scale = phaseScale(next.phaseNumber);
         const defenseMult = 1 + equipmentBonus(game).defenseMult;
@@ -537,13 +539,17 @@ export function resolveBattleAction(battle: BattleState, game: GameState, action
           next.exposedUntil = Math.max(next.exposedUntil, now + 2500);
           next.weakPointHit = false;
           next.message = `PARRY! ${boss.name} is overexposed — strike now!`;
-        } else if (boss.signature && next.phaseNumber >= 2 && now > 0 && now >= next.bossSpecialAt) {
-          damage = boss.atk * scale * boss.signature.mult;
+        } else if ((boss.signatures?.[next.phaseNumber - 2] ?? boss.signature) && next.phaseNumber >= 2 && now > 0 && now >= next.bossSpecialAt) {
+          const sig = (boss.signatures?.[next.phaseNumber - 2] ?? boss.signature)!;
+          damage = boss.atk * scale * sig.mult;
           next.bossSpecialAt = now + 6000;
-          next.message = `⚡ ${boss.name} unleashes ${boss.signature.name}!`;
+          next.message = `⚡ ${boss.name} unleashes ${sig.name}!`;
         } else if (now > 0 && next.overloadedUntil > now) {
           damage *= 1.5;
           next.message = `${boss.name} punishes your Ki overload!`;
+        } else if (now > 0 && next.enrageAt > 0 && now >= next.enrageAt) {
+          damage *= 1.25;
+          next.message = `${boss.name} is ENRAGED!`;
         } else if (now > 0 && next.adaptMeleeUntil >= now) {
           damage *= 1.35;
           next.adaptMeleeUntil = 0;
