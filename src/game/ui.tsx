@@ -982,7 +982,7 @@ export function InventoryTab() {
 }
 
 export function EndgameTab({ onFight }: { onFight: (boss: EndgameBoss) => void }) {
-  const { s } = useGame();
+  const { s, update } = useGame();
   const pl = powerLevel(s);
   const [wave, setWave] = useState(() => Math.max(1, Math.min(9999, s.survivalBest + 1)));
   const [modifier, setModifier] = useState<EndlessModifierId>("none");
@@ -1005,6 +1005,24 @@ export function EndgameTab({ onFight }: { onFight: (boss: EndgameBoss) => void }
           </div>
         </div>
       </div>
+
+      {/* Prestige / New Game+ */}
+      <Card className="border-chart-5/50">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="font-display text-xl">✨ Prestige — New Game+ {s.prestige > 0 ? `(Lv ${s.prestige})` : ""}</div>
+            <div className="text-sm text-muted-foreground">Reset progress for permanent bonuses. Requires Lv 50+.</div>
+            {s.prestige > 0 && (
+              <div className="mt-1 text-xs text-chart-2">Bonuses: +{s.prestige * 10}% training · +{s.prestige} starting gravity · +{s.prestige * 10} max stamina</div>
+            )}
+          </div>
+          <Btn disabled={s.level < 50} onClick={() => {
+            if (!confirm(`Prestige to Lv ${s.prestige + 1}? This resets stats, level, forms, zeni and quests. Permanent bonuses increase.`)) return;
+            playBattleSound("levelup");
+            update((d) => applyAction(d, { type: "PRESTIGE" }));
+          }}>{s.level < 50 ? `Need Lv 50 (now ${s.level})` : "Prestige"}</Btn>
+        </div>
+      </Card>
 
       {/* Modifier cards */}
       <section aria-label="Challenge modifiers">

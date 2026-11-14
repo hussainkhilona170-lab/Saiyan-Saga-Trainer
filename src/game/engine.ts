@@ -41,6 +41,7 @@ export type GameState = {
   customTechniques: CustomTechnique[];
   adminEvents: AdminEvent[];
   formXp: Record<string, number>;
+  prestige: number;
 };
 
 export type AdminEvent = { id: string; at: number; action: string; target: string; previousValue: string; newValue: string; outcome: "ok" | "failed" | "blocked"; detail?: string };
@@ -67,6 +68,7 @@ export const initialState: GameState = {
   customTechniques: [],
   adminEvents: [],
   formXp: {},
+  prestige: 0,
 };
 
 export const MAX_SAVE_NUMBER = 1e18;
@@ -127,7 +129,7 @@ export const powerLevel = (s: GameState) => {
 export const trainingGain = (s: GameState) => {
   const loc = LOCATIONS.find((l) => l.id === s.location)?.mult ?? 1;
   const equip = equipmentBonus(s);
-  const gain = loc * gravMult(s) * (s.passes.includes("x2") ? 2 : 1) * Math.pow(formMult(s), 0.75) * (1 + equip.trainingMult);
+  const gain = loc * gravMult(s) * (s.passes.includes("x2") ? 2 : 1) * Math.pow(formMult(s), 0.75) * (1 + equip.trainingMult) * (1 + 0.1 * (s.prestige ?? 0));
   return Number.isFinite(gain) ? Math.min(gain, MAX_SAVE_NUMBER) : MAX_SAVE_NUMBER;
 };
 
@@ -248,6 +250,7 @@ export type GameAction =
   | { type: "EQUIP_ITEM"; itemId: string }
   | { type: "UNEQUIP_ITEM"; itemId: string }
   | { type: "MAKE_WISH"; wishId: string }
+  | { type: "PRESTIGE" }
   | { type: "SCOUT"; rand?: number }
   | { type: "TOURNAMENT_WIN"; round: number }
   | { type: "CLAIM_SAGA"; saga: string }
@@ -806,7 +809,7 @@ export function applyAction(d: GameState, a: GameAction): void {
       return;
     }
     case "TICK": {
-      d.maxStamina = Math.min(MAX_SAVE_NUMBER, 100 + Math.floor(d.stats.defense / 5) + Math.floor(d.maxStaminaBonus ?? 0));
+      d.maxStamina = Math.min(MAX_SAVE_NUMBER, 100 + Math.floor(d.stats.defense / 5) + Math.floor(d.maxStaminaBonus ?? 0) + (d.prestige ?? 0) * 10);
       const regen = (2 + d.maxStamina * 0.02) * (d.passes.includes("vip") ? 2 : 1);
       d.stamina = Math.min(d.maxStamina, d.stamina + regen);
       if (d.passes.includes("auto")) {
@@ -931,6 +934,40 @@ export function applyAction(d: GameState, a: GameAction): void {
         }
       }
       bumpQuestProgress(d, "wish", 1);
+      return;
+    }
+    case "PRESTIGE": {
+      if (d.level < 50) return;
+      d.prestige = (d.prestige ?? 0) + 1;
+      const p = d.prestige;
+      // Reset progress, keep prestige + permanent bonuses.
+      d.stats = { strength: 1, agility: 1, ki: 1, defense: 1 };
+      d.mastery = { strength: 0, agility: 0, ki: 0, defense: 0 };
+      d.level = 1;
+      d.xp = 0;
+      d.gravity = 1 + p;
+      d.stamina = d.maxStamina;
+      d.zeni = 0;
+      d.tp = 0;
+      d.dragonBalls = 0;
+      d.forms = ["base"];
+      d.customForms = [];
+      d.activeForm = "base";
+      d.location = "roshi";
+      d.passes = [];
+      d.defeated = [];
+      d.quests = [];
+      d.questProgress = {};
+      d.sagaBonuses = [];
+      d.tournamentRound = 0;
+      d.bestGrades = {};
+      d.inventory = {};
+      d.equipped = [];
+      d.techniqueUses = {};
+      d.survivalBest = 0;
+      d.customTechniques = [];
+      d.formXp = {};
+      logTransaction(d, "credit", "zeni", 0, `Prestige ${p} — New Game+`);
       return;
     }
     case "SCOUT": {
@@ -1094,6 +1131,7 @@ export function hydrate(raw: unknown): GameState {
       }
     }
   }
+  out.prestige = Math.max(0, Math.min(100, Math.floor(clampSaveNumber(r.prestige, 0, 100))));
   // Custom techniques: strict shape enforcement — they execute in real combat.
   const TECH_SCALES: readonly CustomTechniqueScale[] = ["ki", "strength", "agility", "defense"];
   out.customTechniques = [];
