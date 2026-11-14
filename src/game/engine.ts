@@ -1,9 +1,9 @@
 // Pure game rules: no React, no browser APIs. All state transitions live here.
-import { BOSSES, FORMS, LOCATIONS, PASSES, QUESTS, WISHES, SAGA_BONUSES, TOURNAMENT, EQUIPMENT, CONSUMABLES, TECHNIQUE_RANKS, RAID_BOSSES, ENDLESS_ROSTER, ENDLESS_MODIFIERS, MAX_CUSTOM_TECHNIQUES, MAX_CUSTOM_TECHNIQUE_MULT, type Boss, type Form, type Quest, type QuestKind, type StatKey, type EndlessModifierId, type CustomTechniqueScale, type CustomTechnique } from "./data";
+import { BOSSES, FORMS, LOCATIONS, PASSES, QUESTS, WISHES, SAGA_BONUSES, TOURNAMENT, EQUIPMENT, CONSUMABLES, TECHNIQUES, TECHNIQUE_RANKS, RAID_BOSSES, ENDLESS_ROSTER, ENDLESS_MODIFIERS, MAX_CUSTOM_TECHNIQUES, MAX_CUSTOM_TECHNIQUE_MULT, type Boss, type Form, type Quest, type QuestKind, type StatKey, type EndlessModifierId, type CustomTechniqueScale, type CustomTechnique } from "./data";
 
 export type TournamentBoss = Boss & { tournament?: number };
 
-export type Transaction = { id: string; at: number; kind: "credit" | "debit"; currency: "zeni" | "tp"; amount: number; label: string; balance: number };
+export type Transaction = { id: string; at: number; kind: "credit" | "debit"; currency: "zeni" | "tp" | "stamina" | "mastery" | "gravity" | "technique" | "form"; amount: number; label: string; balance: number };
 
 export type GameState = {
   stats: Record<StatKey, number>;
@@ -77,7 +77,7 @@ export function clampSaveNumber(value: unknown, fallback = 0, max: number = MAX_
 
 export function logTransaction(d: GameState, kind: Transaction["kind"], currency: Transaction["currency"], amount: number, label: string, at = Date.now()): void {
   if (!Number.isFinite(amount) || amount <= 0) return;
-  const balance = currency === "zeni" ? d.zeni : d.tp;
+  const balance = currency === "zeni" ? d.zeni : currency === "tp" ? d.tp : 0;
   d.transactions.push({ id: `${at}-${d.transactions.length}`, at, kind, currency, amount: Math.floor(amount), label: label.slice(0, 80), balance: Math.floor(balance) });
   if (d.transactions.length > MAX_TRANSACTIONS) d.transactions.splice(0, d.transactions.length - MAX_TRANSACTIONS);
 }
@@ -879,6 +879,7 @@ export function applyAction(d: GameState, a: GameAction): void {
         logTransaction(d, "credit", "zeni", amount, "Shenron wish — Infinite riches");
       } else if (wish.id === "power") {
         for (const k of Object.keys(d.stats) as StatKey[]) d.stats[k] = clampSaveNumber(d.stats[k] * 2, d.stats[k]);
+        logTransaction(d, "credit", "zeni", 0, "Shenron wish — Become stronger");
       } else if (wish.id === "tp") {
         d.tp = clampSaveNumber(d.tp + 500, d.tp);
         logTransaction(d, "credit", "tp", 500, "Shenron wish — Medals of honor");
@@ -886,6 +887,31 @@ export function applyAction(d: GameState, a: GameAction): void {
         d.maxStaminaBonus = clampSaveNumber((d.maxStaminaBonus ?? 0) + 50, 0, MAX_SAVE_NUMBER);
         d.maxStamina = clampSaveNumber(d.maxStamina + 50, d.maxStamina);
         d.stamina = d.maxStamina;
+        logTransaction(d, "credit", "stamina", 50, "Shenron wish — Endless stamina");
+      } else if (wish.id === "mastery") {
+        for (const k of Object.keys(d.stats) as StatKey[]) d.mastery[k] = Math.min(100, d.mastery[k] + 25);
+        logTransaction(d, "credit", "mastery", 25, "Shenron wish — Mastery breakthrough");
+      } else if (wish.id === "gravity") {
+        d.gravity = Math.min(510, d.gravity + 5);
+        logTransaction(d, "credit", "gravity", 5, "Shenron wish — Heavier gravity");
+      } else if (wish.id === "technique") {
+        for (const k of Object.keys(d.techniqueUses)) d.techniqueUses[k] = clampSaveNumber((d.techniqueUses[k] ?? 0) + 50, 0);
+        // ensure all known techniques get the boost even if unused
+        for (const t of TECHNIQUES) d.techniqueUses[t.id] = clampSaveNumber((d.techniqueUses[t.id] ?? 0) + 50, 0);
+        logTransaction(d, "credit", "technique", 50, "Shenron wish — Technique mastery");
+      } else if (wish.id === "form") {
+        const owned = new Set(d.forms);
+        const candidates = FORMS.filter((f) => !f.custom && !owned.has(f.id) && canUnlockForm(d, f.id));
+        if (candidates.length > 0) {
+          const pick = candidates[Math.floor(Math.random() * candidates.length)]!;
+          d.forms.push(pick.id);
+          logTransaction(d, "credit", "form", 1, `Shenron wish — New transformation (${pick.name})`);
+        } else {
+          // fallback: grant zeni
+          const amount = Math.floor(powerLevel(d) * 50);
+          d.zeni = clampSaveNumber(d.zeni + amount, d.zeni);
+          logTransaction(d, "credit", "zeni", amount, "Shenron wish — New transformation (no unlockable form; zeni)");
+        }
       }
       bumpQuestProgress(d, "wish", 1);
       return;
@@ -990,7 +1016,7 @@ export function hydrate(raw: unknown): GameState {
   // Transactions: keep only well-formed rows, cap the log.
   out.transactions = Array.isArray(r.transactions)
     ? r.transactions
-      .filter((t): t is Transaction => !!t && typeof t.id === "string" && typeof t.at === "number" && isFinite(t.at) && (t.kind === "credit" || t.kind === "debit") && (t.currency === "zeni" || t.currency === "tp") && typeof t.amount === "number" && isFinite(t.amount) && typeof t.label === "string")
+      .filter((t): t is Transaction => !!t && typeof t.id === "string" && typeof t.at === "number" && isFinite(t.at) && (t.kind === "credit" || t.kind === "debit") && (t.currency === "zeni" || t.currency === "tp" || t.currency === "stamina" || t.currency === "mastery" || t.currency === "gravity" || t.currency === "technique" || t.currency === "form") && typeof t.amount === "number" && isFinite(t.amount) && typeof t.label === "string")
       .slice(-MAX_TRANSACTIONS)
       .map((t) => ({ ...t, amount: Math.floor(Math.abs(t.amount)), balance: Math.floor(Math.abs(t.balance ?? 0)) }))
     : [];

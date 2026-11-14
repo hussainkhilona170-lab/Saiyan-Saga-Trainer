@@ -109,6 +109,10 @@ export const WISHES = [
   { id: "power", name: "Become stronger", desc: "All stats ×2" },
   { id: "tp", name: "Medals of honor", desc: "+500 TP Medals" },
   { id: "stamina", name: "Endless stamina", desc: "+50 max stamina, permanently" },
+  { id: "mastery", name: "Mastery breakthrough", desc: "All stat mastery +25 (capped at 100%)" },
+  { id: "gravity", name: "Heavier gravity", desc: "+5 gravity chamber steps (divine boost)" },
+  { id: "technique", name: "Technique mastery", desc: "+50 uses to every technique (ranks up)" },
+  { id: "form", name: "New transformation", desc: "Unlock one form you meet the requirements for" },
 ];
 
 export type EquipmentSlot = "body" | "accessory" | "hands";

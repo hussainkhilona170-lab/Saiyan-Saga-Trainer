@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { BOSSES, FORMS, LOCATIONS, PASSES, QUESTS, SAGA_ORDER, TOURNAMENT, TRAININGS, WISHES, EQUIPMENT, CONSUMABLES, TECHNIQUES, TECHNIQUE_RANKS, RAID_BOSSES, ENDLESS_MODIFIERS, fmt, type Boss, type StatKey, type EndlessModifierId } from "./data";
-import { allForms, applyAction, applyBattleRewards, applyShadowRewards, applyTournamentRewards, applySurvivalRewards, applyRaidRewards, consumeItem, effectiveTrainingGain, endlessBoss, equipmentBonus, techniqueRank, bumpTechniqueUse, battleGrade, CUSTOM_FORM_MAX_MULT, findForm, battleClashDelay, battleClashPressure, canUnlockForm, formMult, gravMult, initialBattleState, levelForXp, maxGravityForLevel, powerLevel, questSummary, sagaQuests, sagaStatus, rankForLevel, resolveBattleAction, shadowDummyBoss, SHADOW_REWARD_MULT, SHADOW_ZENKAI_HP_FRACTION, SHADOW_ZENKAI_MULT, xpRequiredForLevel, type BattleState } from "./engine";
+import { allForms, applyAction, applyBattleRewards, applyShadowRewards, applyTournamentRewards, applySurvivalRewards, applyRaidRewards, consumeItem, effectiveTrainingGain, endlessBoss, equipmentBonus, techniqueRank, bumpTechniqueUse, battleGrade, CUSTOM_FORM_MAX_MULT, findForm, battleClashDelay, battleClashPressure, canUnlockForm, formMult, gravMult, initialBattleState, levelForXp, maxGravityForLevel, powerLevel, questSummary, sagaQuests, sagaStatus, rankForLevel, resolveBattleAction, shadowDummyBoss, SHADOW_REWARD_MULT, SHADOW_ZENKAI_HP_FRACTION, SHADOW_ZENKAI_MULT, xpRequiredForLevel, type BattleState, type GameState } from "./engine";
 import { registerBattleHandler, type BattleCommand } from "./battleBus";
 import { useBattleControls } from "./controls";
 import { useGame } from "./store";
@@ -706,6 +706,24 @@ export function QuestsTab() {
   );
 }
 
+function wishPreview(s: GameState, w: (typeof WISHES)[number]): string {
+  switch (w.id) {
+    case "zeni": return `≈ ${fmt(powerLevel(s) * 100)} Zeni`;
+    case "power": return "all stats ×2";
+    case "tp": return "+500 TP";
+    case "stamina": return "+50 max stamina";
+    case "mastery": return "all mastery +25%";
+    case "gravity": return "+5 gravity steps";
+    case "technique": return "+50 uses each";
+    case "form": {
+      const owned = new Set(s.forms);
+      const cands = FORMS.filter((f) => !f.custom && !owned.has(f.id) && canUnlockForm(s, f.id));
+      return cands.length > 0 ? `unlock ${cands[0]!.name}` : "zeni fallback";
+    }
+    default: return "";
+  }
+}
+
 export function ShopTab() {
   const { s, update, triggerShake } = useGame();
   const [wishing, setWishing] = useState(false);
@@ -764,13 +782,29 @@ export function ShopTab() {
         ) : (
           <div className="mt-3 space-y-2">
             <p className="font-display text-xl text-chart-2">"State your wish. I will grant one."</p>
-            {WISHES.map((w) => (
-              <Btn key={w.id} className="mr-2" onClick={() => {
-                playBattleSound("levelup");
-                update((d) => applyAction(d, { type: "MAKE_WISH", wishId: w.id }));
-                setWishing(false);
-              }}>{w.name} — {w.desc}{w.id === "zeni" ? ` (≈ ${fmt(powerLevel(s) * 100)})` : ""}</Btn>
-            ))}
+            {WISHES.map((w) => {
+              const preview = wishPreview(s, w);
+              return (
+                <Btn key={w.id} className="mr-2" onClick={() => {
+                  playBattleSound("levelup");
+                  update((d) => applyAction(d, { type: "MAKE_WISH", wishId: w.id }));
+                  setWishing(false);
+                }}>{w.name} — {w.desc}{preview ? ` (${preview})` : ""}</Btn>
+              );
+            })}
+          </div>
+        )}
+        {s.transactions.some((t) => t.label.includes("Shenron wish")) && (
+          <div className="mt-3">
+            <div className="text-sm font-display text-muted-foreground">Wish history</div>
+            <ul className="mt-1 max-h-32 space-y-0.5 overflow-y-auto text-xs text-muted-foreground">
+              {[...s.transactions].filter((t) => t.label.includes("Shenron wish")).reverse().slice(0, 10).map((t) => (
+                <li key={t.id} className="flex justify-between gap-2 border-b border-border/40 pb-0.5">
+                  <span>{t.label}</span>
+                  <span className="text-chart-2">{t.amount > 0 ? `+${fmt(t.amount)} ${t.currency}` : "—"}</span>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
       </Card>
