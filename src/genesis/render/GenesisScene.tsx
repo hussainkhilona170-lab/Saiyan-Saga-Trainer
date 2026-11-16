@@ -2,7 +2,7 @@ import { Canvas } from "@react-three/fiber";
 import { useState, useRef, useEffect, type RefObject } from "react";
 import { createCharacterState, type CharacterState } from "../sim/character";
 import { useKeyboard } from "./useKeyboard";
-import { Fighter } from "./Fighter";
+import { FighterGLTF } from "./FighterGLTF";
 import { GenesisHud, type HudStats } from "../hud/GenesisHud";
 import { CHARACTERS, characterByID, nextCharacterID, type CharacterDef } from "../characters";
 import { subscribeGenesisCommands, type GenesisCommand } from "../genesisBus";
@@ -126,12 +126,13 @@ export default function GenesisScene() {
         <gridHelper args={[160, 80, SCENE.grid, SCENE.grid]} position={[0, 0.02, 0]} />
         <Ridge />
         <Landmarks />
-        <Fighter
+        <FighterGLTF
           stateRef={stateRef}
           keysRef={keysRef}
           onStats={setStats}
           character={character}
           teleportRef={teleportRef}
+          modelUrl="/assets/characters/Soldier_Male.glb"
         />
       </Canvas>
       <GenesisHud
