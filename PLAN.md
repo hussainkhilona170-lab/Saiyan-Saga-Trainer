@@ -98,18 +98,22 @@ src/game/FormArt.tsx   Form portrait rendering (sprite images + SVG fallback)
 
 ## 5. In-progress / upcoming features
 
-### High priority
+> **PAUSED during Genesis (active direction, see §10):** the 2D feature list below is
+> frozen while the 3D action RPG is developed. Revisit after Milestone B. The 2D app
+> stays stable and regression-tested (155 tests) but takes no new features.
+
+### High priority (paused)
 - [ ] Boss Rush mode — fight all saga bosses back-to-back, escalating rewards
 - [ ] Combat skill tree — spend TP on combat perks (crit, ki regen, guard window, clash power, vanish cooldown)
 - [ ] Achievement system — badge/medal collection for milestones with small rewards
 
-### Medium priority
+### Medium priority (paused)
 - [ ] Save import (JSON) — import from file/paste; closes last save-integrity gap
 - [ ] Location identity — distinct activities per location instead of pure multipliers
 - [ ] Saga Story Mode — guided campaign with dialogue and cutscenes
 - [ ] Boss AI patterns — distinct attack patterns, telegraphs, phase-specific behaviors
 
-### Low priority / nice-to-have
+### Low priority / nice-to-have (paused)
 - [ ] Weather & time of day — affects training multipliers and visuals
 - [ ] Training minigames — rhythm/timing for bonus gains
 - [ ] Companion system — pet with passive bonuses
@@ -192,9 +196,42 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 - `0fee3ab` — ascension skill tree
 - `5f7a822` — PRE ALPHA 0.1 (plan + battleSim fix)
 - `59e0b26` — reference sprites + turbo 100/s
+- `f41d75c` — PRE ALPHA 0.2 (Turbo Clicker restyle)
+- `37599cc` — PRE ALPHA 0.3 (UI consistency rules in AGENTS.md + PLAN.md)
+- `0.4` — Genesis Phase 0: TECH_STACK_DECISIONS.md + this GENESIS section
 
 ## 9. Test counts
 
 - Engine tests: 22
 - Total: 155 (9 files)
 - All passing as of last commit
+
+## 10. GENESIS — 3D Action RPG (active direction)
+
+**Vision:** transform the 2D Trainer into a third-person 3D action RPG
+(desktop PC, Windows; Kakarot-inspired, original assets only). Full direction
+and rules: the user's Genesis master prompt (12 phases → Milestones A–D).
+
+### Decisions locked (2026-11-16)
+- **2D features paused** (§5) — the 2D app stays stable and regression-tested, no new features during Genesis.
+- **God Engine = parallel track** — an adapter (`genesisBus`, console, Live Inspector, snapshots on Genesis state) ships with Phase 1, not Phase 9. The existing God Engine pattern (16 labs, 26+ typed actions) transfers.
+- **Prototype assets:** CC0 placeholder packs (Quaternius/Kenney GLTF) for Milestones A–B; original/licensed assets gated before Alpha 0.1. Kakarot assets are off-limits.
+- **Engine decision:** PENDING USER REVIEW — see `TECH_STACK_DECISIONS.md` §6 (recommendation: Three.js + R3F + Rapier, Tauri packaging; Godot 4.6 runner-up with a defined switch trigger). Nothing 3D is installed until approved.
+
+### Roadmap (user-approved structure)
+- **Milestone A (Phases 0–2):** preservation + architecture + playable 3D character. ← current
+- **Milestone B (Phases 3–8):** flight, combat, RPG progression, world, quests, bosses.
+- **Milestone C (Phase 9):** God Engine ecosystem expansion.
+- **Milestone D (Phases 10–12):** polish, optimization, desktop release, post-launch.
+- **Alpha 0.1 target:** 1 region, 1–2 characters, movement + flight, melee + Ki combat, 2–3 enemy types, 1 boss, 3–5 quests, NPCs, XP/levels, 1 transformation, save/load, basic God Engine.
+
+### Milestone A exit gates (all must pass)
+1. Character walks/runs/jumps/lands with camera collision at 60 FPS on the dev machine.
+2. 2D app: zero regressions — 155 tests green + build green on every commit.
+3. God Engine console can drive/inspect the 3D player (parallel-track rule).
+4. Visual verification per AGENTS.md UI consistency rules (screenshots + zero console errors).
+
+### Genesis documents
+`TECH_STACK_DECISIONS.md` (engine decision, pending review) — Phase 0 continues with
+PROJECT_VISION / ARCHITECTURE / MIGRATION_PLAN / DESIGN_SYSTEM / GAME_SYSTEMS /
+ASSET_PIPELINE / TESTING_STRATEGY after the engine is approved.
