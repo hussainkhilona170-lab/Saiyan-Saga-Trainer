@@ -230,7 +230,7 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 - `8f8f86d` — PRE ALPHA 0.6 (Genesis Phase 1: 3D stack, /genesis route, character sim + tests, scene, HUD)
 - `7585349` — PRE ALPHA 0.7 (Genesis Phase 2: procedural fighter body + pure animation layer + scene polish)
 - `5df29ca` — PRE ALPHA 0.8 (Genesis Phase 3: Rapier attempt + camera collision + character selection; pushed)
-- `0.9` — Genesis Phase 3 (revised): manual collision + God Engine adapter + genesisBus (commit pending)
+- `dd5ef3c` — PRE ALPHA 0.9 (manual collision + God Engine adapter + genesisBus)
 
 ## 9. Test counts
 
