@@ -10,15 +10,6 @@ import type { RawKeys } from "./useKeyboard";
 import { moveIntent, resolveCameraPosition } from "./cameraRelative";
 import { OBSTACLES } from "../world";
 
-/**
- * Genesis fighter — original low-poly rig driven by the pure character sim,
- * with manual obstacle collision (capsule vs. AABB push-out) and camera
- * collision (ray vs. AABB). Rapier was evaluated (Phase 3) but its Physics
- * provider suspends indefinitely under React 19 in this environment, so the
- * prototype uses the sim's plane ground + manual collision until a compatible
- * Rapier/React pairing is available (see TECH_STACK_DECISIONS.md §7 reversal
- * trigger).
- */
 const CAM_BACK = 5;
 const CAM_UP = 2.2;
 const LOOK_AT_Y = 1.15;
@@ -31,6 +22,32 @@ type FighterProps = {
   character: CharacterDef;
   teleportRef?: RefObject<{ x: number; y: number; z: number } | null>;
 };
+
+// Toon gradient texture for cel-shaded DBZ look
+function makeToonGradient(): THREE.CanvasTexture {
+  const canvas = document.createElement("canvas");
+  canvas.width = 4;
+  canvas.height = 1;
+  const ctx = canvas.getContext("2d")!;
+  ctx.fillStyle = "#404040";
+  ctx.fillRect(0, 0, 1, 1);
+  ctx.fillStyle = "#808080";
+  ctx.fillRect(1, 0, 1, 1);
+  ctx.fillStyle = "#c0c0c0";
+  ctx.fillRect(2, 0, 1, 1);
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(3, 0, 1, 1);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.minFilter = THREE.NearestFilter;
+  tex.magFilter = THREE.NearestFilter;
+  return tex;
+}
+
+let _toonGrad: THREE.CanvasTexture | null = null;
+function toonGrad(): THREE.CanvasTexture {
+  if (!_toonGrad) _toonGrad = makeToonGradient();
+  return _toonGrad;
+}
 
 export function Fighter({ stateRef, keysRef, onStats, character, teleportRef }: FighterProps) {
   const { camera } = useThree();
@@ -53,6 +70,8 @@ export function Fighter({ stateRef, keysRef, onStats, character, teleportRef }: 
   const frames = useRef({ count: 0, time: 0 });
   const wasGroundedRef = useRef(true);
 
+  const grad = toonGrad();
+
   useFrame((_, delta) => {
     const tp = teleportRef?.current;
     if (tp) {
@@ -71,7 +90,6 @@ export function Fighter({ stateRef, keysRef, onStats, character, teleportRef }: 
     const next = updateCharacter(stateRef.current, input, delta);
     const speed = Math.hypot(next.vx, next.vz);
 
-    // --- manual obstacle collision (capsule ≈ circle in XZ) ---------------
     let rx = next.x;
     let rz = next.z;
     for (let iter = 0; iter < 4; iter++) {
@@ -90,7 +108,6 @@ export function Fighter({ stateRef, keysRef, onStats, character, teleportRef }: 
           rz += dz * push;
           pushed = true;
         } else if (dist <= 1e-6) {
-          // Inside the box: push out along the shortest axis.
           const toLeft = rx - (ob.x - halfW);
           const toRight = ob.x + halfW - rx;
           const toBack = rz - (ob.z - halfD);
@@ -106,7 +123,6 @@ export function Fighter({ stateRef, keysRef, onStats, character, teleportRef }: 
       if (!pushed) break;
     }
 
-    // Landing detection off the sim's own ground flag (plane ground).
     let action = next.action;
     let landTimer = next.landTimer;
     let vy = next.vy;
@@ -136,7 +152,6 @@ export function Fighter({ stateRef, keysRef, onStats, character, teleportRef }: 
       innerRef.current.rotation.y = next.facing;
     }
 
-    // Pose.
     const a = anim.current;
     a.phase = advancePhase(a.phase, action, speed, delta);
     poseForInto(a.target, action, speed, a.phase);
@@ -161,13 +176,12 @@ export function Fighter({ stateRef, keysRef, onStats, character, teleportRef }: 
     if (aura.current) {
       const t = Math.min(1, speed / 8);
       const mat = aura.current.material as THREE.MeshBasicMaterial;
-      mat.opacity = 0.16 + 0.34 * t;
-      const s = (1 + 0.12 * t) * character.scale;
+      mat.opacity = 0.12 + 0.3 * t;
+      const s = (1 + 0.1 * t) * character.scale;
       aura.current.scale.set(s, 1, s);
       aura.current.rotation.z += delta * (0.6 + 2.4 * t);
     }
 
-    // Camera with collision (ray vs. obstacle AABBs).
     const desiredCam = { x: resolved.x, y: resolved.y + CAM_UP, z: resolved.z + CAM_BACK };
     const lookAt = { x: resolved.x, y: resolved.y + LOOK_AT_Y, z: resolved.z };
     const dx2 = desiredCam.x - lookAt.x;
@@ -192,7 +206,6 @@ export function Fighter({ stateRef, keysRef, onStats, character, teleportRef }: 
     camera.position.lerp(camTarget, 1 - Math.exp(-delta * 6));
     camera.lookAt(lookAt.x, lookAt.y, lookAt.z);
 
-    // Stats.
     const acc = frames.current;
     acc.count += 1;
     acc.time += delta;
@@ -215,144 +228,262 @@ export function Fighter({ stateRef, keysRef, onStats, character, teleportRef }: 
   const hair = character.hair;
   const skin = character.skin;
 
+  // Toon materials
+  const toonMat = (color: string, emissive?: string, ei = 0) => (
+    <meshToonMaterial
+      color={color}
+      gradientMap={grad}
+      emissive={emissive || color}
+      emissiveIntensity={ei}
+    />
+  );
+
   return (
     <group ref={innerRef}>
+      {/* Ki aura */}
       <mesh ref={aura} position={[0, 0.03, 0]} rotation-x={-Math.PI / 2}>
-        <ringGeometry args={[0.5, 0.78, 32]} />
+        <ringGeometry args={[0.5, 0.85, 32]} />
         <meshBasicMaterial
           color={gi}
           transparent
-          opacity={0.3}
+          opacity={0.25}
           side={THREE.DoubleSide}
           depthWrite={false}
         />
       </mesh>
 
-      <group position={[0, 0.85, 0]} ref={hips}>
-        <mesh position={[0, -0.01, 0]} castShadow>
-          <boxGeometry args={[0.3, 0.17, 0.22]} />
-          <meshStandardMaterial color="#28324d" roughness={0.85} />
+      <group position={[0, 0, 0]} ref={hips}>
+        {/* Pelvis */}
+        <mesh position={[0, -0.02, 0]} castShadow>
+          <capsuleGeometry args={[0.16, 0.12, 8, 12]} />
+          {toonMat("#28324d")}
         </mesh>
-        <mesh position={[0, 0.09, 0]} castShadow>
-          <boxGeometry args={[0.33, 0.08, 0.25]} />
-          <meshStandardMaterial color="#1b2338" roughness={0.7} />
+        {/* Belt */}
+        <mesh position={[0, 0.1, 0]} castShadow>
+          <boxGeometry args={[0.36, 0.09, 0.26]} />
+          {toonMat("#1b2338")}
+        </mesh>
+        {/* Belt knot */}
+        <mesh position={[0, 0.1, 0.16]} castShadow>
+          <boxGeometry args={[0.1, 0.1, 0.06]} />
+          {toonMat("#1b2338")}
         </mesh>
 
         <group ref={torso}>
-          <mesh position={[0, 0.32, 0]} castShadow>
-            <boxGeometry args={[0.44, 0.46, 0.26]} />
-            <meshStandardMaterial
-              color={gi}
-              roughness={0.6}
-              emissive={gi}
-              emissiveIntensity={0.12}
-            />
+          {/* Gi top - main body */}
+          <mesh position={[0, 0.28, 0]} castShadow>
+            <capsuleGeometry args={[0.2, 0.3, 8, 12]} />
+            {toonMat(gi, gi, 0.05)}
           </mesh>
-          <mesh position={[0, 0.5, 0]} castShadow>
-            <boxGeometry args={[0.4, 0.12, 0.27]} />
-            <meshStandardMaterial color={under} roughness={0.7} />
+          {/* Blue undershirt visible at collar */}
+          <mesh position={[0, 0.48, 0.02]} castShadow>
+            <boxGeometry args={[0.3, 0.12, 0.2]} />
+            {toonMat(under)}
           </mesh>
-          <mesh position={[0, 0.62, 0]} castShadow>
-            <boxGeometry args={[0.12, 0.08, 0.12]} />
-            <meshStandardMaterial color={skin} roughness={0.9} />
+          {/* Gi wrap / sash */}
+          <mesh position={[0, 0.06, 0]} castShadow>
+            <boxGeometry args={[0.42, 0.1, 0.28]} />
+            {toonMat(gi, gi, 0.03)}
+          </mesh>
+          {/* Neck */}
+          <mesh position={[0, 0.56, 0]} castShadow>
+            <capsuleGeometry args={[0.09, 0.08, 6, 10]} />
+            {toonMat(skin)}
           </mesh>
 
-          <group ref={head} position={[0, 0.74, 0]}>
+          {/* Head */}
+          <group ref={head} position={[0, 0.72, 0]}>
             <mesh castShadow>
-              <sphereGeometry args={[0.145 * s, 20, 16]} />
-              <meshStandardMaterial color={skin} roughness={0.85} />
+              <sphereGeometry args={[0.16 * s, 24, 16]} />
+              {toonMat(skin)}
             </mesh>
-            <mesh position={[-0.055, 0.02, 0.125]}>
-              <sphereGeometry args={[0.024, 10, 10]} />
-              <meshStandardMaterial color="#1b1b1b" roughness={0.4} />
+            {/* Eyes */}
+            <mesh position={[-0.06, 0.02, 0.13]}>
+              <sphereGeometry args={[0.03, 10, 10]} />
+              <meshStandardMaterial color="#ffffff" roughness={0.3} />
             </mesh>
-            <mesh position={[0.055, 0.02, 0.125]}>
-              <sphereGeometry args={[0.024, 10, 10]} />
-              <meshStandardMaterial color="#1b1b1b" roughness={0.4} />
+            <mesh position={[0.06, 0.02, 0.13]}>
+              <sphereGeometry args={[0.03, 10, 10]} />
+              <meshStandardMaterial color="#ffffff" roughness={0.3} />
             </mesh>
+            {/* Pupils */}
+            <mesh position={[-0.055, 0.02, 0.155]}>
+              <sphereGeometry args={[0.015, 8, 8]} />
+              <meshStandardMaterial color="#1a1a2e" roughness={0.2} />
+            </mesh>
+            <mesh position={[0.055, 0.02, 0.155]}>
+              <sphereGeometry args={[0.015, 8, 8]} />
+              <meshStandardMaterial color="#1a1a2e" roughness={0.2} />
+            </mesh>
+            {/* Eyebrows */}
+            <mesh position={[-0.06, 0.06, 0.14]} rotation={[0, 0, -0.15]}>
+              <boxGeometry args={[0.06, 0.012, 0.02]} />
+              {toonMat(hair)}
+            </mesh>
+            <mesh position={[0.06, 0.06, 0.14]} rotation={[0, 0, 0.15]}>
+              <boxGeometry args={[0.06, 0.012, 0.02]} />
+              {toonMat(hair)}
+            </mesh>
+            {/* Nose */}
+            <mesh position={[0, -0.01, 0.15]}>
+              <sphereGeometry args={[0.015, 6, 6]} />
+              {toonMat(skin)}
+            </mesh>
+            {/* Mouth */}
+            <mesh position={[0, -0.05, 0.14]}>
+              <boxGeometry args={[0.05, 0.008, 0.01]} />
+              <meshStandardMaterial color="#8b4a3a" roughness={0.8} />
+            </mesh>
+
+            {/* Spiky Saiyan hair */}
             {[
-              { p: [0, 0.3, 0.02], r: [0.12, 0, 0] },
-              { p: [-0.075, 0.27, 0.01], r: [0, 0, 0.4] },
-              { p: [0.075, 0.27, 0.01], r: [0, 0, -0.4] },
-              { p: [0, 0.27, -0.09], r: [-0.35, 0, 0] },
-              { p: [-0.06, 0.25, -0.07], r: [-0.25, 0, 0.28] },
-              { p: [0.06, 0.25, -0.07], r: [-0.25, 0, -0.28] },
+              {
+                p: [0, 0.22, 0.02] as [number, number, number],
+                r: [0.0, 0, 0] as [number, number, number],
+                s: 1.0,
+              },
+              {
+                p: [-0.06, 0.2, 0.0] as [number, number, number],
+                r: [0.1, 0, 0.35] as [number, number, number],
+                s: 0.9,
+              },
+              {
+                p: [0.06, 0.2, 0.0] as [number, number, number],
+                r: [0.1, 0, -0.35] as [number, number, number],
+                s: 0.9,
+              },
+              {
+                p: [-0.1, 0.16, -0.04] as [number, number, number],
+                r: [-0.2, 0, 0.5] as [number, number, number],
+                s: 0.8,
+              },
+              {
+                p: [0.1, 0.16, -0.04] as [number, number, number],
+                r: [-0.2, 0, -0.5] as [number, number, number],
+                s: 0.8,
+              },
+              {
+                p: [0, 0.18, -0.1] as [number, number, number],
+                r: [-0.4, 0, 0] as [number, number, number],
+                s: 0.85,
+              },
+              {
+                p: [-0.04, 0.2, 0.1] as [number, number, number],
+                r: [0.2, 0, 0.2] as [number, number, number],
+                s: 0.7,
+              },
+              {
+                p: [0.04, 0.2, 0.1] as [number, number, number],
+                r: [0.2, 0, -0.2] as [number, number, number],
+                s: 0.7,
+              },
+              {
+                p: [0, 0.14, 0.12] as [number, number, number],
+                r: [0.5, 0, 0] as [number, number, number],
+                s: 0.6,
+              },
             ].map((spike, i) => (
-              <mesh
-                key={i}
-                position={spike.p as [number, number, number]}
-                rotation={spike.r as [number, number, number]}
-                castShadow
-              >
-                <coneGeometry args={[0.055, 0.24, 6]} />
-                <meshStandardMaterial color={hair} roughness={0.75} />
+              <mesh key={i} position={spike.p} rotation={spike.r} castShadow>
+                <coneGeometry args={[0.05 * spike.s, 0.28 * spike.s, 6]} />
+                {toonMat(hair)}
               </mesh>
             ))}
+            {/* Hair base */}
+            <mesh position={[0, 0.14, -0.02]} castShadow>
+              <sphereGeometry args={[0.16 * s, 12, 10]} />
+              {toonMat(hair)}
+            </mesh>
           </group>
 
-          <group ref={shoulderL} position={[-0.26, 0.46, 0]}>
-            <mesh position={[0, -0.13, 0]} castShadow>
-              <capsuleGeometry args={[0.062, 0.18, 4, 10]} />
-              <meshStandardMaterial color={gi} roughness={0.65} />
+          {/* Arms */}
+          <group ref={shoulderL} position={[-0.25, 0.44, 0]}>
+            {/* Wristband */}
+            <mesh position={[0, -0.42, 0]} castShadow>
+              <cylinderGeometry args={[0.065, 0.065, 0.06, 10]} />
+              {toonMat(under)}
+            </mesh>
+            {/* Upper arm */}
+            <mesh position={[0, -0.12, 0]} castShadow>
+              <capsuleGeometry args={[0.07, 0.16, 8, 10]} />
+              {toonMat(gi)}
             </mesh>
             <group ref={elbowL} position={[0, -0.26, 0]}>
-              <mesh position={[0, -0.11, 0]} castShadow>
-                <capsuleGeometry args={[0.052, 0.16, 4, 10]} />
-                <meshStandardMaterial color={skin} roughness={0.85} />
+              {/* Forearm */}
+              <mesh position={[0, -0.1, 0]} castShadow>
+                <capsuleGeometry args={[0.06, 0.14, 8, 10]} />
+                {toonMat(skin)}
               </mesh>
-              <mesh position={[0, -0.25, 0]} castShadow>
-                <sphereGeometry args={[0.062, 12, 12]} />
-                <meshStandardMaterial color={under} roughness={0.7} />
+              {/* Fist */}
+              <mesh position={[0, -0.24, 0]} castShadow>
+                <sphereGeometry args={[0.065, 10, 10]} />
+                {toonMat(skin)}
               </mesh>
             </group>
           </group>
-          <group ref={shoulderR} position={[0.26, 0.46, 0]}>
-            <mesh position={[0, -0.13, 0]} castShadow>
-              <capsuleGeometry args={[0.062, 0.18, 4, 10]} />
-              <meshStandardMaterial color={gi} roughness={0.65} />
+          <group ref={shoulderR} position={[0.25, 0.44, 0]}>
+            <mesh position={[0, -0.42, 0]} castShadow>
+              <cylinderGeometry args={[0.065, 0.065, 0.06, 10]} />
+              {toonMat(under)}
+            </mesh>
+            <mesh position={[0, -0.12, 0]} castShadow>
+              <capsuleGeometry args={[0.07, 0.16, 8, 10]} />
+              {toonMat(gi)}
             </mesh>
             <group ref={elbowR} position={[0, -0.26, 0]}>
-              <mesh position={[0, -0.11, 0]} castShadow>
-                <capsuleGeometry args={[0.052, 0.16, 4, 10]} />
-                <meshStandardMaterial color={skin} roughness={0.85} />
+              <mesh position={[0, -0.1, 0]} castShadow>
+                <capsuleGeometry args={[0.06, 0.14, 8, 10]} />
+                {toonMat(skin)}
               </mesh>
-              <mesh position={[0, -0.25, 0]} castShadow>
-                <sphereGeometry args={[0.062, 12, 12]} />
-                <meshStandardMaterial color={under} roughness={0.7} />
+              <mesh position={[0, -0.24, 0]} castShadow>
+                <sphereGeometry args={[0.065, 10, 10]} />
+                {toonMat(skin)}
               </mesh>
             </group>
           </group>
         </group>
 
-        <group ref={hipL} position={[-0.11, 0, 0]}>
+        {/* Legs */}
+        <group ref={hipL} position={[-0.12, 0, 0]}>
+          {/* Thigh */}
           <mesh position={[0, -0.2, 0]} castShadow>
-            <capsuleGeometry args={[0.078, 0.24, 4, 10]} />
-            <meshStandardMaterial color="#28324d" roughness={0.85} />
+            <capsuleGeometry args={[0.085, 0.22, 8, 10]} />
+            {toonMat("#28324d")}
           </mesh>
-          <group ref={kneeL} position={[0, -0.4, 0]}>
-            <mesh position={[0, -0.17, 0]} castShadow>
-              <capsuleGeometry args={[0.066, 0.2, 4, 10]} />
-              <meshStandardMaterial color="#28324d" roughness={0.85} />
+          <group ref={kneeL} position={[0, -0.42, 0]}>
+            {/* Shin */}
+            <mesh position={[0, -0.16, 0]} castShadow>
+              <capsuleGeometry args={[0.07, 0.18, 8, 10]} />
+              {toonMat("#28324d")}
             </mesh>
-            <mesh position={[0, -0.37, 0.03]} castShadow>
-              <boxGeometry args={[0.14, 0.12, 0.24]} />
-              <meshStandardMaterial color="#1f2a42" roughness={0.6} />
+            {/* Boot */}
+            <mesh position={[0, -0.36, 0.04]} castShadow>
+              <boxGeometry args={[0.13, 0.14, 0.24]} />
+              {toonMat("#1f2a42")}
+            </mesh>
+            {/* Boot sole */}
+            <mesh position={[0, -0.43, 0.06]} castShadow>
+              <boxGeometry args={[0.14, 0.04, 0.26]} />
+              {toonMat("#111827")}
             </mesh>
           </group>
         </group>
-        <group ref={hipR} position={[0.11, 0, 0]}>
+        <group ref={hipR} position={[0.12, 0, 0]}>
           <mesh position={[0, -0.2, 0]} castShadow>
-            <capsuleGeometry args={[0.078, 0.24, 4, 10]} />
-            <meshStandardMaterial color="#28324d" roughness={0.85} />
+            <capsuleGeometry args={[0.085, 0.22, 8, 10]} />
+            {toonMat("#28324d")}
           </mesh>
-          <group ref={kneeR} position={[0, -0.4, 0]}>
-            <mesh position={[0, -0.17, 0]} castShadow>
-              <capsuleGeometry args={[0.066, 0.2, 4, 10]} />
-              <meshStandardMaterial color="#28324d" roughness={0.85} />
+          <group ref={kneeR} position={[0, -0.42, 0]}>
+            <mesh position={[0, -0.16, 0]} castShadow>
+              <capsuleGeometry args={[0.07, 0.18, 8, 10]} />
+              {toonMat("#28324d")}
             </mesh>
-            <mesh position={[0, -0.37, 0.03]} castShadow>
-              <boxGeometry args={[0.14, 0.12, 0.24]} />
-              <meshStandardMaterial color="#1f2a42" roughness={0.6} />
+            <mesh position={[0, -0.36, 0.04]} castShadow>
+              <boxGeometry args={[0.13, 0.14, 0.24]} />
+              {toonMat("#1f2a42")}
+            </mesh>
+            <mesh position={[0, -0.43, 0.06]} castShadow>
+              <boxGeometry args={[0.14, 0.04, 0.26]} />
+              {toonMat("#111827")}
             </mesh>
           </group>
         </group>
@@ -361,7 +492,6 @@ export function Fighter({ stateRef, keysRef, onStats, character, teleportRef }: 
   );
 }
 
-/** Slab (ray vs. AABB) intersection. Returns distance along the ray, or null. */
 function rayAABB(
   origin: { x: number; y: number; z: number },
   dir: { x: number; y: number; z: number },

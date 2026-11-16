@@ -121,9 +121,8 @@ src/genesis/hud/        GENESIS 3D: HUD reusing Card + design tokens (AGENTS.md 
 - **Camera collision** — slab ray-vs-AABB pulls the follow cam in when geometry occludes the view (`resolveCameraPosition`, pure + tested)
 - **Character selection** — `CHARACTERS` roster (Saiyan / Namekian / Android) with palette + scale swap, HUD cycle button; logic pure + tested
 - **God Engine adapter** — `genesisBus` (BroadcastChannel + same-tab fallback) + GenesisSection in the admin panel (character swap, teleport, reset); GenesisScene applies commands; cross-tab verified
+- **Character visual upgrade** — cel-shaded (toon) Saiyan fighter: spiky layered hair, orange gi with blue undershirt/wristbands, belt with knot, boots, expressive eyes/eyebrows; smoother geometry (8–24 segments) and per-character scaling. No licensed assets used.
 - **Live-verified**: 100 FPS, 10.0 ms/frame, walk/run verified, character swap works, zero console errors
-
-## 5. In-progress / upcoming features
 
 > **PAUSED during Genesis (active direction, see §10):** the 2D feature list below is
 > frozen while the 3D action RPG is developed. Revisit after Milestone B. The 2D app
