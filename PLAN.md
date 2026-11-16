@@ -124,6 +124,12 @@ src/genesis/hud/        GENESIS 3D: HUD reusing Card + design tokens (AGENTS.md 
 - **Character visual upgrade** — cel-shaded (toon) Saiyan fighter: spiky layered hair, orange gi with blue undershirt/wristbands, belt with knot, boots, expressive eyes/eyebrows; smoother geometry (8–24 segments) and per-character scaling. No licensed assets used.
 - **Live-verified**: 100 FPS, 10.0 ms/frame, walk/run verified, character swap works, zero console errors
 
+### Rosé Saiyan — original GLB character (`0.15`)
+- **Original character built in Blender** (`assets/source/rose_saiyan.py` → `public/assets/characters/rose_saiyan.glb`, 20-bone humanoid rig, 57 mesh parts, CC0-original geometry)
+- Dark indigo gi, crimson sash/wristbands, spiky black hair, pale warm skin, rose aura
+- **Procedural bone animation** (`FighterRose.tsx`): drives the 20-bone rig from the same pure `Pose` state machine — walk/run/jump/land limb motion with no baked clips (fixes the static "stuck" FBX problem)
+- Set as the default character; cycle with the Character button
+
 ### Asset library (`assets/`, 2026-11-16)
 - **13 CC0 character models** downloaded from Cinevva (Quaternius + Kenney), stored in `assets/characters/`
 - All CC0 (public domain) — free for commercial use, no attribution required

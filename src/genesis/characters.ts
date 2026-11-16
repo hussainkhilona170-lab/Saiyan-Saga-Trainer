@@ -21,6 +21,17 @@ export type CharacterDef = {
 
 export const CHARACTERS: CharacterDef[] = [
   {
+    id: "rose",
+    name: "Rosé Saiyan",
+    title: "Original fighter",
+    gi: "#232a4a",
+    under: "#b8323a",
+    hair: "#0c0c14",
+    skin: "#e6b08a",
+    scale: 1,
+    model: "/assets/characters/rose_saiyan.glb",
+  },
+  {
     id: "vegeta",
     name: "Saiyan Prince",
     title: "Royal warrior (GLB)",

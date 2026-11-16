@@ -2,7 +2,7 @@ import { Canvas } from "@react-three/fiber";
 import { useState, useRef, useEffect, type RefObject } from "react";
 import { createCharacterState, type CharacterState } from "../sim/character";
 import { useKeyboard } from "./useKeyboard";
-import { FighterGLTF } from "./FighterGLTF";
+import { FighterRose } from "./FighterRose";
 import { GenesisHud, type HudStats } from "../hud/GenesisHud";
 import { CHARACTERS, characterByID, nextCharacterID, type CharacterDef } from "../characters";
 import { subscribeGenesisCommands, type GenesisCommand } from "../genesisBus";
@@ -66,13 +66,13 @@ export default function GenesisScene() {
   const stateRef = useRef<CharacterState>(createCharacterState());
   const keysRef = useKeyboard();
   const teleportRef = useRef<{ x: number; y: number; z: number } | null>(null);
-  const [characterID, setCharacterID] = useState("vegeta");
+  const [characterID, setCharacterID] = useState("rose");
   const [stats, setStats] = useState<HudStats>({
     fps: 0,
     ms: 0,
     action: "idle",
     speed: 0,
-    character: "Saiyan Prince",
+    character: "Rosé Saiyan",
   });
   const character = characterByID(characterID);
 
@@ -126,13 +126,13 @@ export default function GenesisScene() {
         <gridHelper args={[160, 80, SCENE.grid, SCENE.grid]} position={[0, 0.02, 0]} />
         <Ridge />
         <Landmarks />
-        <FighterGLTF
+        <FighterRose
           stateRef={stateRef}
           keysRef={keysRef}
           onStats={setStats}
           character={character}
           teleportRef={teleportRef}
-          modelUrl={character.model ?? "/assets/characters/Soldier_Male.glb"}
+          modelUrl={character.model ?? "/assets/characters/rose_saiyan.glb"}
         />
       </Canvas>
       <GenesisHud
