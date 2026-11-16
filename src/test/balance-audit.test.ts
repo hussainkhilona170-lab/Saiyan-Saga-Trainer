@@ -7,7 +7,10 @@ import { initialState, type GameState } from "@/game/engine";
 const build = (level: number, stat: number, formId: string, gravity = 1): GameState => {
   const s = structuredClone(initialState);
   s.level = level;
-  s.stats.strength = stat; s.stats.agility = stat; s.stats.ki = stat; s.stats.defense = stat;
+  s.stats.strength = stat;
+  s.stats.agility = stat;
+  s.stats.ki = stat;
+  s.stats.defense = stat;
   s.xp = 0;
   s.gravity = gravity;
   s.forms = ["base", formId];
@@ -16,7 +19,9 @@ const build = (level: number, stat: number, formId: string, gravity = 1): GameSt
 };
 const report = (label: string, buildState: GameState, bossIdx: number) => {
   const r = simulateBossFight(buildState, BOSSES[bossIdx]!, 240);
-  console.info(`[balance] ${label} vs ${BOSSES[bossIdx]!.name.padEnd(14)} → ${r.result.padEnd(7)} ${r.seconds}s (boss ${Math.floor(r.bossHpLeft)} left)`);
+  console.info(
+    `[balance] ${label} vs ${BOSSES[bossIdx]!.name.padEnd(14)} → ${r.result.padEnd(7)} ${r.seconds}s (boss ${Math.floor(r.bossHpLeft)} left)`,
+  );
   return r;
 };
 

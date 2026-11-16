@@ -1,16 +1,40 @@
 import { describe, it, expect } from "vitest";
-import { applyAction, applyShadowRewards, battleClashDelay, canUnlockForm, effectiveTrainingGain, grantExperience, hydrate, initialState, levelForXp, maxGravityForLevel, openSave, powerLevel, rankForLevel, sealSave, shadowDummyBoss, SHADOW_REWARD_MULT, SHADOW_ZENKAI_MULT, xpRequiredForLevel } from "@/game/engine";
+import {
+  applyAction,
+  applyShadowRewards,
+  battleClashDelay,
+  canUnlockForm,
+  effectiveTrainingGain,
+  grantExperience,
+  hydrate,
+  initialState,
+  levelForXp,
+  maxGravityForLevel,
+  openSave,
+  powerLevel,
+  rankForLevel,
+  sealSave,
+  shadowDummyBoss,
+  SHADOW_REWARD_MULT,
+  SHADOW_ZENKAI_MULT,
+  xpRequiredForLevel,
+} from "@/game/engine";
 
 const fresh = () => structuredClone(initialState);
 
 describe("engine", () => {
   it("power level of a new character is 40", () => expect(powerLevel(fresh())).toBe(40));
   it("training costs 1 stamina and adds gain", () => {
-    const d = fresh(); applyAction(d, { type: "TRAIN_STAT", stat: "strength", rand: 1 });
-    expect(d.stamina).toBe(99); expect(d.stats.strength).toBeGreaterThan(1); expect(d.stats.strength).toBeLessThan(2);
+    const d = fresh();
+    applyAction(d, { type: "TRAIN_STAT", stat: "strength", rand: 1 });
+    expect(d.stamina).toBe(99);
+    expect(d.stats.strength).toBeGreaterThan(1);
+    expect(d.stats.strength).toBeLessThan(2);
   });
   it("no training with empty stamina", () => {
-    const d = fresh(); d.stamina = 0; applyAction(d, { type: "TRAIN_STAT", stat: "ki", rand: 1 });
+    const d = fresh();
+    d.stamina = 0;
+    applyAction(d, { type: "TRAIN_STAT", stat: "ki", rand: 1 });
     expect(d.stats.ki).toBe(1);
   });
   it("gravity adapts automatically as level increases — no manual training", () => {
@@ -25,14 +49,17 @@ describe("engine", () => {
     expect(d.level).toBe(5);
     expect(d.gravity).toBe(3);
     // A higher gravity is never lowered by leveling (God Engine overrides persist).
-    const g = fresh(); g.gravity = 10;
+    const g = fresh();
+    g.gravity = 10;
     grantExperience(g, xpRequiredForLevel(2));
     expect(g.level).toBe(2);
     expect(g.gravity).toBe(10);
   });
   it("hydrate keeps old save progress and repairs bad fields", () => {
     const s = hydrate({ zeni: 500, stats: { strength: 99, agility: "x" }, forms: null });
-    expect(s.zeni).toBe(500); expect(s.stats.strength).toBe(99); expect(s.stats.agility).toBe(1);
+    expect(s.zeni).toBe(500);
+    expect(s.stats.strength).toBe(99);
+    expect(s.stats.agility).toBe(1);
     expect(s.forms).toEqual(["base"]);
   });
   it("soft-caps repeated stat growth while mastery improves its yield", () => {
@@ -50,14 +77,17 @@ describe("engine", () => {
     expect(rankForLevel(5)).toBe("Fighter");
   });
   it("simulates 500 deterministic training reps into level 5", () => {
-    const s = fresh(); s.godMode = true;
+    const s = fresh();
+    s.godMode = true;
     for (let i = 0; i < 500; i++) applyAction(s, { type: "TRAIN_STAT", stat: "strength", rand: 1 });
     expect(s.level).toBe(5);
     expect(s.stats.strength).toBeGreaterThan(1);
     expect(s.mastery.strength).toBeGreaterThan(0);
   });
   it("requires the level, power, and Zeni gates before unlocking Kaioken", () => {
-    const s = fresh(); s.stats.strength = 1000; s.zeni = 1500;
+    const s = fresh();
+    s.stats.strength = 1000;
+    s.zeni = 1500;
     expect(canUnlockForm(s, "kaioken")).toBe(false);
     s.level = 2;
     expect(canUnlockForm(s, "kaioken")).toBe(true);
@@ -73,18 +103,38 @@ describe("engine", () => {
   });
 });
 
-import { applyAction as act2, formMult as fm2, hydrate as hy2, initialState as init2, CUSTOM_FORM_MAX_MULT } from "@/game/engine";
+import {
+  applyAction as act2,
+  formMult as fm2,
+  hydrate as hy2,
+  initialState as init2,
+  CUSTOM_FORM_MAX_MULT,
+} from "@/game/engine";
 describe("custom transformations", () => {
   it("creates an owned form, caps power, and applies its multiplier", () => {
     const s = structuredClone(init2);
-    act2(s, { type: "CREATE_FORM", id: "custom-1", name: "Rosé", mult: 999999, aura: "#f0f", hair: "#f9f" });
+    act2(s, {
+      type: "CREATE_FORM",
+      id: "custom-1",
+      name: "Rosé",
+      mult: 999999,
+      aura: "#f0f",
+      hair: "#f9f",
+    });
     act2(s, { type: "TRANSFORM", formId: "custom-1" });
     expect(s.forms).toContain("custom-1");
     expect(fm2(s)).toBe(CUSTOM_FORM_MAX_MULT);
   });
   it("deleting the active custom form returns to base and survives reload", () => {
     const s = structuredClone(init2);
-    act2(s, { type: "CREATE_FORM", id: "custom-2", name: "X", mult: 50, aura: "#fff", hair: "#fff" });
+    act2(s, {
+      type: "CREATE_FORM",
+      id: "custom-2",
+      name: "X",
+      mult: 50,
+      aura: "#fff",
+      hair: "#fff",
+    });
     expect(hy2(JSON.parse(JSON.stringify(s))).customForms[0]?.mult).toBe(50);
     act2(s, { type: "TRANSFORM", formId: "custom-2" });
     act2(s, { type: "DELETE_FORM", formId: "custom-2" });
@@ -130,7 +180,8 @@ describe("shadow dummy sparring", () => {
   });
   it("beating the shadow dummy multiplies all stats by 1.35", () => {
     const s = fresh();
-    s.stats.strength = 100; s.stats.agility = 40;
+    s.stats.strength = 100;
+    s.stats.agility = 40;
     applyShadowRewards(s, false);
     expect(s.stats.strength).toBeCloseTo(100 * SHADOW_REWARD_MULT);
     expect(s.stats.agility).toBeCloseTo(40 * SHADOW_REWARD_MULT);
@@ -138,7 +189,8 @@ describe("shadow dummy sparring", () => {
   });
   it("surviving at low health triggers the Zenkai boost and refills stamina", () => {
     const s = fresh();
-    s.stats.strength = 100; s.stamina = 12;
+    s.stats.strength = 100;
+    s.stamina = 12;
     applyShadowRewards(s, true);
     expect(s.stats.strength).toBeCloseTo(100 * SHADOW_ZENKAI_MULT);
     expect(s.stamina).toBe(s.maxStamina);
@@ -147,7 +199,8 @@ describe("shadow dummy sparring", () => {
     expect(battleClashDelay(shadowDummyBoss(fresh()))).toBe(2400);
   });
   it("remembers the Dark Ki Aura cosmetic across reloads", () => {
-    const s = fresh(); s.darkAura = true;
+    const s = fresh();
+    s.darkAura = true;
     expect(hydrate(JSON.parse(JSON.stringify(s))).darkAura).toBe(true);
     expect(hydrate({}).darkAura).toBe(false);
   });
@@ -156,7 +209,8 @@ describe("shadow dummy sparring", () => {
 describe("save integrity", () => {
   it("seals and reopens a save without losing progress", () => {
     const s = fresh();
-    s.zeni = 12345; s.defeated.push("raditz");
+    s.zeni = 12345;
+    s.defeated.push("raditz");
     const out = openSave(sealSave(s));
     expect(out?.zeni).toBe(12345);
     expect(out?.defeated).toContain("raditz");

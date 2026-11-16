@@ -1,17 +1,43 @@
 import { describe, it, expect } from "vitest";
 import {
-  applyAction, applyBattleRewards, clampSaveNumber, initialState, MAX_SAVE_NUMBER, MAX_TRANSACTIONS,
-  openSave, powerLevel, sealSave, SAVE_VERSION, hydrate,
+  applyAction,
+  applyBattleRewards,
+  clampSaveNumber,
+  initialState,
+  MAX_SAVE_NUMBER,
+  MAX_TRANSACTIONS,
+  openSave,
+  powerLevel,
+  sealSave,
+  SAVE_VERSION,
+  hydrate,
 } from "@/game/engine";
-import { resolveInitialLoad, exportSlotText, slotKey, backupKey, MAIN_KEY, SANDBOX_KEY, BACKUP_SUFFIX } from "@/game/persistence";
-import { createSnapshot, serializeSnapshot, parseSnapshot, parseSnapshotList, SNAPSHOT_VERSION } from "@/game/snapshots";
+import {
+  resolveInitialLoad,
+  exportSlotText,
+  slotKey,
+  backupKey,
+  MAIN_KEY,
+  SANDBOX_KEY,
+  BACKUP_SUFFIX,
+} from "@/game/persistence";
+import {
+  createSnapshot,
+  serializeSnapshot,
+  parseSnapshot,
+  parseSnapshotList,
+  SNAPSHOT_VERSION,
+} from "@/game/snapshots";
 
 const fresh = () => structuredClone(initialState);
 
 describe("save integrity — versioned envelope", () => {
   it("stays on save version 2 until a migration is authored", () => expect(SAVE_VERSION).toBe(2));
   it("exports the versioned envelope and re-imports it losslessly", () => {
-    const s = fresh(); s.zeni = 98765; s.defeated.push("raditz"); s.quests.push("q1");
+    const s = fresh();
+    s.zeni = 98765;
+    s.defeated.push("raditz");
+    s.quests.push("q1");
     const text = exportSlotText(s);
     expect(JSON.parse(text).v).toBe(SAVE_VERSION);
     const back = openSave(text);
@@ -33,7 +59,15 @@ describe("save integrity — versioned envelope", () => {
     expect(openSave(null)).toBeNull();
   });
   it("hydrate clamps absurd numbers and dedupes string arrays", () => {
-    const s = hydrate({ zeni: Number.POSITIVE_INFINITY, tp: 5e30, dragonBalls: 9999, gravity: 1e100, gaps: undefined, forms: ["base", "base", "ssj1", "ssj1", "ssj1"], quests: ["q1", "q1", "q2"] } as never);
+    const s = hydrate({
+      zeni: Number.POSITIVE_INFINITY,
+      tp: 5e30,
+      dragonBalls: 9999,
+      gravity: 1e100,
+      gaps: undefined,
+      forms: ["base", "base", "ssj1", "ssj1", "ssj1"],
+      quests: ["q1", "q1", "q2"],
+    } as never);
     expect(s.zeni).toBe(0);
     expect(s.tp).toBe(MAX_SAVE_NUMBER);
     expect(s.dragonBalls).toBe(7);
@@ -42,7 +76,10 @@ describe("save integrity — versioned envelope", () => {
     expect(s.quests).toEqual(["q1", "q2"]);
   });
   it("removes NaN and Infinity from every persisted currency", () => {
-    const s = fresh(); s.zeni = Number.NaN; s.tp = Number.POSITIVE_INFINITY; s.stamina = Number.NaN;
+    const s = fresh();
+    s.zeni = Number.NaN;
+    s.tp = Number.POSITIVE_INFINITY;
+    s.stamina = Number.NaN;
     const out = hydrate(s);
     expect(Number.isFinite(out.zeni)).toBe(true);
     expect(Number.isFinite(out.tp)).toBe(true);
@@ -51,9 +88,12 @@ describe("save integrity — versioned envelope", () => {
   });
   it("power level saturates instead of overflowing to Infinity", () => {
     const s = fresh();
-    s.stats.strength = MAX_SAVE_NUMBER; s.stats.agility = MAX_SAVE_NUMBER;
-    s.stats.ki = MAX_SAVE_NUMBER; s.stats.defense = MAX_SAVE_NUMBER;
-    s.forms = ["ui"]; s.activeForm = "ui";
+    s.stats.strength = MAX_SAVE_NUMBER;
+    s.stats.agility = MAX_SAVE_NUMBER;
+    s.stats.ki = MAX_SAVE_NUMBER;
+    s.stats.defense = MAX_SAVE_NUMBER;
+    s.forms = ["ui"];
+    s.activeForm = "ui";
     expect(powerLevel(s)).toBeLessThanOrEqual(MAX_SAVE_NUMBER);
     expect(Number.isFinite(powerLevel(s))).toBe(true);
   });
@@ -86,7 +126,8 @@ describe("save integrity — slot resolution & backup recovery", () => {
 
 describe("save integrity — shop & wish transactions", () => {
   it("BUY_PASS debits TP once, logs the transaction, and refuses double-buys", () => {
-    const s = fresh(); s.tp = 1000;
+    const s = fresh();
+    s.tp = 1000;
     applyAction(s, { type: "BUY_PASS", passId: "x2" });
     expect(s.tp).toBe(975);
     expect(s.passes).toContain("x2");
@@ -96,13 +137,16 @@ describe("save integrity — shop & wish transactions", () => {
     expect(s.tp).toBe(975);
   });
   it("BUY_PASS refuses when TP is insufficient", () => {
-    const s = fresh(); s.tp = 10;
+    const s = fresh();
+    s.tp = 10;
     applyAction(s, { type: "BUY_PASS", passId: "vip" });
     expect(s.passes).not.toContain("vip");
     expect(s.tp).toBe(10);
   });
   it("MAKE_WISH demands 7 balls and pays exactly once", () => {
-    const s = fresh(); s.dragonBalls = 7; const before = s.tp;
+    const s = fresh();
+    s.dragonBalls = 7;
+    const before = s.tp;
     applyAction(s, { type: "MAKE_WISH", wishId: "tp" });
     expect(s.tp).toBe(before + 500);
     expect(s.dragonBalls).toBe(0);
@@ -111,14 +155,20 @@ describe("save integrity — shop & wish transactions", () => {
     expect(s.tp).toBe(after); // second wish denied: no balls left
   });
   it("MAKE_WISH 'power' doubles every stat and consumes the balls", () => {
-    const s = fresh(); s.dragonBalls = 7; s.stats.strength = 50; s.stats.ki = 8;
+    const s = fresh();
+    s.dragonBalls = 7;
+    s.stats.strength = 50;
+    s.stats.ki = 8;
     applyAction(s, { type: "MAKE_WISH", wishId: "power" });
     expect(s.stats.strength).toBe(100);
     expect(s.stats.ki).toBe(16);
     expect(s.dragonBalls).toBe(0);
   });
   it("MAKE_WISH 'stamina' permanently raises the cap through the TICK path", () => {
-    const s = fresh(); s.dragonBalls = 7; s.maxStamina = 100; s.stamina = 100;
+    const s = fresh();
+    s.dragonBalls = 7;
+    s.maxStamina = 100;
+    s.stamina = 100;
     applyAction(s, { type: "MAKE_WISH", wishId: "stamina" });
     expect(s.maxStaminaBonus).toBe(50);
     expect(s.maxStamina).toBe(150);
@@ -126,16 +176,38 @@ describe("save integrity — shop & wish transactions", () => {
     expect(s.maxStamina).toBe(150);
   });
   it("boss victory rewards land in the transaction ledger", () => {
-    const s = fresh(); s.tp = 0;
-    applyBattleRewards(s, { id: "raditz", name: "Raditz", hp: 1500, atk: 10, zeni: 3000, tp: 10, req: 0, emoji: "🦹" }, false);
+    const s = fresh();
+    s.tp = 0;
+    applyBattleRewards(
+      s,
+      { id: "raditz", name: "Raditz", hp: 1500, atk: 10, zeni: 3000, tp: 10, req: 0, emoji: "🦹" },
+      false,
+    );
     expect(s.zeni).toBe(3000);
     expect(s.tp).toBe(10);
     expect(s.transactions.some((t) => t.label.includes("Raditz"))).toBe(true);
   });
   it("ledger caps at MAX_TRANSACTIONS and drops malformed rows on load", () => {
-    const loaded = hydrate({ ...fresh(), transactions: Array.from({ length: MAX_TRANSACTIONS + 50 }, (_, i) => ({ id: `t${i}`, at: i, kind: i % 2 ? "credit" : "debit", currency: "tp", amount: 1, label: "x", balance: 1 })) });
+    const loaded = hydrate({
+      ...fresh(),
+      transactions: Array.from({ length: MAX_TRANSACTIONS + 50 }, (_, i) => ({
+        id: `t${i}`,
+        at: i,
+        kind: i % 2 ? "credit" : "debit",
+        currency: "tp",
+        amount: 1,
+        label: "x",
+        balance: 1,
+      })),
+    });
     expect(loaded.transactions.length).toBeLessThanOrEqual(MAX_TRANSACTIONS);
-    const broken = hydrate({ transactions: [{ garbage: true }, null, { id: "ok", at: 1, kind: "credit", currency: "zeni", amount: 5, label: "ok", balance: 5 }] });
+    const broken = hydrate({
+      transactions: [
+        { garbage: true },
+        null,
+        { id: "ok", at: 1, kind: "credit", currency: "zeni", amount: 5, label: "ok", balance: 5 },
+      ],
+    });
     expect(broken.transactions).toHaveLength(1);
     expect(broken.transactions[0]?.id).toBe("ok");
   });
@@ -145,7 +217,8 @@ describe("save integrity — infinite zeni override is honest", () => {
   it("bypasses form unlock costs without erasing the player's Zeni", () => {
     const s = fresh();
     s.zeni = 0;
-    s.stats.strength = 9000; s.level = 9;
+    s.stats.strength = 9000;
+    s.level = 9;
     s.infiniteZeni = true;
     expect(s.zeni).toBe(0); // update() no longer clobbers the wallet
     applyAction(s, { type: "UNLOCK_FORM", formId: "kaioken" });
@@ -156,7 +229,9 @@ describe("save integrity — infinite zeni override is honest", () => {
 
 describe("snapshots — schema-versioned time reversal foundation", () => {
   it("round-trips through serialize/parse", () => {
-    const s = fresh(); s.zeni = 777; s.defeated.push("frieza");
+    const s = fresh();
+    s.zeni = 777;
+    s.defeated.push("frieza");
     const snap = createSnapshot(s, "Before cell fight", "main", 1234567890);
     expect(snap.version).toBe(SNAPSHOT_VERSION);
     const back = parseSnapshot(serializeSnapshot(snap));

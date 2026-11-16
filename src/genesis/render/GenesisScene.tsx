@@ -1,30 +1,26 @@
 import { Canvas } from "@react-three/fiber";
-import { useRef, useState } from "react";
+import { useState, useRef, type RefObject } from "react";
+import { Physics, RigidBody } from "@react-three/rapier";
 import { createCharacterState, type CharacterState } from "../sim/character";
 import { useKeyboard } from "./useKeyboard";
 import { Fighter } from "./Fighter";
 import { GenesisHud, type HudStats } from "../hud/GenesisHud";
+import { CHARACTERS, characterByID, nextCharacterID, type CharacterDef } from "../characters";
 
-/**
- * Genesis scene — third-person arena (Phase 2: animated fighter body).
- * Colors match the app's oklch tokens from styles.css (hex approximations for
- * scene materials; the HUD itself uses the real Tailwind tokens).
- */
 const SCENE = {
-  background: "#191b2c", // slightly lifted from --background oklch(0.16 0.04 270)
-  ground: "#262640", // lifted --card tone
-  grid: "#3d3d68", // between --muted and --secondary
-  block: "#2f2f52", // --secondary family
-  accentBlue: "#4a9eda", // --chart-1 oklch(0.72 0.17 230)
-  accentGreen: "#35c98e", // --chart-2 oklch(0.72 0.18 150)
-  accentRed: "#e05252", // --destructive family
+  background: "#191b2c",
+  ground: "#262640",
+  grid: "#3d3d68",
+  block: "#2f2f52",
+  accentBlue: "#4a9eda",
+  accentGreen: "#35c98e",
+  accentRed: "#e05252",
   ridge: "#1f2038",
 };
 
 const CAM_BACK = 5;
 const CAM_UP = 2.2;
 
-/** Reference pillars give motion strong spatial anchors. */
 function Landmarks() {
   const pillars: Array<{ x: number; z: number; h: number; w: number; color: string }> = [
     { x: -8, z: -10, h: 5, w: 1.6, color: SCENE.accentBlue },
@@ -38,16 +34,17 @@ function Landmarks() {
   return (
     <>
       {pillars.map((p, i) => (
-        <mesh key={i} position={[p.x, p.h / 2, p.z]} castShadow receiveShadow>
-          <boxGeometry args={[p.w, p.h, p.w]} />
-          <meshStandardMaterial color={p.color} roughness={0.8} />
-        </mesh>
+        <RigidBody key={i} type="fixed" colliders="cuboid" position={[p.x, p.h / 2, p.z]}>
+          <mesh castShadow receiveShadow>
+            <boxGeometry args={[p.w, p.h, p.w]} />
+            <meshStandardMaterial color={p.color} roughness={0.8} />
+          </mesh>
+        </RigidBody>
       ))}
     </>
   );
 }
 
-/** Distant ridge line so the horizon reads instead of empty fog. */
 function Ridge() {
   const hills = Array.from({ length: 16 }, (_, i) => {
     const angle = (i / 16) * Math.PI * 2;
@@ -70,7 +67,15 @@ function Ridge() {
 export default function GenesisScene() {
   const stateRef = useRef<CharacterState>(createCharacterState());
   const keysRef = useKeyboard();
-  const [stats, setStats] = useState<HudStats>({ fps: 0, ms: 0, action: "idle", speed: 0 });
+  const [characterID, setCharacterID] = useState("saiyan");
+  const [stats, setStats] = useState<HudStats>({
+    fps: 0,
+    ms: 0,
+    action: "idle",
+    speed: 0,
+    character: "Saiyan",
+  });
+  const character = characterByID(characterID);
 
   return (
     <div className="relative h-screen w-full overflow-hidden bg-background">
@@ -96,16 +101,24 @@ export default function GenesisScene() {
           shadow-camera-top={30}
           shadow-camera-bottom={-30}
         />
-        <mesh rotation-x={-Math.PI / 2} receiveShadow>
-          <planeGeometry args={[200, 200]} />
-          <meshStandardMaterial color={SCENE.ground} roughness={1} />
-        </mesh>
-        <gridHelper args={[160, 80, SCENE.grid, SCENE.grid]} position={[0, 0.02, 0]} />
-        <Ridge />
-        <Landmarks />
-        <Fighter stateRef={stateRef} keysRef={keysRef} onStats={setStats} />
+        <Physics gravity={[0, -9.81, 0]}>
+          {/* Ground slab */}
+          <RigidBody type="fixed" colliders="cuboid" position={[0, -0.5, 0]}>
+            <mesh receiveShadow>
+              <boxGeometry args={[200, 1, 200]} />
+              <meshStandardMaterial color={SCENE.ground} roughness={1} />
+            </mesh>
+          </RigidBody>
+          <gridHelper args={[160, 80, SCENE.grid, SCENE.grid]} position={[0, 0.02, 0]} />
+          <Ridge />
+          <Landmarks />
+          <Fighter stateRef={stateRef} keysRef={keysRef} onStats={setStats} character={character} />
+        </Physics>
       </Canvas>
-      <GenesisHud stats={stats} />
+      <GenesisHud
+        stats={stats}
+        onCycleCharacter={() => setCharacterID((id) => nextCharacterID(id))}
+      />
     </div>
   );
 }

@@ -1,15 +1,21 @@
 import { Link } from "@tanstack/react-router";
-import { Card } from "@/game/ui";
+import { Card, Btn } from "@/game/ui";
 
-/** HUD readout updated ~2×/second by the scene loop (no per-frame React renders). */
-export type HudStats = { fps: number; ms: number; action: string; speed: number };
+export type HudStats = {
+  fps: number;
+  ms: number;
+  action: string;
+  speed: number;
+  character: string;
+};
 
-/**
- * Genesis HUD — reuses the app's Card and the established design language
- * (emoji + font-display text-xl title, muted subtitle, chart-2 accent readout),
- * per AGENTS.md UI consistency rules.
- */
-export function GenesisHud({ stats }: { stats: HudStats }) {
+export function GenesisHud({
+  stats,
+  onCycleCharacter,
+}: {
+  stats: HudStats;
+  onCycleCharacter: () => void;
+}) {
   return (
     <div className="pointer-events-none absolute inset-x-4 top-4 z-10 flex items-start justify-between gap-3">
       <Card className="pointer-events-auto">
@@ -18,7 +24,7 @@ export function GenesisHud({ stats }: { stats: HudStats }) {
             <span className="text-2xl">🌌</span>{" "}
             <span className="font-display text-xl">Genesis — Movement Prototype</span>
             <div className="text-sm text-muted-foreground">
-              WASD move · Shift sprint · Space jump
+              WASD move · Shift sprint · Space jump · {stats.character}
             </div>
           </div>
           <div className="text-right text-xs text-muted-foreground">
@@ -30,6 +36,11 @@ export function GenesisHud({ stats }: { stats: HudStats }) {
               {stats.action} · {stats.speed.toFixed(1)} m/s
             </div>
           </div>
+        </div>
+        <div className="mt-2 flex items-center gap-2">
+          <Btn onClick={onCycleCharacter} className="text-xs">
+            ↻ Character
+          </Btn>
         </div>
       </Card>
       <Link

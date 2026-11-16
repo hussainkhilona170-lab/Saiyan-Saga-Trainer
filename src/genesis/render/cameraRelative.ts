@@ -22,3 +22,25 @@ export function moveIntent(keys: RawKeys, camera: THREE.Camera): { moveX: number
   const mag = Math.hypot(mx, mz) || 1;
   return { moveX: mx / mag, moveZ: mz / mag };
 }
+
+/**
+ * Pull a desired camera position in toward `target` when a ray from `target` to
+ * `desired` hits an obstacle. `hitToi` is the normalized (0..1) time-of-impact
+ * of the ray against the nearest collider, or null when nothing was hit.
+ */
+export function resolveCameraPosition(
+  target: { x: number; y: number; z: number },
+  desired: { x: number; y: number; z: number },
+  hitToi: number | null,
+  margin = 0.82,
+): { x: number; y: number; z: number } {
+  if (hitToi === null || !Number.isFinite(hitToi)) {
+    return { x: desired.x, y: desired.y, z: desired.z };
+  }
+  const t = Math.min(1, Math.max(0, hitToi * margin));
+  return {
+    x: target.x + (desired.x - target.x) * t,
+    y: target.y + (desired.y - target.y) * t,
+    z: target.z + (desired.z - target.z) * t,
+  };
+}

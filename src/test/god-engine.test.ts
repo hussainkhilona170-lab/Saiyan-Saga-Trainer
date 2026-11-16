@@ -1,13 +1,24 @@
 import { describe, it, expect } from "vitest";
 import { BOSSES } from "@/game/data";
 import {
-  executeAdminAction, adminActionRequiresConfirmation, inspectPlayer, isStatKey, adminModeOf,
+  executeAdminAction,
+  adminActionRequiresConfirmation,
+  inspectPlayer,
+  isStatKey,
+  adminModeOf,
 } from "@/game/admin";
 import { parseAdminCommand, consoleSuggestions, COMMANDS } from "@/game/adminConsole";
 import { simulateBossFight } from "@/game/battleSim";
 import {
-  applyAction, initialBattleState, initialState, resolveBattleAction, hydrate, sealSave, openSave,
-  type BattleState, type GameState,
+  applyAction,
+  initialBattleState,
+  initialState,
+  resolveBattleAction,
+  hydrate,
+  sealSave,
+  openSave,
+  type BattleState,
+  type GameState,
 } from "@/game/engine";
 
 const fresh = () => structuredClone(initialState);
@@ -25,7 +36,8 @@ describe("god engine — typed admin actions & validation", () => {
   });
 
   it("ADD_STAT with negative delta respects the floor", () => {
-    const s = fresh(); s.stats.ki = 500;
+    const s = fresh();
+    s.stats.ki = 500;
     const r = executeAdminAction(s, { type: "ADD_STAT", stat: "ki", delta: -10000 }, at());
     expect(r.ok).toBe(true);
     expect(s.stats.ki).toBe(0);
@@ -42,7 +54,10 @@ describe("god engine — typed admin actions & validation", () => {
 
   it("SET_POWER_LEVEL scales stats proportionally toward the target", () => {
     const s = fresh();
-    s.stats.strength = 40; s.stats.agility = 40; s.stats.ki = 40; s.stats.defense = 40; // PL = 1600
+    s.stats.strength = 40;
+    s.stats.agility = 40;
+    s.stats.ki = 40;
+    s.stats.defense = 40; // PL = 1600
     executeAdminAction(s, { type: "SET_POWER_LEVEL", target: 3200 }, at());
     const pl = (s.stats.strength + s.stats.agility + s.stats.ki + s.stats.defense) * 10;
     expect(Math.round(pl)).toBe(3200);
@@ -143,8 +158,18 @@ describe("god engine — typed admin actions & validation", () => {
 
 describe("god engine — infinite ki override is honored by the combat pipeline", () => {
   const battleOf = (ki: number, infiniteKi: boolean): { s: GameState; b: BattleState } => {
-    const s = fresh(); s.infiniteKi = infiniteKi;
-    const b: BattleState = { ...structuredClone(initialBattleState), boss: { ...BOSSES[0]! }, phase: "active", hp: 1e7, playerHp: 100, maxPlayerHp: 100, ki, message: "" };
+    const s = fresh();
+    s.infiniteKi = infiniteKi;
+    const b: BattleState = {
+      ...structuredClone(initialBattleState),
+      boss: { ...BOSSES[0]! },
+      phase: "active",
+      hp: 1e7,
+      playerHp: 100,
+      maxPlayerHp: 100,
+      ki,
+      message: "",
+    };
     return { s, b };
   };
 
@@ -169,29 +194,63 @@ describe("god engine — infinite ki override is honored by the combat pipeline"
 });
 
 describe("god engine — custom techniques run on the real combat pipeline", () => {
-  const baseTech = { id: "custom-tech-1", name: "Solar Flare", desc: "A blinding burst", scale: "ki" as const, mult: 3, kiCost: 25, cooldownMs: 500, aura: "#ff0" };
+  const baseTech = {
+    id: "custom-tech-1",
+    name: "Solar Flare",
+    desc: "A blinding burst",
+    scale: "ki" as const,
+    mult: 3,
+    kiCost: 25,
+    cooldownMs: 500,
+    aura: "#ff0",
+  };
   const gameWithTech = () => {
     const s = fresh();
     s.stats.ki = 100;
     s.customTechniques = [{ ...baseTech }];
     return s;
   };
-  const battle = (ki: number): BattleState => ({ ...structuredClone(initialBattleState), boss: { ...BOSSES[0]! }, phase: "active", hp: 1e8, playerHp: 100, maxPlayerHp: 100, ki, message: "" });
+  const battle = (ki: number): BattleState => ({
+    ...structuredClone(initialBattleState),
+    boss: { ...BOSSES[0]! },
+    phase: "active",
+    hp: 1e8,
+    playerHp: 100,
+    maxPlayerHp: 100,
+    ki,
+    message: "",
+  });
 
   it("CUSTOM_TECHNIQUE deals real damage, consumes Ki, sets cooldown, blocks refire", () => {
     const s = gameWithTech();
-    const b1 = resolveBattleAction(battle(100), s, { type: "CUSTOM_TECHNIQUE", techniqueId: baseTech.id, now: 1000 });
+    const b1 = resolveBattleAction(battle(100), s, {
+      type: "CUSTOM_TECHNIQUE",
+      techniqueId: baseTech.id,
+      now: 1000,
+    });
     expect(b1.hp).toBeLessThan(1e8);
     expect(b1.ki).toBe(75);
-    const b2 = resolveBattleAction(b1, s, { type: "CUSTOM_TECHNIQUE", techniqueId: baseTech.id, now: 1100 });
+    const b2 = resolveBattleAction(b1, s, {
+      type: "CUSTOM_TECHNIQUE",
+      techniqueId: baseTech.id,
+      now: 1100,
+    });
     expect(b2.message).toMatch(/recovering/i);
     expect(b2.ki).toBe(75);
   });
 
   it("EXPOSED triples the first hit via weak point, then ×2 — no double-dip (×4)", () => {
     const s = gameWithTech();
-    const plain = resolveBattleAction(battle(100), s, { type: "CUSTOM_TECHNIQUE", techniqueId: baseTech.id, now: 1000 });
-    const exposed = resolveBattleAction({ ...battle(100), exposedUntil: 99_999 }, s, { type: "CUSTOM_TECHNIQUE", techniqueId: baseTech.id, now: 1000 });
+    const plain = resolveBattleAction(battle(100), s, {
+      type: "CUSTOM_TECHNIQUE",
+      techniqueId: baseTech.id,
+      now: 1000,
+    });
+    const exposed = resolveBattleAction({ ...battle(100), exposedUntil: 99_999 }, s, {
+      type: "CUSTOM_TECHNIQUE",
+      techniqueId: baseTech.id,
+      now: 1000,
+    });
     const normalHit = 1e8 - plain.hp;
     const exposedHit = 1e8 - exposed.hp;
     expect(normalHit).toBeGreaterThan(0);
@@ -201,10 +260,18 @@ describe("god engine — custom techniques run on the real combat pipeline", () 
 
   it("CUSTOM_TECHNIQUE refuses with insufficient Ki and enforces infiniteKi override", () => {
     const s = gameWithTech();
-    const b = resolveBattleAction(battle(10), s, { type: "CUSTOM_TECHNIQUE", techniqueId: baseTech.id, now: 1 });
+    const b = resolveBattleAction(battle(10), s, {
+      type: "CUSTOM_TECHNIQUE",
+      techniqueId: baseTech.id,
+      now: 1,
+    });
     expect(b.ki).toBe(10);
     const s2 = { ...s, infiniteKi: true };
-    const b2 = resolveBattleAction(battle(0), s2, { type: "CUSTOM_TECHNIQUE", techniqueId: baseTech.id, now: 1 });
+    const b2 = resolveBattleAction(battle(0), s2, {
+      type: "CUSTOM_TECHNIQUE",
+      techniqueId: baseTech.id,
+      now: 1,
+    });
     expect(b2.hp).toBeLessThan(1e8);
   });
 });
@@ -213,14 +280,49 @@ describe("god engine — save hydration for new fields", () => {
   it("hydrate keeps valid custom techs and drops junk", () => {
     const s = hydrate({
       customTechniques: [
-        { id: "custom-tech-ok", name: "Solar", desc: "d", scale: "ki", mult: 5, kiCost: 10, cooldownMs: 100, aura: "#fff" },
-        { id: "bad-id", name: "Nope", desc: "d", scale: "ki", mult: 5, kiCost: 10, cooldownMs: 100, aura: "#fff" },
-        { id: "custom-tech-2", name: "BadScale", desc: "d", scale: "luck", mult: 5, kiCost: 10, cooldownMs: 100, aura: "#fff" },
+        {
+          id: "custom-tech-ok",
+          name: "Solar",
+          desc: "d",
+          scale: "ki",
+          mult: 5,
+          kiCost: 10,
+          cooldownMs: 100,
+          aura: "#fff",
+        },
+        {
+          id: "bad-id",
+          name: "Nope",
+          desc: "d",
+          scale: "ki",
+          mult: 5,
+          kiCost: 10,
+          cooldownMs: 100,
+          aura: "#fff",
+        },
+        {
+          id: "custom-tech-2",
+          name: "BadScale",
+          desc: "d",
+          scale: "luck",
+          mult: 5,
+          kiCost: 10,
+          cooldownMs: 100,
+          aura: "#fff",
+        },
         "garbage",
       ],
       infiniteKi: true,
       adminEvents: [
-        { id: "ok", at: 1, action: "SET_STAT", target: "strength", previousValue: "1", newValue: "2", outcome: "ok" },
+        {
+          id: "ok",
+          at: 1,
+          action: "SET_STAT",
+          target: "strength",
+          previousValue: "1",
+          newValue: "2",
+          outcome: "ok",
+        },
         { id: "", at: "NaN" },
         null,
       ],
@@ -232,7 +334,18 @@ describe("god engine — save hydration for new fields", () => {
 
   it("custom techniques survive a save round trip", () => {
     const s = fresh();
-    s.customTechniques = [{ id: "custom-tech-x", name: "Solar", desc: "d", scale: "strength", mult: 2, kiCost: 20, cooldownMs: 50, aura: "#f0f" }];
+    s.customTechniques = [
+      {
+        id: "custom-tech-x",
+        name: "Solar",
+        desc: "d",
+        scale: "strength",
+        mult: 2,
+        kiCost: 20,
+        cooldownMs: 50,
+        aura: "#f0f",
+      },
+    ];
     const back = openSave(sealSave(s))!;
     expect(back.customTechniques).toHaveLength(1);
     expect(back.customTechniques[0]?.mult).toBe(2);
@@ -242,7 +355,10 @@ describe("god engine — save hydration for new fields", () => {
 describe("god engine — deterministic battle simulator", () => {
   it("a god-level build beats Raditz; a zero build cannot", () => {
     const god = fresh();
-    god.stats.strength = 1e6; god.stats.agility = 1e6; god.stats.ki = 1e6; god.stats.defense = 1e6;
+    god.stats.strength = 1e6;
+    god.stats.agility = 1e6;
+    god.stats.ki = 1e6;
+    god.stats.defense = 1e6;
     const win = simulateBossFight(god, BOSSES[0]!);
     expect(win.result).toBe("win");
     const zero = fresh();
@@ -251,7 +367,11 @@ describe("god engine — deterministic battle simulator", () => {
   });
 
   it("simulation is deterministic for identical inputs", () => {
-    const g = fresh(); g.stats.strength = 5000; g.stats.agility = 1000; g.stats.ki = 1000; g.stats.defense = 100;
+    const g = fresh();
+    g.stats.strength = 5000;
+    g.stats.agility = 1000;
+    g.stats.ki = 1000;
+    g.stats.defense = 100;
     const a = simulateBossFight(g, BOSSES[1]!); // Vegeta
     const b = simulateBossFight(g, BOSSES[1]!);
     expect(a).toEqual(b);
@@ -279,13 +399,35 @@ describe("god engine — command console", () => {
 
   it("valid commands map to real admin actions", () => {
     const s = fresh();
-    expect(parseAdminCommand("player.setStat strength 999", s).action).toEqual({ type: "SET_STAT", stat: "strength", value: 999 });
-    expect(parseAdminCommand("player.setLevel 7", s).action).toEqual({ type: "SET_LEVEL", level: 7 });
-    expect(parseAdminCommand("player.setPowerLevel 1000", s).action).toEqual({ type: "SET_POWER_LEVEL", target: 1000 });
-    expect(parseAdminCommand("quest.complete all", s).action).toEqual({ type: "COMPLETE_QUEST", questId: "all" });
-    expect(parseAdminCommand("world.teleport htc", s).action).toEqual({ type: "TELEPORT", locationId: "htc" });
-    expect(parseAdminCommand("battle.spawnBoss vegeta", s).action).toEqual({ type: "SPAWN_BOSS", bossId: "vegeta" });
-    expect(parseAdminCommand("player.setGodMode on", s).action).toEqual({ type: "SET_GOD_MODE", flag: true });
+    expect(parseAdminCommand("player.setStat strength 999", s).action).toEqual({
+      type: "SET_STAT",
+      stat: "strength",
+      value: 999,
+    });
+    expect(parseAdminCommand("player.setLevel 7", s).action).toEqual({
+      type: "SET_LEVEL",
+      level: 7,
+    });
+    expect(parseAdminCommand("player.setPowerLevel 1000", s).action).toEqual({
+      type: "SET_POWER_LEVEL",
+      target: 1000,
+    });
+    expect(parseAdminCommand("quest.complete all", s).action).toEqual({
+      type: "COMPLETE_QUEST",
+      questId: "all",
+    });
+    expect(parseAdminCommand("world.teleport htc", s).action).toEqual({
+      type: "TELEPORT",
+      locationId: "htc",
+    });
+    expect(parseAdminCommand("battle.spawnBoss vegeta", s).action).toEqual({
+      type: "SPAWN_BOSS",
+      bossId: "vegeta",
+    });
+    expect(parseAdminCommand("player.setGodMode on", s).action).toEqual({
+      type: "SET_GOD_MODE",
+      flag: true,
+    });
   });
 
   it("quest.complete/reset and unlock-all flags demand confirmation from the caller", () => {

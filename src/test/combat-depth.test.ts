@@ -2,16 +2,35 @@ import { describe, it, expect } from "vitest";
 import { BOSSES, ENDLESS_ROSTER } from "@/game/data";
 import { buildBossFromId } from "@/game/bossLibrary";
 import {
-  applyAction, battleClashDelay, battleClashPressure, battleGrade, battlePhaseOf, battleSagaRank, GRADE_ORDER, initialBattleState, initialState,
-  phaseScale, resolveBattleAction, sealSave, openSave, hydrate, type BattleState,
+  applyAction,
+  battleClashDelay,
+  battleClashPressure,
+  battleGrade,
+  battlePhaseOf,
+  battleSagaRank,
+  GRADE_ORDER,
+  initialBattleState,
+  initialState,
+  phaseScale,
+  resolveBattleAction,
+  sealSave,
+  openSave,
+  hydrate,
+  type BattleState,
 } from "@/game/engine";
 
 const game = () => {
   const g = structuredClone(initialState);
-  g.stats.strength = 100; g.stats.agility = 100; g.stats.ki = 100; g.stats.defense = 100;
+  g.stats.strength = 100;
+  g.stats.agility = 100;
+  g.stats.ki = 100;
+  g.stats.defense = 100;
   return g;
 };
-const boss = (overrides: Partial<(typeof BOSSES)[number]> = {}) => ({ ...BOSSES[0]!, ...overrides }); // Raditz
+const boss = (overrides: Partial<(typeof BOSSES)[number]> = {}) => ({
+  ...BOSSES[0]!,
+  ...overrides,
+}); // Raditz
 const tank = () => boss({ id: "frieza", name: "Tankling", hp: 1e7, atk: 10 });
 const bstate = (b = boss()): BattleState => ({
   ...structuredClone(initialBattleState),
@@ -23,8 +42,11 @@ const bstate = (b = boss()): BattleState => ({
   ki: 100,
   message: "",
 });
-const run = (battle: BattleState, g: ReturnType<typeof game>, action: Parameters<typeof resolveBattleAction>[2]) =>
-  resolveBattleAction(battle, g, action);
+const run = (
+  battle: BattleState,
+  g: ReturnType<typeof game>,
+  action: Parameters<typeof resolveBattleAction>[2],
+) => resolveBattleAction(battle, g, action);
 
 describe("combat depth — boss phases", () => {
   it("phase scales: 1 at opener, 2 below 66%, 3 below 33%", () => {
@@ -38,7 +60,8 @@ describe("combat depth — boss phases", () => {
   });
 
   it("damaging the boss through 66% triggers the EXPOSED surge window", () => {
-    const s = bstate(); s.hp = Math.floor(s.boss!.hp * 0.7); // just above the threshold
+    const s = bstate();
+    s.hp = Math.floor(s.boss!.hp * 0.7); // just above the threshold
     const out = run(s, game(), { type: "PUNCH", now: 5000 });
     expect(out.phaseNumber).toBe(2);
     expect(out.exposedUntil).toBeGreaterThan(5000);
@@ -59,14 +82,17 @@ describe("combat depth — boss phases", () => {
 
   it("every boss has a signature move and uses it from phase 2 onward", () => {
     for (const b of BOSSES) expect(b.signature, `signature missing on ${b.id}`).toBeDefined();
-    const s = bstate(); s.phaseNumber = 2; s.bossSpecialAt = 1000; // due now
+    const s = bstate();
+    s.phaseNumber = 2;
+    s.bossSpecialAt = 1000; // due now
     const out = run(s, game(), { type: "ENEMY_TICK", playerMaxHp: 5000, now: 1000 });
     expect(out.message).toMatch(/Double Sunday/);
     expect(out.bossSpecialAt).toBe(7000); // 6s cooldown applied
   });
 
   it("signature moves do not fire in phase 1", () => {
-    const s = bstate(); s.bossSpecialAt = 1000; // due, but phase 1
+    const s = bstate();
+    s.bossSpecialAt = 1000; // due, but phase 1
     const out = run(s, game(), { type: "ENEMY_TICK", playerMaxHp: 5000, now: 1000 });
     expect(out.message).not.toMatch(/Double Sunday/);
   });
@@ -106,7 +132,8 @@ describe("combat depth — perfect guard / parry", () => {
   });
 
   it("exposed boss takes double damage from attacks", () => {
-    const s = bstate(tank()); s.exposedUntil = 99999;
+    const s = bstate(tank());
+    s.exposedUntil = 99999;
     const out = run(s, game(), { type: "PUNCH", now: 1000 });
     const baseline = run(bstate(tank()), game(), { type: "PUNCH", now: 1000 });
     expect(out.hp).toBeLessThan(baseline.hp); // double damage → less HP remaining
@@ -115,13 +142,16 @@ describe("combat depth — perfect guard / parry", () => {
 
 describe("combat depth — combo branches", () => {
   it("HEAVY is a finisher when combo is 4+", () => {
-    const s = bstate(); s.combo = 5; s.lastPunchAt = 1000;
+    const s = bstate();
+    s.combo = 5;
+    s.lastPunchAt = 1000;
     const out = run(s, game(), { type: "HEAVY", now: 1500 });
     expect(out.message).toMatch(/Haymaker/i);
   });
 
   it("BLAST mid-combo gets the ki-assist bonus", () => {
-    const s = bstate(); s.combo = 4;
+    const s = bstate();
+    s.combo = 4;
     const out = run(s, game(), { type: "BLAST", now: 1000 });
     expect(out.message).toMatch(/Ki-assisted/i);
   });
@@ -134,13 +164,16 @@ describe("combat depth — combo branches", () => {
   });
 
   it("vanishing with a 4+ combo triggers the punish branch", () => {
-    const s = bstate(); s.combo = 4;
+    const s = bstate();
+    s.combo = 4;
     const out = run(s, game(), { type: "VANISH", now: 1000 });
     expect(out.message).toMatch(/punish/i);
   });
 
   it("ULTIMATE at 5+ combo triggers Final Stretch and its vulnerability window", () => {
-    const s = bstate(tank()); s.combo = 5; s.ki = 100;
+    const s = bstate(tank());
+    s.combo = 5;
+    s.ki = 100;
     const out = run(s, game(), { type: "ULTIMATE", now: 2000 });
     expect(out.message).toMatch(/FINAL STRETCH/i);
     expect(out.overloadedUntil).toBe(5000);
@@ -191,14 +224,18 @@ describe("combat depth — integration sanity", () => {
     let s = bstate(); // player stats 100 → punch ~ (200+100)*1*bonus
     s.playerHp = 5000;
     let guard = 0;
-    while (s.phase !== "won" && guard++ < 200) s = resolveBattleAction(s, g, { type: "PUNCH", now: guard * 100 });
+    while (s.phase !== "won" && guard++ < 200)
+      s = resolveBattleAction(s, g, { type: "PUNCH", now: guard * 100 });
     expect(s.phase).toBe("won");
     expect(s.message).toMatch(/defeated/i);
   });
 
   it("player death ends the fight and blocks further combat actions", () => {
-    const g = game(); g.stats.defense = 0;
-    const s = bstate(); s.phaseNumber = 3; s.playerHp = 1;
+    const g = game();
+    g.stats.defense = 0;
+    const s = bstate();
+    s.phaseNumber = 3;
+    s.playerHp = 1;
     const out = resolveBattleAction(s, g, { type: "ENEMY_TICK", playerMaxHp: 5000, now: 1000 });
     expect(out.phase).toBe("lost");
     const punched = resolveBattleAction(out, g, { type: "PUNCH", now: 2000 });
@@ -220,6 +257,8 @@ describe("combat depth — integration sanity", () => {
     const raid = buildBossFromId("raid-broly")!;
     expect(battleSagaRank(raid)).toBe(BOSSES.length - 1);
     expect(battleClashPressure(raid)).toBe(9 + (BOSSES.length - 1) * 10);
-    expect(battleClashDelay(buildBossFromId("tournament-r4")!)).toBe(Math.max(6500, 11500 - rankOf("beerus") * 850));
+    expect(battleClashDelay(buildBossFromId("tournament-r4")!)).toBe(
+      Math.max(6500, 11500 - rankOf("beerus") * 850),
+    );
   });
 });

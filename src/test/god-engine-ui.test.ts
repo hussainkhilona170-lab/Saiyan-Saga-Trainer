@@ -1,6 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { buildBossFromId, bossIdSuggestions } from "@/game/bossLibrary";
-import { applyScenarioBuild, parseScenarioList, serializeScenarioList, createScenario } from "@/game/scenarios";
+import {
+  applyScenarioBuild,
+  parseScenarioList,
+  serializeScenarioList,
+  createScenario,
+} from "@/game/scenarios";
 import { initialState, powerLevel } from "@/game/engine";
 
 const fresh = () => structuredClone(initialState);
@@ -49,7 +54,12 @@ describe("bossLibrary — id resolution for scenarios and the battle tester", ()
 describe("scenario creator — capture, persist, reapply", () => {
   it("capture → serialize → parse round-trips a build", () => {
     const s = fresh();
-    s.stats.strength = 1234; s.level = 42; s.xp = 999_000; s.activeForm = "ssj4"; s.forms.push("ssj4"); s.gravity = 5;
+    s.stats.strength = 1234;
+    s.level = 42;
+    s.xp = 999_000;
+    s.activeForm = "ssj4";
+    s.forms.push("ssj4");
+    s.gravity = 5;
     const sc = createScenario(s, "Godslayer setup", "beerus", "bring the pain", 1_000_000);
     expect(sc.name).toBe("Godslayer setup");
     expect(sc.build.stats.strength).toBe(1234);
@@ -65,7 +75,13 @@ describe("scenario creator — capture, persist, reapply", () => {
     expect(parseScenarioList("{}")).toEqual([]);
     const s = fresh();
     const sc = createScenario(s, "legit", "raditz");
-    const mangled = JSON.stringify([sc, { id: "x" }, null, 42, { id: "y", name: "bad", bossId: "raditz", build: null }]);
+    const mangled = JSON.stringify([
+      sc,
+      { id: "x" },
+      null,
+      42,
+      { id: "y", name: "bad", bossId: "raditz", build: null },
+    ]);
     const parsed = parseScenarioList(mangled);
     expect(parsed).toHaveLength(1);
     expect(parsed[0]?.name).toBe("legit");
@@ -74,7 +90,15 @@ describe("scenario creator — capture, persist, reapply", () => {
   it("applyScenarioBuild restores stats, level, gravity, and activates the form", () => {
     const s = fresh();
     s.activeForm = "base";
-    const build = { stats: { strength: 500, agility: 600, ki: 700, defense: 800 }, level: 50, xp: 5_000_000, mastery: { strength: 55, agility: 44, ki: 33, defense: 22 }, gravity: 4, formId: "ssj4", customForms: [] };
+    const build = {
+      stats: { strength: 500, agility: 600, ki: 700, defense: 800 },
+      level: 50,
+      xp: 5_000_000,
+      mastery: { strength: 55, agility: 44, ki: 33, defense: 22 },
+      gravity: 4,
+      formId: "ssj4",
+      customForms: [],
+    };
     const applied = applyScenarioBuild(s, build);
     expect(applied).toBe("ssj4");
     expect(s.forms).toContain("ssj4");
@@ -97,7 +121,18 @@ describe("scenario creator — capture, persist, reapply", () => {
 describe("scenario apply — form gating consistency with engine", () => {
   it("scenario carries custom transformations into a foreign save (re-registers them)", () => {
     const owner = fresh();
-    owner.customForms = [{ id: "custom-test-form", name: "Solar Crown", mult: 7, req: 0, cost: 0, aura: "#f0f", levelReq: 1, custom: true }];
+    owner.customForms = [
+      {
+        id: "custom-test-form",
+        name: "Solar Crown",
+        mult: 7,
+        req: 0,
+        cost: 0,
+        aura: "#f0f",
+        levelReq: 1,
+        custom: true,
+      },
+    ];
     owner.forms = ["base", "custom-test-form"];
     owner.activeForm = "custom-test-form";
     const sc = createScenario(owner, "Custom form test", "raditz");
@@ -112,7 +147,10 @@ describe("scenario apply — form gating consistency with engine", () => {
 
   it("powerLevel is applied to a scenario build for the tester preview math", () => {
     const s = fresh();
-    s.stats.strength = 10; s.stats.agility = 10; s.stats.ki = 10; s.stats.defense = 10;
+    s.stats.strength = 10;
+    s.stats.agility = 10;
+    s.stats.ki = 10;
+    s.stats.defense = 10;
     expect(powerLevel(s)).toBe(400);
   });
 });

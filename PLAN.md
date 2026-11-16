@@ -115,6 +115,12 @@ src/genesis/hud/        GENESIS 3D: HUD reusing Card + design tokens (AGENTS.md 
 - **Scene** — distant ridge line so the horizon reads, ki aura ring that brightens with speed, 2K shadows, HUD now shows live `action · m/s`
 - **Live-verified**: 100 FPS, poses animate, zero console errors
 
+### Genesis Phase 3 — Rapier physics (`0.8`, 2026-11-16)
+- **Rapier integration** — `Physics` provider, ground slab collider, landmark colliders; `KinematicCharacterController` resolves movement with wall-slide + snap-to-ground + autostep
+- **Camera collision** — raycast from look-at to desired camera pulls the follow cam in when geometry occludes the view (`resolveCameraPosition`, pure + tested)
+- **Character selection** — `CHARACTERS` roster (Saiyan / Namekian / Android) with palette + scale swap, HUD cycle button; selection logic pure + tested
+- **Live-verified**: 100 FPS, 10.1 ms/frame, character swap + run verified, zero console errors
+
 ## 5. In-progress / upcoming features
 
 > **PAUSED during Genesis (active direction, see §10):** the 2D feature list below is
@@ -219,15 +225,17 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 - `37599cc` — PRE ALPHA 0.3 (UI consistency rules in AGENTS.md + PLAN.md)
 - `03e0dfd` — PRE ALPHA 0.4 (Genesis Phase 0: TECH_STACK_DECISIONS.md + GENESIS section)
 - `100ee19` — PRE ALPHA 0.5 (engine decision approved, ADR filled)
-- `0.6` — Genesis Phase 1: 3D stack, /genesis route, character sim + tests, scene, HUD (commit `8f8f86d`)
-- `0.7` — Genesis Phase 2: procedural fighter body + pure animation layer + scene polish
+- `8f8f86d` — PRE ALPHA 0.6 (Genesis Phase 1: 3D stack, /genesis route, character sim + tests, scene, HUD)
+- `7585349` — PRE ALPHA 0.7 (Genesis Phase 2: procedural fighter body + pure animation layer + scene polish)
+- `0.8` — Genesis Phase 3: Rapier physics, camera collision, character selection (commit pending)
 
 ## 9. Test counts
 
 - Engine tests: 22
 - Genesis character-sim tests: 13
 - Genesis animation tests: 16
-- Total: 184 (11 files)
+- Genesis logic tests: 11 (characters + camera collision)
+- Total: 194 (12 files)
 - All passing as of last commit
 
 ## 10. GENESIS — 3D Action RPG (active direction)
