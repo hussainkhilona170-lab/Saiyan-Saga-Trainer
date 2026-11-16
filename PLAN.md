@@ -216,7 +216,7 @@ and rules: the user's Genesis master prompt (12 phases → Milestones A–D).
 - **2D features paused** (§5) — the 2D app stays stable and regression-tested, no new features during Genesis.
 - **God Engine = parallel track** — an adapter (`genesisBus`, console, Live Inspector, snapshots on Genesis state) ships with Phase 1, not Phase 9. The existing God Engine pattern (16 labs, 26+ typed actions) transfers.
 - **Prototype assets:** CC0 placeholder packs (Quaternius/Kenney GLTF) for Milestones A–B; original/licensed assets gated before Alpha 0.1. Kakarot assets are off-limits.
-- **Engine decision:** PENDING USER REVIEW — see `TECH_STACK_DECISIONS.md` §6 (recommendation: Three.js + R3F + Rapier, Tauri packaging; Godot 4.6 runner-up with a defined switch trigger). Nothing 3D is installed until approved.
+- **Engine decision: APPROVED 2026-11-16** — Three.js + React Three Fiber + Rapier (see `TECH_STACK_DECISIONS.md` §6/§12; Godot 4.6 remains the runner-up with a defined switch trigger). Phase 1 unlocked.
 
 ### Roadmap (user-approved structure)
 - **Milestone A (Phases 0–2):** preservation + architecture + playable 3D character. ← current

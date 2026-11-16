@@ -1,8 +1,8 @@
 # TECH_STACK_DECISIONS.md — Genesis 3D Engine Decision
 
-**Status: PENDING USER REVIEW** — no engine chosen yet; nothing 3D is installed or built.
+**Status: APPROVED (2026-11-16)** — Three.js + React Three Fiber + Rapier. Phase 1 unlocked.
 **Prepared:** 2026-11-16 · **Project:** Saiyan Saga Trainer: Genesis (3D action RPG)
-**Decision gate:** user approval of a recommendation below unlocks Phase 1 (Genesis foundation).
+**Decision gate:** resolved — see ADR in §12.
 
 > Research method: live web verification via Tavily (2026-11-16) against vendor pages,
 > release archives, and community sources. Engine versions below are **verified current
@@ -179,9 +179,9 @@ At that point engine.ts/data.ts/battleSim get ported to C# (Godot .NET), a bound
 - three.js WebGPU renderer status — threejs manual / community guides ("experimental"; WebGLRenderer recommended)
 - Repository facts — verified by direct code inspection (see PLAN.md §2, §9)
 
-## 12. Decision record (ADR — fill on approval)
+## 12. Decision record (ADR)
 
-- **Decision:** _pending user review of §6_
-- **Date / approver:** —
-- **Reversal trigger:** §7
-- **Consequences:** unlocks Phase 1 (Genesis foundation) per DEVELOPMENT_ROADMAP.md
+- **Decision:** Three.js + React Three Fiber + @react-three/rapier (TypeScript), Tauri 2 packaging with Electron evaluated as fallback (§7 reversal trigger and §9 packaging spike stand).
+- **Date / approver:** 2026-11-16 — project owner (user), after review of the scored matrix (§4) and deep dives (§5).
+- **Reversal trigger:** §7 — re-evaluate Godot 4.6 at Milestone A exit if 60 FPS flight/combat or animation authoring throughput fails.
+- **Consequences:** Phase 1 (Genesis foundation) unlocked: install three/R3F/Rapier, `/genesis` code-split route, `src/genesis/sim|render|hud` module split, God Engine adapter from day one. Existing TypeScript engine, save envelope and test suite carry over unchanged.
