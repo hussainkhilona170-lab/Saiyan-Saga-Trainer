@@ -18,8 +18,8 @@ const SCENE = {
   ridge: "#1f2038",
 };
 
-const CAM_BACK = 5;
-const CAM_UP = 2.2;
+const CAM_BACK = 3.6;
+const CAM_UP = 1.9;
 
 function Landmarks() {
   const pillars: Array<{ x: number; z: number; h: number; w: number; color: string }> = [
@@ -66,13 +66,13 @@ export default function GenesisScene() {
   const stateRef = useRef<CharacterState>(createCharacterState());
   const keysRef = useKeyboard();
   const teleportRef = useRef<{ x: number; y: number; z: number } | null>(null);
-  const [characterID, setCharacterID] = useState("saiyan");
+  const [characterID, setCharacterID] = useState("vegeta");
   const [stats, setStats] = useState<HudStats>({
     fps: 0,
     ms: 0,
     action: "idle",
     speed: 0,
-    character: "Saiyan",
+    character: "Saiyan Prince",
   });
   const character = characterByID(characterID);
 
@@ -105,8 +105,8 @@ export default function GenesisScene() {
       >
         <color attach="background" args={[SCENE.background]} />
         <fog attach="fog" args={[SCENE.background, 45, 130]} />
-        <hemisphereLight args={["#ffe0b0", SCENE.ground, 1.1]} />
-        <ambientLight intensity={0.28} />
+        <hemisphereLight args={["#ffffff", SCENE.ground, 1.0]} />
+        <ambientLight intensity={0.35} />
         <directionalLight
           position={[12, 18, 8]}
           intensity={1.5}
@@ -132,7 +132,7 @@ export default function GenesisScene() {
           onStats={setStats}
           character={character}
           teleportRef={teleportRef}
-          modelUrl="/assets/characters/Soldier_Male.glb"
+          modelUrl={character.model ?? "/assets/characters/Soldier_Male.glb"}
         />
       </Canvas>
       <GenesisHud

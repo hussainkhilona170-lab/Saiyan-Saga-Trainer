@@ -13,9 +13,25 @@ export type CharacterDef = {
   hair: string;
   skin: string;
   scale: number;
+  /** Vegeta-style battle armor (blue chest plates + white gloves/boots). */
+  armor?: boolean;
+  /** GLB model path in public/assets. If set, the GLTF rig renders this model. */
+  model?: string;
 };
 
 export const CHARACTERS: CharacterDef[] = [
+  {
+    id: "vegeta",
+    name: "Saiyan Prince",
+    title: "Royal warrior (GLB)",
+    gi: "#2f6fd0",
+    under: "#f2f2f5",
+    hair: "#141424",
+    skin: "#ffd9a8",
+    scale: 1,
+    armor: true,
+    model: "/assets/characters/vegeta.glb",
+  },
   {
     id: "saiyan",
     name: "Saiyan",

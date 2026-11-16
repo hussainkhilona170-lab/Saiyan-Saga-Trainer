@@ -10,9 +10,9 @@ import type { RawKeys } from "./useKeyboard";
 import { moveIntent, resolveCameraPosition } from "./cameraRelative";
 import { OBSTACLES } from "../world";
 
-const CAM_BACK = 5;
-const CAM_UP = 2.2;
-const LOOK_AT_Y = 1.15;
+const CAM_BACK = 3.6;
+const CAM_UP = 1.9;
+const LOOK_AT_Y = 1.0;
 const CHAR_RADIUS = 0.4;
 
 type FighterProps = {
@@ -75,12 +75,17 @@ export function FighterGLTF({
             const mixer = new THREE.AnimationMixer(scene);
             mixerRef.current = mixer;
             const clips = gltf.animations;
-            const idleClip = findClip(clips, "idle", "stand", "breath");
-            const walkClip = findClip(clips, "walk", "walking");
-            const runClip = findClip(clips, "run", "running", "sprint");
-            const jumpClip = findClip(clips, "jump", "jumping");
-            const fallClip = findClip(clips, "fall", "falling");
-            const landClip = findClip(clips, "land", "landing");
+            // Quaternius/Kenney packs use real names; the Vegeta FBX has generic
+            // "TempMotion" clips. Map by name, then fall back to the first clip
+            // for every state so imported rigs still animate.
+            const byName = (pat: string[]) => findClip(clips, ...pat);
+            const fallback = clips[0] ?? null;
+            const idleClip = byName(["idle", "stand", "breath"]) ?? fallback;
+            const walkClip = byName(["walk", "walking"]) ?? fallback;
+            const runClip = byName(["run", "running", "sprint"]) ?? fallback;
+            const jumpClip = byName(["jump", "jumping"]) ?? fallback;
+            const fallClip = byName(["fall", "falling"]) ?? fallback;
+            const landClip = byName(["land", "landing"]) ?? fallback;
             actionsRef.current = {
               idle: idleClip ? mixer.clipAction(idleClip) : null,
               walk: walkClip ? mixer.clipAction(walkClip) : null,
