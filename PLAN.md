@@ -115,11 +115,13 @@ src/genesis/hud/        GENESIS 3D: HUD reusing Card + design tokens (AGENTS.md 
 - **Scene** — distant ridge line so the horizon reads, ki aura ring that brightens with speed, 2K shadows, HUD now shows live `action · m/s`
 - **Live-verified**: 100 FPS, poses animate, zero console errors
 
-### Genesis Phase 3 — Rapier physics (`0.8`, 2026-11-16)
-- **Rapier integration** — `Physics` provider, ground slab collider, landmark colliders; `KinematicCharacterController` resolves movement with wall-slide + snap-to-ground + autostep
-- **Camera collision** — raycast from look-at to desired camera pulls the follow cam in when geometry occludes the view (`resolveCameraPosition`, pure + tested)
-- **Character selection** — `CHARACTERS` roster (Saiyan / Namekian / Android) with palette + scale swap, HUD cycle button; selection logic pure + tested
-- **Live-verified**: 100 FPS, 10.1 ms/frame, character swap + run verified, zero console errors
+### Genesis Phase 3 — Physics & camera collision (`0.8`–`0.9`, 2026-11-16)
+- **Physics evaluated**: @react-three/rapier 2.2.0 suspends indefinitely under React 19 in this environment ("useRapier must be used within <Physics />" / WASM init hang); Rapier deferred per TECH_STACK_DECISIONS.md §7 reversal trigger, to be re-introduced when a React-19-compatible pairing lands
+- **Manual collision (interim)** — capsule-vs-AABB push-out against landmark pillars; sim keeps its plane ground; character slides along walls
+- **Camera collision** — slab ray-vs-AABB pulls the follow cam in when geometry occludes the view (`resolveCameraPosition`, pure + tested)
+- **Character selection** — `CHARACTERS` roster (Saiyan / Namekian / Android) with palette + scale swap, HUD cycle button; logic pure + tested
+- **God Engine adapter** — `genesisBus` (BroadcastChannel + same-tab fallback) + GenesisSection in the admin panel (character swap, teleport, reset); GenesisScene applies commands; cross-tab verified
+- **Live-verified**: 100 FPS, 10.0 ms/frame, walk/run verified, character swap works, zero console errors
 
 ## 5. In-progress / upcoming features
 
@@ -227,7 +229,8 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 - `100ee19` — PRE ALPHA 0.5 (engine decision approved, ADR filled)
 - `8f8f86d` — PRE ALPHA 0.6 (Genesis Phase 1: 3D stack, /genesis route, character sim + tests, scene, HUD)
 - `7585349` — PRE ALPHA 0.7 (Genesis Phase 2: procedural fighter body + pure animation layer + scene polish)
-- `0.8` — Genesis Phase 3: Rapier physics, camera collision, character selection (commit pending)
+- `5df29ca` — PRE ALPHA 0.8 (Genesis Phase 3: Rapier attempt + camera collision + character selection; pushed)
+- `0.9` — Genesis Phase 3 (revised): manual collision + God Engine adapter + genesisBus (commit pending)
 
 ## 9. Test counts
 

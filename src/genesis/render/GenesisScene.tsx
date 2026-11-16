@@ -1,11 +1,11 @@
 import { Canvas } from "@react-three/fiber";
-import { useState, useRef, type RefObject } from "react";
-import { Physics, RigidBody } from "@react-three/rapier";
+import { useState, useRef, useEffect, type RefObject } from "react";
 import { createCharacterState, type CharacterState } from "../sim/character";
 import { useKeyboard } from "./useKeyboard";
 import { Fighter } from "./Fighter";
 import { GenesisHud, type HudStats } from "../hud/GenesisHud";
 import { CHARACTERS, characterByID, nextCharacterID, type CharacterDef } from "../characters";
+import { subscribeGenesisCommands, type GenesisCommand } from "../genesisBus";
 
 const SCENE = {
   background: "#191b2c",
@@ -34,12 +34,10 @@ function Landmarks() {
   return (
     <>
       {pillars.map((p, i) => (
-        <RigidBody key={i} type="fixed" colliders="cuboid" position={[p.x, p.h / 2, p.z]}>
-          <mesh castShadow receiveShadow>
-            <boxGeometry args={[p.w, p.h, p.w]} />
-            <meshStandardMaterial color={p.color} roughness={0.8} />
-          </mesh>
-        </RigidBody>
+        <mesh key={i} position={[p.x, p.h / 2, p.z]} castShadow receiveShadow>
+          <boxGeometry args={[p.w, p.h, p.w]} />
+          <meshStandardMaterial color={p.color} roughness={0.8} />
+        </mesh>
       ))}
     </>
   );
@@ -67,6 +65,7 @@ function Ridge() {
 export default function GenesisScene() {
   const stateRef = useRef<CharacterState>(createCharacterState());
   const keysRef = useKeyboard();
+  const teleportRef = useRef<{ x: number; y: number; z: number } | null>(null);
   const [characterID, setCharacterID] = useState("saiyan");
   const [stats, setStats] = useState<HudStats>({
     fps: 0,
@@ -76,6 +75,24 @@ export default function GenesisScene() {
     character: "Saiyan",
   });
   const character = characterByID(characterID);
+
+  // God Engine → Genesis command channel (cross-tab).
+  useEffect(() => {
+    return subscribeGenesisCommands((cmd: GenesisCommand) => {
+      switch (cmd.type) {
+        case "setCharacter":
+          setCharacterID(cmd.id);
+          break;
+        case "teleport":
+          teleportRef.current = { x: cmd.x, y: cmd.y, z: cmd.z };
+          break;
+        case "reset":
+          teleportRef.current = { x: 0, y: 0, z: 0 };
+          stateRef.current = createCharacterState();
+          break;
+      }
+    });
+  }, []);
 
   return (
     <div className="relative h-screen w-full overflow-hidden bg-background">
@@ -101,19 +118,21 @@ export default function GenesisScene() {
           shadow-camera-top={30}
           shadow-camera-bottom={-30}
         />
-        <Physics gravity={[0, -9.81, 0]}>
-          {/* Ground slab */}
-          <RigidBody type="fixed" colliders="cuboid" position={[0, -0.5, 0]}>
-            <mesh receiveShadow>
-              <boxGeometry args={[200, 1, 200]} />
-              <meshStandardMaterial color={SCENE.ground} roughness={1} />
-            </mesh>
-          </RigidBody>
-          <gridHelper args={[160, 80, SCENE.grid, SCENE.grid]} position={[0, 0.02, 0]} />
-          <Ridge />
-          <Landmarks />
-          <Fighter stateRef={stateRef} keysRef={keysRef} onStats={setStats} character={character} />
-        </Physics>
+        {/* Physics disabled for diagnosis */}
+        <mesh receiveShadow>
+          <boxGeometry args={[200, 1, 200]} />
+          <meshStandardMaterial color={SCENE.ground} roughness={1} />
+        </mesh>
+        <gridHelper args={[160, 80, SCENE.grid, SCENE.grid]} position={[0, 0.02, 0]} />
+        <Ridge />
+        <Landmarks />
+        <Fighter
+          stateRef={stateRef}
+          keysRef={keysRef}
+          onStats={setStats}
+          character={character}
+          teleportRef={teleportRef}
+        />
       </Canvas>
       <GenesisHud
         stats={stats}

@@ -6,7 +6,7 @@ export type HudStats = {
   ms: number;
   action: string;
   speed: number;
-  character: string;
+  character?: string;
 };
 
 export function GenesisHud({
@@ -14,7 +14,7 @@ export function GenesisHud({
   onCycleCharacter,
 }: {
   stats: HudStats;
-  onCycleCharacter: () => void;
+  onCycleCharacter?: () => void;
 }) {
   return (
     <div className="pointer-events-none absolute inset-x-4 top-4 z-10 flex items-start justify-between gap-3">
@@ -24,7 +24,7 @@ export function GenesisHud({
             <span className="text-2xl">🌌</span>{" "}
             <span className="font-display text-xl">Genesis — Movement Prototype</span>
             <div className="text-sm text-muted-foreground">
-              WASD move · Shift sprint · Space jump · {stats.character}
+              WASD move · Shift sprint · Space jump{stats.character ? ` · ${stats.character}` : ""}
             </div>
           </div>
           <div className="text-right text-xs text-muted-foreground">
@@ -38,9 +38,11 @@ export function GenesisHud({
           </div>
         </div>
         <div className="mt-2 flex items-center gap-2">
-          <Btn onClick={onCycleCharacter} className="text-xs">
-            ↻ Character
-          </Btn>
+          {onCycleCharacter && (
+            <Btn onClick={onCycleCharacter} className="text-xs">
+              ↻ Character
+            </Btn>
+          )}
         </div>
       </Card>
       <Link
