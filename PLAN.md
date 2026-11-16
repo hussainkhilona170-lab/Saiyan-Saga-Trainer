@@ -1,7 +1,7 @@
 # Dragon Ball RPG — Development Plan
 
 **Version:** PRE ALPHA 0.1
-**Last updated:** 2026-11-14
+**Last updated:** 2026-11-16
 **Branch:** main (Lovable-connected — do not rewrite published history)
 
 > This is the living plan document. It must be updated on every commit: completed
@@ -92,6 +92,9 @@ src/game/FormArt.tsx   Form portrait rendering (sprite images + SVG fallback)
 - **Combat weak points** — first exposed strike = 3× "WEAK POINT!" hit
 - **Boss phases & signatures+** — 4th phase (≤10% HP), per-phase signature moves, enrage timer (+25% after 60s)
 - **Ascension skill tree** — 8 nodes spendable with prestige points
+
+### User feedback round 4 (UI polish)
+- **Turbo Clicker restyle** — card rebuilt to match the Train tab design language (Gravity Chamber pattern): emoji + `text-xl` title, muted status subtitle, right-aligned `chart-2` accent meter, Auto-Train-style stat pills, standard `Btn` START/STOP
 
 ## 5. In-progress / upcoming features
 

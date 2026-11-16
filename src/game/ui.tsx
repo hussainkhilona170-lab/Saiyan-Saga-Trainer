@@ -194,24 +194,30 @@ function TurboClicker() {
   }, [on, stat, train, update]);
   const free = s.godMode || s.stamina >= 1;
   const rate = meter >= 1000 ? fmt(meter) : meter.toFixed(1);
+  const statusText = on && !free ? "⏳ Waiting for stamina…" : on && s.godMode ? "God Mode: unlimited clicks." : on ? "Running on stamina — it refills on its own." : "Insane-speed auto-clicker. Stamina gates gains and refills on its own.";
   return (
     <Card className={on ? "border-primary" : ""}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="font-display text-2xl">⚡ Turbo Clicker — 100/s</div>
-        <Btn onClick={() => setOn((v) => !v)} className={on ? "bg-destructive" : ""}>{on ? "■ STOP" : "▶ START"}</Btn>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <span className="text-2xl">⚡</span> <span className="font-display text-xl">Turbo Clicker — 100/s</span>
+          <div className="text-sm text-muted-foreground">{statusText}</div>
+        </div>
+        <div className="text-right text-xs text-muted-foreground">
+          <div className="font-display text-lg text-chart-2" aria-live="polite">{on ? `+${rate} /s` : "—"}</div>
+          {total > 0 && <div>Session total: +{fmt(total)} {TRAININGS.find((t) => t.stat === stat)?.name ?? stat}</div>}
+        </div>
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-2">
         {TRAININGS.map((t) => (
-          <button key={t.id} onClick={() => setStat(t.stat as StatKey)} aria-pressed={stat === t.stat} className={`rounded px-3 py-1 text-sm font-display ${stat === t.stat ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>{t.icon} {t.name}</button>
+          <button key={t.id} onClick={() => setStat(t.stat as StatKey)} aria-pressed={stat === t.stat} className={`rounded px-2 py-1 text-sm ${stat === t.stat ? "bg-primary text-primary-foreground" : "bg-muted"}`}>{t.icon} {t.name}</button>
         ))}
       </div>
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-        <div className="font-display text-3xl text-primary" aria-live="polite">{on ? `+${rate} /s` : "—"}</div>
-        <p className="text-right text-xs text-muted-foreground">
-          {total > 0 && <span className="mr-2 text-chart-2">Session total: +{fmt(total)} {TRAININGS.find((t) => t.stat === stat)?.name ?? stat}</span>}
-          {on && !free ? "⏳ Waiting for stamina…" : s.godMode ? "God Mode: unlimited clicks." : on ? "Running on stamina." : "Insane-speed auto-clicker (1ms buffer)."}
-          {!s.godMode && " Stamina gates gains and refills on its own — God Mode (Ctrl+Shift+A) trains free."}
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-xs text-muted-foreground">
+          {!s.godMode && "Stamina gates gains and refills on its own. "}
+          God Mode (Ctrl+Shift+A) trains free.
         </p>
+        <Btn onClick={() => setOn((v) => !v)} className={on ? "bg-destructive" : ""}>{on ? "■ STOP" : "▶ START"}</Btn>
       </div>
     </Card>
   );
