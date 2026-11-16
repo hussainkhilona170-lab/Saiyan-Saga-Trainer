@@ -124,6 +124,13 @@ src/genesis/hud/        GENESIS 3D: HUD reusing Card + design tokens (AGENTS.md 
 - **Character visual upgrade** — cel-shaded (toon) Saiyan fighter: spiky layered hair, orange gi with blue undershirt/wristbands, belt with knot, boots, expressive eyes/eyebrows; smoother geometry (8–24 segments) and per-character scaling. No licensed assets used.
 - **Live-verified**: 100 FPS, 10.0 ms/frame, walk/run verified, character swap works, zero console errors
 
+### Asset library (`assets/`, 2026-11-16)
+- **13 CC0 character models** downloaded from Cinevva (Quaternius + Kenney), stored in `assets/characters/`
+- All CC0 (public domain) — free for commercial use, no attribution required
+- Models are rigged GLBs with embedded animations (17-32 clips each)
+- `assets/README.md` documents sources, tri counts, rig types, and usage
+- Ready for GLTF integration via `useGLTF` from `@react-three/drei`
+
 > **PAUSED during Genesis (active direction, see §10):** the 2D feature list below is
 > frozen while the 3D action RPG is developed. Revisit after Milestone B. The 2D app
 > stays stable and regression-tested (155 tests) but takes no new features.
