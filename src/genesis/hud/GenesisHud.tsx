@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { Card } from "@/game/ui";
 
 /** HUD readout updated ~2×/second by the scene loop (no per-frame React renders). */
-export type HudStats = { fps: number; ms: number; action: string };
+export type HudStats = { fps: number; ms: number; action: string; speed: number };
 
 /**
  * Genesis HUD — reuses the app's Card and the established design language
@@ -26,7 +26,9 @@ export function GenesisHud({ stats }: { stats: HudStats }) {
               {stats.fps} FPS
             </div>
             <div>{stats.ms.toFixed(1)} ms/frame</div>
-            <div className="font-display text-foreground">{stats.action}</div>
+            <div className="font-display text-foreground">
+              {stats.action} · {stats.speed.toFixed(1)} m/s
+            </div>
           </div>
         </div>
       </Card>
