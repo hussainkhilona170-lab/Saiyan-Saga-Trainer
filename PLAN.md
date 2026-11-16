@@ -26,14 +26,17 @@ Engine-first architecture (pure rules in `engine.ts`, React store only dispatche
 
 ```
 src/game/engine.ts     Pure rules: applyAction, hydrate, save envelope, battle resolver. No React.
-src/game/data.ts       Content registries: TRAININGS, FORMS, BOSSES, LOCATIONS, QUESTS, PASSES, WISHES, fmt
-src/game/store.tsx     GameProvider/useGame — localStorage persistence + slot switching + update()/train()
-src/game/controls.ts   useBattleControls — keyboard map + held-charge lifecycle
-src/game/arena.tsx     Canvas renderer + synthesized battle SFX. Never contains rules.
-src/game/battleBus.ts  One-way God Engine → BattleTab command channel
-src/game/ui.tsx        All tabs + AdminPanel + BattleTab glue
-src/game/router.tsx    TanStack route tree generation (routeTree.gen.ts is generated — do not hand-edit)
-src/game/FormArt.tsx   Form portrait rendering (sprite images + SVG fallback)
+src/game/data.ts        Content registries: TRAININGS, FORMS, BOSSES, LOCATIONS, QUESTS, PASSES, WISHES, fmt
+src/game/store.tsx      GameProvider/useGame — localStorage persistence + slot switching + update()/train()
+src/game/controls.ts    useBattleControls — keyboard map + held-charge lifecycle
+src/game/arena.tsx      Canvas renderer + synthesized battle SFX. Never contains rules.
+src/game/battleBus.ts   One-way God Engine → BattleTab command channel
+src/game/ui.tsx         All tabs + AdminPanel + BattleTab glue
+src/game/router.tsx     TanStack route tree generation (routeTree.gen.ts is generated — do not hand-edit)
+src/game/FormArt.tsx    Form portrait rendering (sprite images + SVG fallback)
+src/genesis/sim/        GENESIS 3D: pure gameplay simulation (no three/React/DOM) — headless-testable
+src/genesis/render/     GENESIS 3D: R3F scene + keyboard collection; renders sim state only
+src/genesis/hud/        GENESIS 3D: HUD reusing Card + design tokens (AGENTS.md UI rules apply)
 ```
 
 **Rules:**
@@ -95,6 +98,15 @@ src/game/FormArt.tsx   Form portrait rendering (sprite images + SVG fallback)
 
 ### User feedback round 4 (UI polish)
 - **Turbo Clicker restyle** — card rebuilt to match the Train tab design language (Gravity Chamber pattern): emoji + `text-xl` title, muted status subtitle, right-aligned `chart-2` accent meter, Auto-Train-style stat pills, standard `Btn` START/STOP
+
+### Genesis Phase 1 (commits `0.4`–`0.6`, 2026-11-16)
+- **Engine decision APPROVED** — Three.js + React Three Fiber + Rapier (ADR in `TECH_STACK_DECISIONS.md` §12; full matrix + Godot runner-up with reversal trigger)
+- **3D stack installed** — three 0.187.0, @react-three/fiber 9.8.2, @react-three/rapier 2.2.0
+- **`/genesis` route** — code-split (three.js loads only there), client-only mount, 2D app untouched
+- **Character sim** (`src/genesis/sim/character.ts`) — pure TS state machine: idle/walk/run/jump/fall/land, analog-ready input scaling, air control, landing recovery, dt clamp; **13 headless tests**
+- **Scene** — theme-matched capsule character (emissive), grid ground, chart-colored landmark pillars, fog, shadows, camera-relative WASD + Shift sprint + Space jump, smooth third-person follow
+- **HUD** — reuses `Card` + design tokens; live FPS/ms/action readout
+- **Live-verified**: 100 FPS on the dev machine, action readout tracks input, zero console errors
 
 ## 5. In-progress / upcoming features
 
@@ -198,12 +210,15 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 - `59e0b26` — reference sprites + turbo 100/s
 - `f41d75c` — PRE ALPHA 0.2 (Turbo Clicker restyle)
 - `37599cc` — PRE ALPHA 0.3 (UI consistency rules in AGENTS.md + PLAN.md)
-- `0.4` — Genesis Phase 0: TECH_STACK_DECISIONS.md + this GENESIS section
+- `03e0dfd` — PRE ALPHA 0.4 (Genesis Phase 0: TECH_STACK_DECISIONS.md + GENESIS section)
+- `100ee19` — PRE ALPHA 0.5 (engine decision approved, ADR filled)
+- `0.6` — Genesis Phase 1: 3D stack, /genesis route, character sim + tests, scene, HUD
 
 ## 9. Test counts
 
 - Engine tests: 22
-- Total: 155 (9 files)
+- Genesis character-sim tests: 13
+- Total: 168 (10 files)
 - All passing as of last commit
 
 ## 10. GENESIS — 3D Action RPG (active direction)
