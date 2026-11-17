@@ -29,6 +29,17 @@ import {
   KI_BLAST_RANGE,
   type Combatant,
 } from "../sim/combat";
+import {
+  awardXp,
+  createProgress,
+  maxHpForLevel,
+  maxKiForLevel,
+  XP_PER_KI_HIT,
+  XP_PER_KILL,
+  XP_PER_MELEE_HIT,
+  xpToNextLevel,
+  type Progress,
+} from "../sim/progression";
 
 const CAM_BACK = 3.6;
 const CAM_UP = 1.9;
@@ -133,6 +144,7 @@ export function FighterRose({
   const targetRespawnRef = useRef(0);
   const targetFlashRef = useRef(0);
   const playerCombatantRef = useRef<Combatant>(createCombatant(100, 100));
+  const progressRef = useRef<Progress>(createProgress());
   const projectilesRef = useRef<Array<{ mesh: THREE.Mesh; vx: number; vz: number; life: number }>>(
     [],
   );
@@ -380,8 +392,30 @@ export function FighterRose({
       const attacker = { x: resolved.x, z: resolved.z, facing: next.facing };
       const tpos = targetMesh.position;
       if (meleeHits(attacker, { x: tpos.x, z: tpos.z })) {
+        const wasAlive = targetCombatantRef.current.alive;
         targetCombatantRef.current = applyDamage(targetCombatantRef.current, MELEE_DAMAGE);
         targetFlashRef.current = 0.2;
+        const { progress, levelsGained } = awardXp(progressRef.current, XP_PER_MELEE_HIT);
+        if (!targetCombatantRef.current.alive && wasAlive) {
+          const r = awardXp(progress, XP_PER_KILL);
+          progressRef.current = r.progress;
+          if (r.levelsGained > 0) {
+            playerCombatantRef.current = {
+              ...playerCombatantRef.current,
+              maxKi: maxKiForLevel(progressRef.current.level),
+              maxHp: maxHpForLevel(progressRef.current.level),
+            };
+          }
+        } else {
+          progressRef.current = progress;
+          if (levelsGained > 0) {
+            playerCombatantRef.current = {
+              ...playerCombatantRef.current,
+              maxKi: maxKiForLevel(progressRef.current.level),
+              maxHp: maxHpForLevel(progressRef.current.level),
+            };
+          }
+        }
       }
     }
     if (!targetCombatantRef.current.alive) {
@@ -438,8 +472,15 @@ export function FighterRose({
           p.mesh.position.z - targetMesh.position.z,
         );
         if (d < 0.6) {
+          const wasAlive = targetCombatantRef.current.alive;
           targetCombatantRef.current = applyDamage(targetCombatantRef.current, KI_BLAST_DAMAGE);
           targetFlashRef.current = 0.2;
+          const r1 = awardXp(progressRef.current, XP_PER_KI_HIT);
+          progressRef.current = r1.progress;
+          if (!targetCombatantRef.current.alive && wasAlive) {
+            const r2 = awardXp(progressRef.current, XP_PER_KILL);
+            progressRef.current = r2.progress;
+          }
           remove = true;
         }
       }
@@ -450,6 +491,13 @@ export function FighterRose({
         projs.splice(i, 1);
       }
     }
+
+    // Keep player resources scaled to level.
+    playerCombatantRef.current = {
+      ...playerCombatantRef.current,
+      maxKi: maxKiForLevel(progressRef.current.level),
+      maxHp: maxHpForLevel(progressRef.current.level),
+    };
 
     // Pose from the pure animation system.
     const a = anim.current;
@@ -539,6 +587,9 @@ export function FighterRose({
         targetHp: targetCombatantRef.current.hp,
         ki: playerCombatantRef.current.ki,
         maxKi: playerCombatantRef.current.maxKi,
+        level: progressRef.current.level,
+        xp: progressRef.current.xp,
+        xpToNext: xpToNextLevel(progressRef.current.level),
       });
       acc.count = 0;
       acc.time = 0;

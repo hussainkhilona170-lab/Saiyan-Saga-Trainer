@@ -1,6 +1,6 @@
 # Dragon Ball RPG — Development Plan
 
-**Version:** PRE ALPHA 0.22
+**Version:** PRE ALPHA 0.23
 **Last updated:** 2026-11-17
 **Branch:** main (Lovable-connected — do not rewrite published history)
 
@@ -147,6 +147,12 @@ src/genesis/hud/        GENESIS 3D: HUD reusing Card + design tokens (AGENTS.md 
 - Skin weights are analytic (nearest two bone segments, inverse-distance^3.6) instead of rigid per-part binding, so joints bend smoothly
 - Set as the default character; cycle with the Character button
 - Before/after previews rendered headlessly with Cycles (`preview_dir` arg) — no desktop window is touched
+
+### RPG progression — XP & levels (`0.23`)
+- **Pure progression module** `src/genesis/sim/progression.ts`: `Progress`, `createProgress`, `awardXp` (multi-level in one award), `xpToNextLevel`, `maxKiForLevel`/`maxHpForLevel`.
+- **XP awards**: melee hit 5, ki hit 8, kill 50; level-up scales max Ki (+10) and max HP (+15) per level.
+- HUD shows `Lv X · XP Y/Z`; player Ki/maxKi scale with level.
+- **Tests**: 9 progression cases → **234 tests / 15 files**.
 
 ### Ki blasts (`0.22`)
 - **Key K fires a ki blast** (costs 15 Ki, 18 damage, 12 m range) when the player has enough Ki; a glowing sphere travels in the facing direction at 16 m/s and damages the target dummy on impact.
@@ -299,6 +305,7 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 - PRE ALPHA 0.20 (flight: powered flight, ascend/descend, hover, altitude clamp)
 - PRE ALPHA 0.21 (melee combat foundation: attack action, combat module, target dummy)
 - PRE ALPHA 0.22 (ki blasts: projectile, ki resource, regen, HUD)
+- PRE ALPHA 0.23 (RPG progression: XP & levels, HUD)
 
 ## 9. Test counts
 
@@ -310,7 +317,8 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 - Genesis flight tests: 9 (takeoff, hover, climb, land, speed, clamp, drop, recovery)
 - Genesis combat tests: 14 (hit detection, damage, ki, ki blast)
 - Genesis attack tests: 4 (wind-up, motion lock, cooldown, recovery)
-- Total: 225 (14 files)
+- Genesis progression tests: 9 (xp, level-up, overflow, multi-level, scaling)
+- Total: 234 (15 files)
 - All passing as of last commit
 
 ## 10. GENESIS — 3D Action RPG (active direction)
