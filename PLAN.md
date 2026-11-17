@@ -1,6 +1,6 @@
 # Dragon Ball RPG — Development Plan
 
-**Version:** PRE ALPHA 0.25
+**Version:** PRE ALPHA 0.26
 **Last updated:** 2026-11-17
 **Branch:** main (Lovable-connected — do not rewrite published history)
 
@@ -147,6 +147,9 @@ src/genesis/hud/        GENESIS 3D: HUD reusing Card + design tokens (AGENTS.md 
 - Skin weights are analytic (nearest two bone segments, inverse-distance^3.6) instead of rigid per-part binding, so joints bend smoothly
 - Set as the default character; cycle with the Character button
 - Before/after previews rendered headlessly with Cycles (`preview_dir` arg) — no desktop window is touched
+
+### Genesis entry point in Trainer (`0.26`)
+- **Nav link + Train-tab card** in the 2D Trainer app: a `🌌 Genesis` button in the tab bar and a "Enter Genesis →" card on the Train tab both route to `/genesis` (TanStack `Link`), so the 3D game is reachable from inside the Trainer without typing a URL.
 
 ### Save / load (`0.25`)
 - **Versioned save envelope** for Genesis: `src/genesis/sim/save.ts` with `serializeSave`/`parseSave` (version check, clamping, malformed-input rejection).
@@ -317,6 +320,7 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 - PRE ALPHA 0.23 (RPG progression: XP & levels, HUD)
 - PRE ALPHA 0.24 (enemy AI: chase, attack, respawn, player HP)
 - PRE ALPHA 0.25 (save/load: versioned envelope, persist on interval + unmount)
+- PRE ALPHA 0.26 (Genesis entry point in Trainer: nav link + Train-tab card)
 
 ## 9. Test counts
 
