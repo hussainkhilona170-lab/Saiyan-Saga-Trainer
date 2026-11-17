@@ -1,7 +1,7 @@
 # Dragon Ball RPG — Development Plan
 
-**Version:** PRE ALPHA 0.1
-**Last updated:** 2026-11-16
+**Version:** PRE ALPHA 0.19
+**Last updated:** 2026-11-17
 **Branch:** main (Lovable-connected — do not rewrite published history)
 
 > This is the living plan document. It must be updated on every commit: completed
@@ -148,6 +148,17 @@ src/genesis/hud/        GENESIS 3D: HUD reusing Card + design tokens (AGENTS.md 
 - Set as the default character; cycle with the Character button
 - Before/after previews rendered headlessly with Cycles (`preview_dir` arg) — no desktop window is touched
 
+### Imported rig support — Saiyan Prince (`0.19`)
+- **The `vegeta.glb` bugs**: 374-joint iClone/CC rig, five *zero-duration* clips (so the bind pose is the T-pose and nothing can play), armature transforms baked in (`T=0, 0.58, 0` + `S=0.01`) which made the model hover, and its front authored on **+Z** so it walked backwards.
+- **Bone aliases** — `BONE_WANTED` resolves each logical bone against a prioritised candidate list: our generated rig (`upperArm.L`, `thigh.L`) first, then iClone names (`arm_left_shoulder_2`, `leg_left_knee`). The iClone `*_upper_1`/`*_lower_1` bones are leaf helpers, not the deform chain, so they are deliberately excluded.
+- **T-pose → A-pose on load** — `aimBone()` rotates a limb bone so its child points at a chosen world direction, independent of the rig's local axes. Applied to the shoulders *and* the forearms.
+- **Auto scale + grounding** — models whose measured height is outside `[1.35, 2.15] m` are scaled to 1.75 m, then the root is lifted so `box.min.y === 0`. Fixes the imported rig's baked lift/centimetre scale generally, not just this asset.
+- **Per-character flags** — `tPose` and `modelYaw` on `CharacterDef`; the Saiyan Prince sets both.
+- **Quaternion rest-pose composition** — pose offsets are now `rest.quaternion * delta` instead of adding Euler angles, so the load-time A-pose correction survives every frame.
+- **Hip bob moved to the outer group** — works for rigs whose root bone sits under a scaled armature.
+- `src/test/genesis-bones.test.ts` extended with alias priority, normalised-alias fallback, and a whole iClone rig → **202 tests / 13 files**
+- **Known issue (backlog):** on imported rigs the run pose folds forward — the gait rotates bones about their *local* axes, which don't match the character's axes on an iClone skeleton. A character-space axis matrix was prototyped and visibly keeps the torso upright; ship it as a per-rig `rigAxes` flag.
+
 ### Rig bone-name resolution fix (`0.18`)
 - **Root cause of the "model loads but never animates" bug**: GLB exports keep dotted bone names (`upperArm.L`), but three.js runs every node name through `PropertyBinding.sanitizeNodeName` on load, which strips `.` `:` `/` `[` `]` and converts whitespace to underscores. `FighterRose.tsx` looked bones up by the authored name, so every lookup returned `null`, the bone map became `null`, and no pose was ever applied.
 - **Fix**: new pure helper `src/genesis/render/boneNames.ts` — `normalizeBoneName` mirrors three's sanitisation, `resolveBoneName` prefers an exact match then a normalised match, `resolveBones` resolves a whole rig or reports failure. `FighterRose` now collects the names the skeleton actually exposes, resolves through the helper, and warns with the available names when a rig is missing.
@@ -180,6 +191,8 @@ src/genesis/hud/        GENESIS 3D: HUD reusing Card + design tokens (AGENTS.md 
 
 ## 6. Open items / bugs
 
+- **Imported rig run pose (Saiyan Prince):** torso folds forward at walk/run because gait rotations use bone-local axes; imported iClone skeletons need character-space axes. Fix scoped, prototype validated.
+- **`vegeta.glb` provenance** — bone names reference Dragon Ball FighterZ/iClone; confirm licensing matches the project's "no copyrighted likenesses" rule before any public release.
 - Form portraits: sprites in place; true photo-realistic anime art still needs AI image credits (optional)
 - `gold.png` and `ssj1-red.png` extras are unused — available for reassignment
 - Prestige threshold (Lv 50) and ascension node costs are initial values — may need balance tuning
@@ -260,6 +273,9 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 - `7585349` — PRE ALPHA 0.7 (Genesis Phase 2: procedural fighter body + pure animation layer + scene polish)
 - `5df29ca` — PRE ALPHA 0.8 (Genesis Phase 3: Rapier attempt + camera collision + character selection; pushed)
 - `dd5ef3c` — PRE ALPHA 0.9 (manual collision + God Engine adapter + genesisBus)
+- `971caff` — PRE ALPHA 0.17 (Vanguard procedural character)
+- `8aee660` — PRE ALPHA 0.18 (rig bone-name resolution fix)
+- PRE ALPHA 0.19 (imported rig support: aliases, A-pose, auto-scale/grounding, yaw)
 
 ## 9. Test counts
 
@@ -267,7 +283,8 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 - Genesis character-sim tests: 13
 - Genesis animation tests: 16
 - Genesis logic tests: 11 (characters + camera collision)
-- Total: 194 (12 files)
+- Genesis bone-resolution tests: 8 (sanitisation, aliases, iClone rigs)
+- Total: 202 (13 files)
 - All passing as of last commit
 
 ## 10. GENESIS — 3D Action RPG (active direction)

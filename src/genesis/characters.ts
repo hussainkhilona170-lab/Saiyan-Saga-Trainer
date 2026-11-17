@@ -17,6 +17,17 @@ export type CharacterDef = {
   armor?: boolean;
   /** GLB model path in public/assets. If set, the GLTF rig renders this model. */
   model?: string;
+  /**
+   * The GLB's bind pose is a T-pose (arms horizontal). Those rigs are lowered
+   * into a relaxed A-pose on load, because the procedural gait assumes arms
+   * hang at the sides.
+   */
+  tPose?: boolean;
+  /**
+   * Yaw (radians) applied to the loaded model so it faces −Z like the rest of
+   * the cast. Some imports model their front on +Z and otherwise walk backwards.
+   */
+  modelYaw?: number;
 };
 
 export const CHARACTERS: CharacterDef[] = [
@@ -53,6 +64,8 @@ export const CHARACTERS: CharacterDef[] = [
     scale: 1,
     armor: true,
     model: "/assets/characters/vegeta.glb",
+    tPose: true,
+    modelYaw: Math.PI,
   },
   {
     id: "saiyan",

@@ -23,6 +23,54 @@ const CAM_UP = 1.9;
 const LOOK_AT_Y = 1.0;
 const CHAR_RADIUS = 0.4;
 
+/** Height every model is normalised to when its own units are clearly off. */
+const TARGET_HEIGHT = 1.75;
+/** Only rescale when a model is obviously not already in metres. */
+const HEIGHT_RANGE = [1.35, 2.15] as const;
+
+/**
+ * Logical bone → the names real rigs use, most specific first. Our generated
+ * rig uses dotted names; imported iClone-style rigs use shoulder_2/elbow/knee.
+ * Note the iClone `*_upper_1`/`*_lower_1` bones are leaf helpers, not the
+ * deform chain, so they are deliberately absent here.
+ */
+const BONE_WANTED = {
+  root: ["root", "RL_BoneRoot", "root_ground"],
+  hips: ["hips", "root_hips"],
+  spine: ["spine", "spine_lower"],
+  chest: ["chest", "spine_upper"],
+  neck: ["neck", "head_neck_lower"],
+  head: ["head", "head_neck_upper", "head_root"],
+  upperArmL: ["upperArm.L", "arm_left_shoulder_2"],
+  lowerArmL: ["lowerArm.L", "arm_left_elbow"],
+  upperArmR: ["upperArm.R", "arm_right_shoulder_2"],
+  lowerArmR: ["lowerArm.R", "arm_right_elbow"],
+  thighL: ["thigh.L", "leg_left_thigh"],
+  shinL: ["shin.L", "leg_left_knee"],
+  thighR: ["thigh.R", "leg_right_thigh"],
+  shinR: ["shin.R", "leg_right_knee"],
+} as const;
+
+/**
+ * Aim a limb bone at a world direction, independent of the rig's local axes.
+ * Used to turn a T-pose bind rig into an A-pose.
+ */
+function aimBone(bone: THREE.Bone, child: THREE.Bone, desiredWorld: THREE.Vector3): void {
+  bone.updateWorldMatrix(true, false);
+  const boneWorldQuat = new THREE.Quaternion();
+  bone.getWorldQuaternion(boneWorldQuat);
+  const head = bone.getWorldPosition(new THREE.Vector3());
+  const tail = child.getWorldPosition(new THREE.Vector3());
+  const dir = tail.sub(head);
+  if (dir.lengthSq() < 1e-9) return;
+  dir.normalize();
+  const axis = new THREE.Vector3().crossVectors(dir, desiredWorld);
+  if (axis.lengthSq() < 1e-9) return;
+  axis.normalize();
+  const angle = dir.angleTo(desiredWorld);
+  bone.rotateOnAxis(axis.applyQuaternion(boneWorldQuat.invert()).normalize(), angle);
+}
+
 type FighterProps = {
   stateRef: RefObject<CharacterState>;
   keysRef: RefObject<RawKeys>;
@@ -67,7 +115,13 @@ export function FighterRose({
   const frames = useRef({ count: 0, time: 0 });
   const wasGroundedRef = useRef(true);
   // Rest rotations captured at load so we can offset from the bind pose.
-  const restRef = useRef<Record<string, THREE.Euler> | null>(null);
+  const restRef = useRef<Record<string, THREE.Quaternion> | null>(null);
+  const tmpEuler = useRef(new THREE.Euler()).current;
+  const tmpQuat = useRef(new THREE.Quaternion()).current;
+
+  // Load-order flags are primitives, so they can safely be effect dependencies
+  // without re-fetching on every render.
+  const { tPose = false, modelYaw = 0 } = character;
 
   useEffect(() => {
     const group = groupRef.current;
@@ -103,39 +157,25 @@ export function FighterRose({
                   });
                   return names;
                 })();
-            const resolved = resolveBones(available, {
-              root: "root",
-              hips: "hips",
-              spine: "spine",
-              chest: "chest",
-              neck: "neck",
-              head: "head",
-              upperArmL: "upperArm.L",
-              lowerArmL: "lowerArm.L",
-              upperArmR: "upperArm.R",
-              lowerArmR: "lowerArm.R",
-              thighL: "thigh.L",
-              shinL: "shin.L",
-              thighR: "thigh.R",
-              shinR: "shin.R",
-            });
+            const resolved = resolveBones(available, BONE_WANTED);
+            const boneByName = new Map<string, THREE.Bone>();
+            if (skeleton) {
+              for (const b of skeleton.bones) boneByName.set(b.name, b);
+            } else {
+              scene.traverse((o) => {
+                if ((o as THREE.Bone).isBone) boneByName.set(o.name, o as THREE.Bone);
+              });
+            }
             const bones: Bones | null = resolved
               ? (Object.fromEntries(
                   Object.entries(resolved).map(([key, name]) => [
                     key,
-                    skeleton
-                      ? (skeleton.bones.find((b) => b.name === name) ?? null)
-                      : (() => {
-                          let hit: THREE.Bone | null = null;
-                          scene.traverse((o) => {
-                            if (o.name === name && (o as THREE.Bone).isBone) hit = o as THREE.Bone;
-                          });
-                          return hit;
-                        })(),
+                    boneByName.get(name) ?? null,
                   ]),
                 ) as Bones)
               : null;
-            if (!bones) {
+            const bonesComplete = bones && Object.values(bones).every((b) => b !== null);
+            if (!bonesComplete) {
               console.warn(
                 "FighterRose: rig bones not found in",
                 modelUrl,
@@ -143,12 +183,46 @@ export function FighterRose({
                 available.slice(0, 24),
               );
             }
-            bonesRef.current = bones;
-            const rest: Record<string, THREE.Euler> = {};
-            if (bones) {
-              for (const [k, v] of Object.entries(bones)) {
-                rest[k] = { x: v.rotation.x, y: v.rotation.y, z: v.rotation.z } as THREE.Euler;
+
+            if (bonesComplete && tPose) {
+              // Bind pose has arms out; drop them to a relaxed A-pose so the
+              // procedural gait (which assumes arms at the sides) reads right.
+              scene.updateMatrixWorld(true);
+              aimBone(
+                bones!.upperArmL,
+                bones!.lowerArmL,
+                new THREE.Vector3(0.34, -1, 0.06).normalize(),
+              );
+              aimBone(
+                bones!.upperArmR,
+                bones!.lowerArmR,
+                new THREE.Vector3(-0.34, -1, 0.06).normalize(),
+              );
+              scene.updateMatrixWorld(true);
+            }
+
+            if (modelYaw) scene.rotation.y = modelYaw;
+
+            // Normalise size and put the feet on the floor. Imported rigs bake
+            // their own lift (e.g. +0.577) and centimetre scale into the armature,
+            // which made them hover and read as tiny.
+            scene.updateMatrixWorld(true);
+            const rawBox = new THREE.Box3().setFromObject(scene);
+            const rawHeight = rawBox.max.y - rawBox.min.y;
+            if (Number.isFinite(rawHeight) && rawHeight > 0.05) {
+              const [minH, maxH] = HEIGHT_RANGE;
+              if (rawHeight < minH || rawHeight > maxH) {
+                scene.scale.multiplyScalar(TARGET_HEIGHT / rawHeight);
               }
+            }
+            scene.updateMatrixWorld(true);
+            const sizedBox = new THREE.Box3().setFromObject(scene);
+            if (Number.isFinite(sizedBox.min.y)) scene.position.y -= sizedBox.min.y;
+
+            bonesRef.current = bonesComplete ? bones : null;
+            const rest: Record<string, THREE.Quaternion> = {};
+            if (bonesComplete && bones) {
+              for (const [k, v] of Object.entries(bones)) rest[k] = v.quaternion.clone();
             }
             restRef.current = rest;
             setLoaded(true);
@@ -165,7 +239,7 @@ export function FighterRose({
         else break;
       }
     };
-  }, [modelUrl]);
+  }, [modelUrl, tPose, modelYaw]);
 
   useFrame((_, delta) => {
     const tp = teleportRef?.current;
@@ -257,11 +331,15 @@ export function FighterRose({
     const bones = bonesRef.current;
     const rest = restRef.current;
     if (bones && rest) {
+      tmpEuler.set(0, 0, 0);
       const set = (key: keyof Bones, x: number, y = 0, z = 0) => {
         const b = bones[key];
         const r = rest[key];
         if (!b || !r) return;
-        b.rotation.set(r.x + x, r.y + y, r.z + z);
+        // Compose the offset on top of the captured rest pose, so any load-time
+        // correction (e.g. lowering a T-pose's arms) is preserved.
+        tmpEuler.set(x, y, z);
+        b.quaternion.copy(r).multiply(tmpQuat.setFromEuler(tmpEuler));
       };
       // Legs swing opposite; knees only bend forward.
       set("thighL", -pose.hipL, 0, 0);
@@ -277,9 +355,11 @@ export function FighterRose({
       set("spine", -pose.torsoPitch, 0, pose.torsoRoll);
       set("chest", -pose.torsoPitch * 0.5, 0, 0);
       set("head", 0, pose.headYaw, 0);
-      // Root vertical bob (whole rig).
-      bones.root.position.y = pose.hipsY;
     }
+    // Hip bob moves the whole fighter rather than a rig-specific root bone,
+    // which keeps it correct for rigs whose root sits under a scaled armature.
+    const bob = pose.hipsY;
+    if (groupRef.current) groupRef.current.position.y = resolved.y + bob;
 
     // Aura pulses with speed.
     if (auraRef.current) {

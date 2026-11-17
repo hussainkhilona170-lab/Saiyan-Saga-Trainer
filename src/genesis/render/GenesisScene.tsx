@@ -21,6 +21,9 @@ const SCENE = {
 const CAM_BACK = 3.6;
 const CAM_UP = 1.9;
 
+/** Roster entry the scene opens on. Keep in sync with `CHARACTERS`. */
+const DEFAULT_CHARACTER_ID = "vanguard";
+
 function Landmarks() {
   const pillars: Array<{ x: number; z: number; h: number; w: number; color: string }> = [
     { x: -8, z: -10, h: 5, w: 1.6, color: SCENE.accentBlue },
@@ -66,13 +69,15 @@ export default function GenesisScene() {
   const stateRef = useRef<CharacterState>(createCharacterState());
   const keysRef = useKeyboard();
   const teleportRef = useRef<{ x: number; y: number; z: number } | null>(null);
-  const [characterID, setCharacterID] = useState("vanguard");
+  const [characterID, setCharacterID] = useState(DEFAULT_CHARACTER_ID);
   const [stats, setStats] = useState<HudStats>({
     fps: 0,
     ms: 0,
     action: "idle",
     speed: 0,
-    character: "Rosé Saiyan",
+    // Seed from the default roster entry so the HUD never shows a stale name
+    // before the first frame reports real stats.
+    character: characterByID(DEFAULT_CHARACTER_ID).name,
   });
   const character = characterByID(characterID);
 
@@ -118,8 +123,10 @@ export default function GenesisScene() {
           shadow-camera-top={30}
           shadow-camera-bottom={-30}
         />
-        {/* Physics disabled for diagnosis */}
-        <mesh receiveShadow>
+        {/* Physics disabled for diagnosis.
+            The slab is 1 m thick and centred on y = 0, so its top face must be
+            pushed down to y = 0 — otherwise the fighter stands knee-deep in it. */}
+        <mesh receiveShadow position={[0, -0.5, 0]}>
           <boxGeometry args={[200, 1, 200]} />
           <meshStandardMaterial color={SCENE.ground} roughness={1} />
         </mesh>

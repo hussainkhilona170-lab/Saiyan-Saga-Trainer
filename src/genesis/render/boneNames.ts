@@ -6,7 +6,11 @@
  * `.` `:` `/` `[` `]` and turns whitespace into underscores. Looking a bone up
  * by its authored name therefore silently fails and the rig never animates.
  *
- * These helpers normalise both sides so the lookup survives sanitisation.
+ * Models also disagree about naming. The two rigs in this project are:
+ *   - our own generated rig:  root, hips, spine, chest, neck, head, upperArm.L …
+ *   - the imported iClone-style rig: RL_BoneRoot, root_hips, spine_lower,
+ *     arm_left_shoulder_2, leg_left_knee …
+ * so each logical bone resolves against a prioritised list of candidates.
  */
 
 const RESERVED = /[[\].:/]/g;
@@ -18,13 +22,27 @@ export function normalizeBoneName(name: string): string {
 
 /**
  * Resolve `wanted` against the bone names a loaded model actually exposes.
- * Prefers an exact match, then the sanitised form, then a normalised match.
+ * Candidates are tried in order: exact match first for every candidate, then a
+ * normalised match, so a preferred name always wins over a fallback.
  */
-export function resolveBoneName(available: readonly string[], wanted: string): string | null {
-  if (available.includes(wanted)) return wanted;
-  const target = normalizeBoneName(wanted);
+export function resolveBoneName(
+  available: readonly string[],
+  wanted: string | readonly string[],
+): string | null {
+  const candidates = typeof wanted === "string" ? [wanted] : wanted;
+
+  for (const candidate of candidates) {
+    if (available.includes(candidate)) return candidate;
+  }
+
+  const byNormalized = new Map<string, string>();
   for (const name of available) {
-    if (normalizeBoneName(name) === target) return name;
+    const key = normalizeBoneName(name);
+    if (!byNormalized.has(key)) byNormalized.set(key, name);
+  }
+  for (const candidate of candidates) {
+    const hit = byNormalized.get(normalizeBoneName(candidate));
+    if (hit) return hit;
   }
   return null;
 }
@@ -32,7 +50,7 @@ export function resolveBoneName(available: readonly string[], wanted: string): s
 /** Resolve a whole rig at once. Returns null if any required bone is missing. */
 export function resolveBones<K extends string>(
   available: readonly string[],
-  wanted: Record<K, string>,
+  wanted: Record<K, string | readonly string[]>,
 ): Record<K, string> | null {
   const out = {} as Record<K, string>;
   for (const key of Object.keys(wanted) as K[]) {
