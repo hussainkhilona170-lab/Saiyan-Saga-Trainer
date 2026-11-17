@@ -6,7 +6,7 @@
  * ground collision with @react-three/rapier and adds the real controller feel.)
  */
 
-export type CharacterAction = "idle" | "walk" | "run" | "jump" | "fall" | "land" | "fly";
+export type CharacterAction = "idle" | "walk" | "run" | "jump" | "fall" | "land" | "fly" | "attack";
 
 /** World-space movement intent. Camera-relative conversion happens in the render layer. */
 export type CharacterInput = {
@@ -21,6 +21,8 @@ export type CharacterInput = {
   ascend?: boolean;
   /** Hold to lose altitude while flying. */
   descend?: boolean;
+  /** Edge-triggered: true on the frame the attack key went down. */
+  attack?: boolean;
 };
 
 export type CharacterState = {
@@ -38,6 +40,10 @@ export type CharacterState = {
   action: CharacterAction;
   /** Seconds left in the landing recovery window. */
   landTimer: number;
+  /** Seconds left in the current attack wind-up/recovery. */
+  attackTimer: number;
+  /** Seconds until the next attack is allowed. */
+  attackCooldown: number;
 };
 
 export const WALK_SPEED = 4;
@@ -49,8 +55,12 @@ export const FLY_SPRINT_SPEED = 18;
 export const CLIMB_SPEED = 5;
 export const TAKEOFF_LIFT = 3.5;
 export const MAX_ALTITUDE = 60;
-/** Exponential smoothing rate (1/s) toward desired flight velocity. */
 export const FLY_ACCEL = 6;
+/** Exponential smoothing rate (1/s) toward desired flight velocity. */
+export const ATTACK_DURATION = 0.32;
+export const ATTACK_COOLDOWN = 0.45;
+export const ATTACK_DAMAGE = 10;
+export const ATTACK_RANGE = 1.25;
 /** Fraction of ground steering available mid-air. */
 export const AIR_CONTROL = 0.35;
 export const LAND_RECOVERY = 0.12;
@@ -72,6 +82,8 @@ export function createCharacterState(): CharacterState {
     flying: false,
     action: "idle",
     landTimer: 0,
+    attackTimer: 0,
+    attackCooldown: 0,
   };
 }
 
@@ -88,6 +100,17 @@ export function updateCharacter(
   const dt = Math.min(Math.max(rawDt, 0), MAX_DT);
   const s: CharacterState = { ...prev };
   const moveMag = magnitude(input.moveX, input.moveZ);
+
+  // Attack timing (cooldown decrements even mid-air; the wind-up locks motion).
+  s.attackCooldown = Math.max(0, s.attackCooldown - dt);
+  s.attackTimer = Math.max(0, s.attackTimer - dt);
+  if (input.attack && s.attackCooldown <= 0 && !s.flying) {
+    s.attackTimer = ATTACK_DURATION;
+    s.attackCooldown = ATTACK_COOLDOWN;
+    s.vx = 0;
+    s.vz = 0;
+  }
+  const attacking = s.attackTimer > 0;
 
   // Face the movement direction along the shortest arc.
   if (moveMag > EPSILON) {
@@ -126,6 +149,10 @@ export function updateCharacter(
       s.vx = 0;
       s.vz = 0;
       if (s.landTimer === 0) s.action = "idle";
+    } else if (attacking) {
+      s.vx = 0;
+      s.vz = 0;
+      s.action = "attack";
     } else if (moveMag > EPSILON) {
       s.vx = wantVx;
       s.vz = wantVz;
@@ -142,7 +169,11 @@ export function updateCharacter(
     }
   } else {
     // Airborne: keep momentum, allow weakened steering toward the target velocity.
-    if (moveMag > EPSILON) {
+    if (attacking) {
+      s.vx *= 0.5;
+      s.vz *= 0.5;
+      s.action = "attack";
+    } else if (moveMag > EPSILON) {
       const k = Math.min(1, dt * 14) * AIR_CONTROL;
       s.vx += (wantVx - s.vx) * k;
       s.vz += (wantVz - s.vz) * k;
@@ -169,6 +200,7 @@ export function updateCharacter(
     }
     if (s.vy < 0) s.vy = 0;
   }
+  if (s.attackTimer > 0) s.action = "attack";
   return s;
 }
 

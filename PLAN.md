@@ -1,6 +1,6 @@
 # Dragon Ball RPG — Development Plan
 
-**Version:** PRE ALPHA 0.20
+**Version:** PRE ALPHA 0.21
 **Last updated:** 2026-11-17
 **Branch:** main (Lovable-connected — do not rewrite published history)
 
@@ -148,6 +148,13 @@ src/genesis/hud/        GENESIS 3D: HUD reusing Card + design tokens (AGENTS.md 
 - Set as the default character; cycle with the Character button
 - Before/after previews rendered headlessly with Cycles (`preview_dir` arg) — no desktop window is touched
 
+### Melee combat foundation (`0.21`)
+- **Attack action** in the character sim: `J` triggers a wind-up/recovery (`ATTACK_DURATION 0.32 s`, `ATTACK_COOLDOWN 0.45 s`) that locks horizontal motion and plays an `attack` pose; `CharacterState` gains `attackTimer`/`attackCooldown`.
+- **Pure combat module** `src/genesis/sim/combat.ts`: `Combatant`, `createCombatant`, `meleeHits` (range + frontal cone), `applyDamage`, `spendKi`/`regenKi`, `kiBlastHits`, `facingVector`, `planarDistance`.
+- **Target dummy** in the scene (red capsule at (3, 0, 0)): melee hits reduce its HP; at 0 HP it hides and respawns after 3 s with a flash on hit. Target HP shown in the HUD.
+- `useKeyboard` collects `attack` (KeyJ); HUD hint updated.
+- **Tests**: 14 combat cases + 4 attack cases → **225 tests / 14 files**.
+
 ### Flight — vertical movement (`0.20`)
 - **Powered flight** in the character sim: `F` toggles flight (takeoff lift, gravity off, altitude capped at 60 m); `Space` ascends at 5 m/s, `Ctrl`/`C` descends; hover holds altitude; touching the ground while descending lands with recovery.
 - **Speeds**: 12 m/s base, 18 m/s sprint; obstacle push-out is skipped when the character flies over a pillar, and the camera ray uses the pillar's real height so the follow cam doesn't clip through tall obstacles.
@@ -285,6 +292,7 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 - `8aee660` — PRE ALPHA 0.18 (rig bone-name resolution fix)
 - PRE ALPHA 0.19 (imported rig support: aliases, A-pose, auto-scale/grounding, yaw)
 - PRE ALPHA 0.20 (flight: powered flight, ascend/descend, hover, altitude clamp)
+- PRE ALPHA 0.21 (melee combat foundation: attack action, combat module, target dummy)
 
 ## 9. Test counts
 
@@ -294,7 +302,9 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 - Genesis logic tests: 11 (characters + camera collision)
 - Genesis bone-resolution tests: 8 (sanitisation, aliases, iClone rigs)
 - Genesis flight tests: 9 (takeoff, hover, climb, land, speed, clamp, drop, recovery)
-- Total: 211 (13 files)
+- Genesis combat tests: 14 (hit detection, damage, ki, ki blast)
+- Genesis attack tests: 4 (wind-up, motion lock, cooldown, recovery)
+- Total: 225 (14 files)
 - All passing as of last commit
 
 ## 10. GENESIS — 3D Action RPG (active direction)

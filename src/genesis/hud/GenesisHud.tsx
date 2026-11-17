@@ -7,6 +7,7 @@ export type HudStats = {
   action: string;
   speed: number;
   character?: string;
+  targetHp?: number;
 };
 
 export function GenesisHud({
@@ -24,7 +25,7 @@ export function GenesisHud({
             <span className="text-2xl">🌌</span>{" "}
             <span className="font-display text-xl">Genesis — Movement Prototype</span>
             <div className="text-sm text-muted-foreground">
-              WASD move · Shift sprint · Space jump · F fly · Ctrl descend
+              WASD move · Shift sprint · Space jump · F fly · Ctrl descend · J attack
               {stats.character ? ` · ${stats.character}` : ""}
             </div>
           </div>
@@ -36,6 +37,9 @@ export function GenesisHud({
             <div className="font-display text-foreground">
               {stats.action} · {stats.speed.toFixed(1)} m/s
             </div>
+            {stats.targetHp !== undefined && (
+              <div className="text-xs text-chart-1">Target HP: {stats.targetHp}</div>
+            )}
           </div>
         </div>
         <div className="mt-2 flex items-center gap-2">

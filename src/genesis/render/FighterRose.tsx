@@ -17,6 +17,13 @@ import type { RawKeys } from "./useKeyboard";
 import { moveIntent, resolveCameraPosition } from "./cameraRelative";
 import { resolveBones } from "./boneNames";
 import { OBSTACLES } from "../world";
+import {
+  applyDamage,
+  createCombatant,
+  meleeHits,
+  MELEE_DAMAGE,
+  type Combatant,
+} from "../sim/combat";
 
 const CAM_BACK = 3.6;
 const CAM_UP = 1.9;
@@ -105,7 +112,7 @@ export function FighterRose({
   teleportRef,
   modelUrl,
 }: FighterProps) {
-  const { camera } = useThree();
+  const { camera, scene } = useThree();
   const groupRef = useRef<THREE.Group>(null);
   const bonesRef = useRef<Bones | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -115,6 +122,11 @@ export function FighterRose({
   const frames = useRef({ count: 0, time: 0 });
   const wasGroundedRef = useRef(true);
   const prevFlyRef = useRef(false);
+  const prevAttackRef = useRef(false);
+  const targetMeshRef = useRef<THREE.Mesh | null>(null);
+  const targetCombatantRef = useRef<Combatant>(createCombatant(100));
+  const targetRespawnRef = useRef(0);
+  const targetFlashRef = useRef(0);
   // Rest rotations captured at load so we can offset from the bind pose.
   const restRef = useRef<Record<string, THREE.Quaternion> | null>(null);
   const tmpEuler = useRef(new THREE.Euler()).current;
@@ -123,6 +135,23 @@ export function FighterRose({
   // Load-order flags are primitives, so they can safely be effect dependencies
   // without re-fetching on every render.
   const { tPose = false, modelYaw = 0 } = character;
+
+  useEffect(() => {
+    const target = new THREE.Mesh(
+      new THREE.CapsuleGeometry(0.35, 1.1, 6, 12),
+      new THREE.MeshStandardMaterial({ color: "#e05252", roughness: 0.7 }),
+    );
+    target.position.set(3, 0.9, 0);
+    target.castShadow = true;
+    scene.add(target);
+    targetMeshRef.current = target;
+    return () => {
+      scene.remove(target);
+      target.geometry.dispose();
+      (target.material as THREE.Material).dispose();
+      targetMeshRef.current = null;
+    };
+  }, [scene]);
 
   useEffect(() => {
     const group = groupRef.current;
@@ -252,6 +281,8 @@ export function FighterRose({
     const move = moveIntent(keys, camera);
     const flyEdge = keys.fly && !prevFlyRef.current;
     prevFlyRef.current = keys.fly;
+    const attackEdge = keys.attack && !prevAttackRef.current;
+    prevAttackRef.current = keys.attack;
     const input: CharacterInput = {
       moveX: move.moveX,
       moveZ: move.moveZ,
@@ -260,6 +291,7 @@ export function FighterRose({
       toggleFly: flyEdge,
       ascend: stateRef.current.flying && keys.jump,
       descend: keys.descend,
+      attack: attackEdge,
     };
     const next = updateCharacter(stateRef.current, input, delta);
     const speed = Math.hypot(next.vx, next.vz);
@@ -327,6 +359,40 @@ export function FighterRose({
     if (groupRef.current) {
       groupRef.current.position.set(resolved.x, resolved.y, resolved.z);
       groupRef.current.rotation.y = next.facing;
+    }
+
+    // Target dummy: melee hit detection + respawn.
+    const targetMesh = targetMeshRef.current;
+    if (attackEdge && targetMesh && targetCombatantRef.current.alive) {
+      const attacker = { x: resolved.x, z: resolved.z, facing: next.facing };
+      const tpos = targetMesh.position;
+      if (meleeHits(attacker, { x: tpos.x, z: tpos.z })) {
+        targetCombatantRef.current = applyDamage(targetCombatantRef.current, MELEE_DAMAGE);
+        targetFlashRef.current = 0.2;
+      }
+    }
+    if (!targetCombatantRef.current.alive) {
+      targetRespawnRef.current += delta;
+      if (targetMesh) targetMesh.visible = false;
+      if (targetRespawnRef.current >= 3) {
+        targetCombatantRef.current = createCombatant(100);
+        targetRespawnRef.current = 0;
+        if (targetMesh) {
+          targetMesh.visible = true;
+          targetMesh.position.set(3, 0.9, 0);
+        }
+      }
+    } else {
+      targetRespawnRef.current = 0;
+      if (targetMesh) targetMesh.visible = true;
+    }
+    // Flash decay.
+    if (targetFlashRef.current > 0) {
+      targetFlashRef.current = Math.max(0, targetFlashRef.current - delta);
+      const scale = 1 + 0.35 * (targetFlashRef.current / 0.2);
+      if (targetMesh) targetMesh.scale.setScalar(scale);
+    } else if (targetMesh) {
+      targetMesh.scale.setScalar(1);
     }
 
     // Pose from the pure animation system.
@@ -414,6 +480,7 @@ export function FighterRose({
         action,
         speed,
         character: character.name,
+        targetHp: targetCombatantRef.current.hp,
       });
       acc.count = 0;
       acc.time = 0;

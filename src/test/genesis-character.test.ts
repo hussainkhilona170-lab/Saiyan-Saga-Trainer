@@ -132,6 +132,52 @@ describe("genesis character sim", () => {
   });
 });
 
+describe("genesis attack", () => {
+  const dt = 1 / 60;
+  it("starts an attack on the attack edge", () => {
+    const s = updateCharacter(
+      rest,
+      { moveX: 0, moveZ: 0, sprint: false, jump: false, attack: true },
+      dt,
+    );
+    expect(s.action).toBe("attack");
+    expect(s.attackTimer).toBeGreaterThan(0);
+    expect(s.attackCooldown).toBeGreaterThan(0);
+  });
+
+  it("locks horizontal motion during the attack", () => {
+    const s = updateCharacter(
+      rest,
+      { moveX: 0, moveZ: 1, sprint: false, jump: false, attack: true },
+      dt,
+    );
+    expect(s.vx).toBe(0);
+    expect(s.vz).toBe(0);
+  });
+
+  it("cooldown blocks an immediate re-attack", () => {
+    let s = updateCharacter(
+      rest,
+      { moveX: 0, moveZ: 0, sprint: false, jump: false, attack: true },
+      dt,
+    );
+    s = updateCharacter(s, { moveX: 0, moveZ: 0, sprint: false, jump: false, attack: true }, dt);
+    expect(s.attackTimer).toBeLessThan(0.32);
+  });
+
+  it("returns to idle once the attack finishes", () => {
+    let s = updateCharacter(
+      rest,
+      { moveX: 0, moveZ: 0, sprint: false, jump: false, attack: true },
+      dt,
+    );
+    for (let i = 0; i < 40; i++)
+      s = updateCharacter(s, { moveX: 0, moveZ: 0, sprint: false, jump: false }, dt);
+    expect(s.attackTimer).toBe(0);
+    expect(s.action).toBe("idle");
+  });
+});
+
 describe("genesis flight", () => {
   const dt = 1 / 60;
 

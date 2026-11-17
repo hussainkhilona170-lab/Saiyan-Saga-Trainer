@@ -107,6 +107,9 @@ export function advancePhase(
       break;
     case "land":
       break; // landing is a fixed crouch pose
+    case "attack":
+      next += 8 * dt;
+      break;
   }
   return wrapPhase(next);
 }
@@ -209,6 +212,25 @@ function flyPoseInto(out: Pose, phase: number, speed: number): Pose {
   return out;
 }
 
+function attackPoseInto(out: Pose, phase: number): Pose {
+  const t = Math.sin(phase * 4) * 0.5 + 0.5; // 0..1 punch pulse
+  out.hipsY = 0.02 * t;
+  out.hipL = 0.35;
+  out.hipR = -0.15;
+  out.kneeL = 0.25;
+  out.kneeR = 0.15;
+  // Braced stance, leading arm extended.
+  out.shoulderL = 0.15 - 1.6 * t;
+  out.shoulderR = 0.3;
+  out.elbowL = 0.1 + 0.4 * (1 - t);
+  out.elbowR = 0.6;
+  out.armSpread = 0.15;
+  out.torsoPitch = 0.15 + 0.1 * t;
+  out.torsoRoll = -0.12 * t;
+  out.headYaw = 0.15 * t;
+  return out;
+}
+
 function landPoseInto(out: Pose): Pose {
   out.hipsY = -0.22;
   out.hipL = 0.56;
@@ -251,6 +273,8 @@ export function poseForInto(
       return fallPoseInto(out);
     case "land":
       return landPoseInto(out);
+    case "attack":
+      return attackPoseInto(out, p);
     case "idle":
     default:
       return idlePoseInto(out, p);
