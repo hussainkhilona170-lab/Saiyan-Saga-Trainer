@@ -8,10 +8,21 @@ export type RawKeys = {
   r: boolean;
   sprint: boolean;
   jump: boolean;
+  fly: boolean;
+  descend: boolean;
 };
 
 function blankKeys(): RawKeys {
-  return { f: false, b: false, l: false, r: false, sprint: false, jump: false };
+  return {
+    f: false,
+    b: false,
+    l: false,
+    r: false,
+    sprint: false,
+    jump: false,
+    fly: false,
+    descend: false,
+  };
 }
 
 /** Collects movement keys (WASD / arrows, Shift sprint, Space jump) into a ref. */
@@ -39,6 +50,14 @@ export function useKeyboard(): RefObject<RawKeys> {
         case "ShiftLeft":
         case "ShiftRight":
           keys.current.sprint = down;
+          break;
+        case "KeyF":
+          keys.current.fly = down;
+          break;
+        case "ControlLeft":
+        case "ControlRight":
+        case "KeyC":
+          keys.current.descend = down;
           break;
         case "Space":
           if (down) e.preventDefault(); // keep the page from scrolling / re-clicking focused buttons

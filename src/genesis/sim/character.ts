@@ -6,7 +6,7 @@
  * ground collision with @react-three/rapier and adds the real controller feel.)
  */
 
-export type CharacterAction = "idle" | "walk" | "run" | "jump" | "fall" | "land";
+export type CharacterAction = "idle" | "walk" | "run" | "jump" | "fall" | "land" | "fly";
 
 /** World-space movement intent. Camera-relative conversion happens in the render layer. */
 export type CharacterInput = {
@@ -15,6 +15,12 @@ export type CharacterInput = {
   moveZ: number;
   sprint: boolean;
   jump: boolean;
+  /** Edge-triggered: true on the frame the flight-toggle key went down. */
+  toggleFly?: boolean;
+  /** Hold to gain altitude while flying. */
+  ascend?: boolean;
+  /** Hold to lose altitude while flying. */
+  descend?: boolean;
 };
 
 export type CharacterState = {
@@ -27,6 +33,8 @@ export type CharacterState = {
   /** Yaw the body faces (radians). */
   facing: number;
   grounded: boolean;
+  /** True while the character is in powered flight. */
+  flying: boolean;
   action: CharacterAction;
   /** Seconds left in the landing recovery window. */
   landTimer: number;
@@ -36,6 +44,13 @@ export const WALK_SPEED = 4;
 export const RUN_SPEED = 8;
 export const JUMP_SPEED = 7.5;
 export const GRAVITY = 22;
+export const FLY_SPEED = 12;
+export const FLY_SPRINT_SPEED = 18;
+export const CLIMB_SPEED = 5;
+export const TAKEOFF_LIFT = 3.5;
+export const MAX_ALTITUDE = 60;
+/** Exponential smoothing rate (1/s) toward desired flight velocity. */
+export const FLY_ACCEL = 6;
 /** Fraction of ground steering available mid-air. */
 export const AIR_CONTROL = 0.35;
 export const LAND_RECOVERY = 0.12;
@@ -54,6 +69,7 @@ export function createCharacterState(): CharacterState {
     vz: 0,
     facing: 0,
     grounded: true,
+    flying: false,
     action: "idle",
     landTimer: 0,
   };
@@ -80,6 +96,20 @@ export function updateCharacter(
     while (diff > Math.PI) diff -= Math.PI * 2;
     while (diff < -Math.PI) diff += Math.PI * 2;
     s.facing += diff * Math.min(1, dt * 14);
+  }
+
+  // Edge-triggered flight toggle (renderer reports the key going down).
+  if (input.toggleFly) {
+    s.flying = !s.flying;
+    s.landTimer = 0;
+    if (s.flying) {
+      s.grounded = false;
+      if (s.vy < TAKEOFF_LIFT) s.vy = TAKEOFF_LIFT;
+    }
+  }
+
+  if (s.flying) {
+    return updateFlight(s, input, dt, moveMag);
   }
 
   const targetSpeed = input.sprint ? RUN_SPEED : WALK_SPEED;
@@ -138,6 +168,48 @@ export function updateCharacter(
       }
     }
     if (s.vy < 0) s.vy = 0;
+  }
+  return s;
+}
+
+function updateFlight(
+  s: CharacterState,
+  input: CharacterInput,
+  dt: number,
+  moveMag: number,
+): CharacterState {
+  const targetSpeed = input.sprint ? FLY_SPRINT_SPEED : FLY_SPEED;
+  const dirScale = moveMag > 1 ? 1 / moveMag : 1;
+  const wantVx = input.moveX * dirScale * targetSpeed;
+  const wantVz = input.moveZ * dirScale * targetSpeed;
+  const wantVy = input.ascend ? CLIMB_SPEED : input.descend ? -CLIMB_SPEED : 0;
+  const k = 1 - Math.exp(-FLY_ACCEL * dt);
+  s.vx += (wantVx - s.vx) * k;
+  s.vz += (wantVz - s.vz) * k;
+  s.vy += (wantVy - s.vy) * k;
+
+  s.x += s.vx * dt;
+  s.y += s.vy * dt;
+  s.z += s.vz * dt;
+
+  if (s.y > MAX_ALTITUDE) {
+    s.y = MAX_ALTITUDE;
+    if (s.vy > 0) s.vy = 0;
+  }
+  if (s.y < 0) s.y = 0;
+
+  if (s.y <= 0 && s.vy <= 0) {
+    const hard = s.vy < -1;
+    s.vy = 0;
+    s.flying = false;
+    s.grounded = true;
+    s.vx = 0;
+    s.vz = 0;
+    s.action = hard ? "land" : "idle";
+    s.landTimer = hard ? LAND_RECOVERY : 0;
+  } else {
+    s.grounded = false;
+    s.action = "fly";
   }
   return s;
 }

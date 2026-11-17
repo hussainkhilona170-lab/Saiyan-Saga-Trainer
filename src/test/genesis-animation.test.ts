@@ -11,7 +11,7 @@ import {
 } from "@/genesis/sim/animation";
 import { RUN_SPEED, WALK_SPEED, type CharacterAction } from "@/genesis/sim/character";
 
-const actions: CharacterAction[] = ["idle", "walk", "run", "jump", "fall", "land"];
+const actions: CharacterAction[] = ["idle", "walk", "run", "jump", "fall", "land", "fly"];
 const dt = 1 / 60;
 
 function poseAt(action: CharacterAction, speed: number, phase: number): Pose {

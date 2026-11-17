@@ -24,7 +24,8 @@ export function GenesisHud({
             <span className="text-2xl">🌌</span>{" "}
             <span className="font-display text-xl">Genesis — Movement Prototype</span>
             <div className="text-sm text-muted-foreground">
-              WASD move · Shift sprint · Space jump{stats.character ? ` · ${stats.character}` : ""}
+              WASD move · Shift sprint · Space jump · F fly · Ctrl descend
+              {stats.character ? ` · ${stats.character}` : ""}
             </div>
           </div>
           <div className="text-right text-xs text-muted-foreground">

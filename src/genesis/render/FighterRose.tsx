@@ -114,6 +114,7 @@ export function FighterRose({
   const anim = useRef({ phase: 0, current: createPose(), target: createPose() });
   const frames = useRef({ count: 0, time: 0 });
   const wasGroundedRef = useRef(true);
+  const prevFlyRef = useRef(false);
   // Rest rotations captured at load so we can offset from the bind pose.
   const restRef = useRef<Record<string, THREE.Quaternion> | null>(null);
   const tmpEuler = useRef(new THREE.Euler()).current;
@@ -249,11 +250,16 @@ export function FighterRose({
     }
     const keys = keysRef.current;
     const move = moveIntent(keys, camera);
+    const flyEdge = keys.fly && !prevFlyRef.current;
+    prevFlyRef.current = keys.fly;
     const input: CharacterInput = {
       moveX: move.moveX,
       moveZ: move.moveZ,
       sprint: keys.sprint,
       jump: keys.jump,
+      toggleFly: flyEdge,
+      ascend: stateRef.current.flying && keys.jump,
+      descend: keys.descend,
     };
     const next = updateCharacter(stateRef.current, input, delta);
     const speed = Math.hypot(next.vx, next.vz);
@@ -264,6 +270,8 @@ export function FighterRose({
     for (let iter = 0; iter < 4; iter++) {
       let pushed = false;
       for (const ob of OBSTACLES) {
+        // Flying characters clear pillars shorter than their altitude.
+        if (next.y >= ob.h) continue;
         const hw = ob.w / 2,
           hd = ob.d / 2;
         const cx = Math.max(ob.x - hw, Math.min(rx, ob.x + hw));
@@ -384,8 +392,8 @@ export function FighterRose({
       let best = Infinity;
       for (const ob of OBSTACLES) {
         const t = rayAABB(lookAt, dir, {
-          min: { x: ob.x - ob.w / 2, y: -Infinity, z: ob.z - ob.d / 2 },
-          max: { x: ob.x + ob.w / 2, y: Infinity, z: ob.z + ob.d / 2 },
+          min: { x: ob.x - ob.w / 2, y: 0, z: ob.z - ob.d / 2 },
+          max: { x: ob.x + ob.w / 2, y: ob.h, z: ob.z + ob.d / 2 },
         });
         if (t !== null && t < best) best = t;
       }

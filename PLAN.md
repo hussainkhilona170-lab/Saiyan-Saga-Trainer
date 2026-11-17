@@ -1,6 +1,6 @@
 # Dragon Ball RPG — Development Plan
 
-**Version:** PRE ALPHA 0.19
+**Version:** PRE ALPHA 0.20
 **Last updated:** 2026-11-17
 **Branch:** main (Lovable-connected — do not rewrite published history)
 
@@ -148,6 +148,14 @@ src/genesis/hud/        GENESIS 3D: HUD reusing Card + design tokens (AGENTS.md 
 - Set as the default character; cycle with the Character button
 - Before/after previews rendered headlessly with Cycles (`preview_dir` arg) — no desktop window is touched
 
+### Flight — vertical movement (`0.20`)
+- **Powered flight** in the character sim: `F` toggles flight (takeoff lift, gravity off, altitude capped at 60 m); `Space` ascends at 5 m/s, `Ctrl`/`C` descends; hover holds altitude; touching the ground while descending lands with recovery.
+- **Speeds**: 12 m/s base, 18 m/s sprint; obstacle push-out is skipped when the character flies over a pillar, and the camera ray uses the pillar's real height so the follow cam doesn't clip through tall obstacles.
+- **Animation**: new `fly` action (distance-driven limb flutter, arms swept back, legs trailing, forward lean under thrust; hover pose with arms out).
+- `CharacterState` gains `flying`; `CharacterInput` gains `toggleFly`/`ascend`/`descend` (optional, so existing tests and callers stay valid).
+- HUD hint updated; `useKeyboard` collects `fly` (F) and `descend` (Ctrl/C).
+- **Tests**: 9 new flight cases (takeoff, hover, climb, land, horizontal/sprint speed, altitude clamp, drop on toggle-off, landing recovery) → **211 tests / 13 files**.
+
 ### Imported rig support — Saiyan Prince (`0.19`)
 - **The `vegeta.glb` bugs**: 374-joint iClone/CC rig, five *zero-duration* clips (so the bind pose is the T-pose and nothing can play), armature transforms baked in (`T=0, 0.58, 0` + `S=0.01`) which made the model hover, and its front authored on **+Z** so it walked backwards.
 - **Bone aliases** — `BONE_WANTED` resolves each logical bone against a prioritised candidate list: our generated rig (`upperArm.L`, `thigh.L`) first, then iClone names (`arm_left_shoulder_2`, `leg_left_knee`). The iClone `*_upper_1`/`*_lower_1` bones are leaf helpers, not the deform chain, so they are deliberately excluded.
@@ -276,6 +284,7 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 - `971caff` — PRE ALPHA 0.17 (Vanguard procedural character)
 - `8aee660` — PRE ALPHA 0.18 (rig bone-name resolution fix)
 - PRE ALPHA 0.19 (imported rig support: aliases, A-pose, auto-scale/grounding, yaw)
+- PRE ALPHA 0.20 (flight: powered flight, ascend/descend, hover, altitude clamp)
 
 ## 9. Test counts
 
@@ -284,7 +293,8 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 - Genesis animation tests: 16
 - Genesis logic tests: 11 (characters + camera collision)
 - Genesis bone-resolution tests: 8 (sanitisation, aliases, iClone rigs)
-- Total: 202 (13 files)
+- Genesis flight tests: 9 (takeoff, hover, climb, land, speed, clamp, drop, recovery)
+- Total: 211 (13 files)
 - All passing as of last commit
 
 ## 10. GENESIS — 3D Action RPG (active direction)

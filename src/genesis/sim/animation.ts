@@ -51,6 +51,7 @@ export const IDLE_BREATH_RATE = 1.7;
 /** Meters travelled per gait cycle (two steps). */
 export const WALK_CYCLE_DISTANCE = 3.4;
 export const RUN_CYCLE_DISTANCE = 4.6;
+export const FLY_CYCLE_DISTANCE = 6;
 /** dt clamp mirrors the character sim so a tab-out frame cannot jump the phase. */
 export const MAX_ANIM_DT = 0.05;
 
@@ -92,6 +93,10 @@ export function advancePhase(
       break;
     case "run":
       next += (v / RUN_CYCLE_DISTANCE) * TWO_PI * dt;
+      break;
+    case "fly":
+      // Distance-driven limb flutter (thrust) plus a slow idle sway when hovering.
+      next += ((v / FLY_CYCLE_DISTANCE) * TWO_PI + 0.6) * dt;
       break;
     case "idle":
       next += IDLE_BREATH_RATE * dt;
@@ -185,6 +190,25 @@ function fallPoseInto(out: Pose): Pose {
   return out;
 }
 
+function flyPoseInto(out: Pose, phase: number, speed: number): Pose {
+  const scale = Math.min(1, Math.max(0, speed) / 12);
+  const flutter = Math.sin(phase * 2);
+  out.hipsY = 0.03 * scale + 0.01 * flutter * (1 - scale);
+  out.hipL = -0.1 - 0.45 * scale;
+  out.hipR = -0.06 - 0.4 * scale;
+  out.kneeL = 0.35 + 0.25 * scale + 0.05 * flutter;
+  out.kneeR = 0.3 + 0.22 * scale - 0.05 * flutter;
+  out.shoulderL = -0.9 - 0.5 * scale;
+  out.shoulderR = -0.9 - 0.5 * scale;
+  out.elbowL = 0.25 + 0.15 * scale;
+  out.elbowR = 0.25 + 0.15 * scale;
+  out.armSpread = 0.35 + 0.15 * (1 - scale);
+  out.torsoPitch = 0.1 + 0.4 * scale;
+  out.torsoRoll = 0.02 * Math.sin(phase);
+  out.headYaw = 0;
+  return out;
+}
+
 function landPoseInto(out: Pose): Pose {
   out.hipsY = -0.22;
   out.hipL = 0.56;
@@ -221,6 +245,8 @@ export function poseForInto(
       return gaitPoseInto(out, p, v, true);
     case "jump":
       return jumpPoseInto(out);
+    case "fly":
+      return flyPoseInto(out, p, v);
     case "fall":
       return fallPoseInto(out);
     case "land":

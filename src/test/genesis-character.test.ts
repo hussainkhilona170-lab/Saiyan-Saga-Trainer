@@ -7,6 +7,11 @@ import {
   MAX_DT,
   RUN_SPEED,
   WALK_SPEED,
+  FLY_SPEED,
+  FLY_SPRINT_SPEED,
+  CLIMB_SPEED,
+  MAX_ALTITUDE,
+  TAKEOFF_LIFT,
   updateCharacter,
 } from "@/genesis/sim/character";
 
@@ -124,5 +129,122 @@ describe("genesis character sim", () => {
     const before = run(rest, { moveX: 0, moveZ: 1, sprint: true, jump: false }, 1);
     const step = updateCharacter(before, { moveX: 0, moveZ: 1, sprint: true, jump: false }, MAX_DT);
     expect(Math.hypot(step.x - before.x, step.z - before.z)).toBeCloseTo(RUN_SPEED * MAX_DT, 5);
+  });
+});
+
+describe("genesis flight", () => {
+  const dt = 1 / 60;
+
+  function steps(
+    start: ReturnType<typeof createCharacterState>,
+    input: Parameters<typeof updateCharacter>[1],
+    n = 60,
+  ) {
+    let s = start;
+    for (let i = 0; i < n; i++) s = updateCharacter(s, input, dt);
+    return s;
+  }
+
+  it("toggle engages flight and lifts off the ground", () => {
+    const s = updateCharacter(
+      rest,
+      { moveX: 0, moveZ: 0, sprint: false, jump: false, toggleFly: true },
+      dt,
+    );
+    expect(s.flying).toBe(true);
+    expect(s.grounded).toBe(false);
+    expect(s.y).toBeGreaterThan(0);
+    expect(s.action).toBe("fly");
+  });
+
+  it("flight holds altitude with no vertical input", () => {
+    let s = updateCharacter(
+      rest,
+      { moveX: 0, moveZ: 0, sprint: false, jump: false, toggleFly: true },
+      dt,
+    );
+    const y0 = s.y;
+    s = steps(s, { moveX: 0, moveZ: 0, sprint: false, jump: false }, 60);
+    expect(s.flying).toBe(true);
+    expect(Math.abs(s.y - y0)).toBeLessThan(0.6);
+  });
+
+  it("ascend climbs at CLIMB_SPEED", () => {
+    let s = updateCharacter(
+      rest,
+      { moveX: 0, moveZ: 0, sprint: false, jump: false, toggleFly: true },
+      dt,
+    );
+    s = steps(s, { moveX: 0, moveZ: 0, sprint: false, jump: false, ascend: true }, 60);
+    expect(s.y).toBeGreaterThan(1.5);
+    expect(s.vy).toBeGreaterThan(0);
+  });
+
+  it("descend lands and clears the flying flag", () => {
+    let s = updateCharacter(
+      rest,
+      { moveX: 0, moveZ: 0, sprint: false, jump: false, toggleFly: true },
+      dt,
+    );
+    s = steps(s, { moveX: 0, moveZ: 0, sprint: false, jump: false, descend: true }, 120);
+    expect(s.flying).toBe(false);
+    expect(s.grounded).toBe(true);
+    expect(s.y).toBe(0);
+  });
+
+  it("flight moves horizontally at FLY_SPEED", () => {
+    let s = updateCharacter(
+      rest,
+      { moveX: 0, moveZ: 1, sprint: false, jump: false, toggleFly: true },
+      dt,
+    );
+    s = steps(s, { moveX: 0, moveZ: 1, sprint: false, jump: false }, 90);
+    expect(Math.hypot(s.vx, s.vz)).toBeCloseTo(FLY_SPEED, 1);
+  });
+
+  it("flight sprints at FLY_SPRINT_SPEED", () => {
+    let s = updateCharacter(
+      rest,
+      { moveX: 0, moveZ: 1, sprint: true, jump: false, toggleFly: true },
+      dt,
+    );
+    s = steps(s, { moveX: 0, moveZ: 1, sprint: true, jump: false }, 90);
+    expect(Math.hypot(s.vx, s.vz)).toBeCloseTo(FLY_SPRINT_SPEED, 1);
+  });
+
+  it("altitude is clamped at MAX_ALTITUDE", () => {
+    let s = updateCharacter(
+      rest,
+      { moveX: 0, moveZ: 0, sprint: false, jump: false, toggleFly: true, ascend: true },
+      dt,
+    );
+    s = steps(s, { moveX: 0, moveZ: 0, sprint: false, jump: false, ascend: true }, 1500);
+    expect(s.y).toBeLessThanOrEqual(MAX_ALTITUDE);
+    expect(s.vy).toBeLessThanOrEqual(0.01);
+  });
+
+  it("toggling flight off mid-air drops under gravity", () => {
+    let s = updateCharacter(
+      rest,
+      { moveX: 0, moveZ: 0, sprint: false, jump: false, toggleFly: true },
+      dt,
+    );
+    s = steps(s, { moveX: 0, moveZ: 0, sprint: false, jump: false }, 30);
+    const y0 = s.y;
+    s = updateCharacter(s, { moveX: 0, moveZ: 0, sprint: false, jump: false, toggleFly: true }, dt);
+    s = steps(s, { moveX: 0, moveZ: 0, sprint: false, jump: false }, 10);
+    expect(s.flying).toBe(false);
+    expect(s.y).toBeLessThan(y0);
+  });
+
+  it("landing from flight sets land recovery", () => {
+    let s = updateCharacter(
+      rest,
+      { moveX: 0, moveZ: 0, sprint: false, jump: false, toggleFly: true },
+      dt,
+    );
+    s = steps(s, { moveX: 0, moveZ: 0, sprint: false, jump: false, descend: true }, 120);
+    expect(s.grounded).toBe(true);
+    expect(s.action === "land" || s.action === "idle").toBe(true);
   });
 });
