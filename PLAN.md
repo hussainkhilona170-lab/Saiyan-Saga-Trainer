@@ -1,6 +1,6 @@
 # Dragon Ball RPG — Development Plan
 
-**Version:** PRE ALPHA 0.31
+**Version:** PRE ALPHA 0.33
 **Last updated:** 2026-11-17
 **Branch:** main (Lovable-connected — do not rewrite published history)
 
@@ -154,6 +154,9 @@ src/genesis/hud/        GENESIS 3D: HUD reusing Card + design tokens (AGENTS.md 
 ### God Engine Genesis fix (`0.30`)
 - **HUD character name** now updates immediately when a `setCharacter` command arrives (no longer waits for the next render frame's `onStats`), so the God Engine's character swap is visible even when the scene is throttled.
 - Removed stray debug logging.
+
+### Polish — hit sparks (`0.33`)
+- **Hit sparks**: small spheres burst on melee/ki hits (target & boss) with gravity and fade, adding combat feedback.
 
 ### Quest system (`0.29`)
 - **Three sequential quests** tracked in the HUD: "Defeat 5 enemies", "Defeat the boss", "Reach level 5"; each completion awards 100 XP and advances to the next.
@@ -346,6 +349,7 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 - PRE ALPHA 0.29 (quest system: 3 sequential quests, HUD progress, XP rewards)
 - PRE ALPHA 0.30 (God Engine Genesis fix: immediate HUD character update)
 - PRE ALPHA 0.31 (God Engine responsiveness: immediate command application via handler ref)
+- PRE ALPHA 0.33 (polish: hit sparks on melee/ki hits)
 
 ## 9. Test counts
 

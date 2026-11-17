@@ -156,6 +156,9 @@ export function FighterRose({
   const targetRespawnRef = useRef(0);
   const targetFlashRef = useRef(0);
   const playerCombatantRef = useRef<Combatant>(createCombatant(100, 100));
+  const sparksRef = useRef<
+    Array<{ mesh: THREE.Mesh; life: number; vx: number; vy: number; vz: number }>
+  >([]);
   const progressRef = useRef<Progress>(createProgress());
   const enemyMeshRef = useRef<THREE.Mesh | null>(null);
   const enemyCombatantRef = useRef<Combatant>(createCombatant(60));
@@ -448,6 +451,26 @@ export function FighterRose({
     };
   }, [commandHandlerRef]);
 
+  const spawnSparks = (pos: THREE.Vector3, color: string) => {
+    for (let i = 0; i < 8; i++) {
+      const m = new THREE.Mesh(
+        new THREE.SphereGeometry(0.06, 6, 6),
+        new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 1 }),
+      );
+      m.position.copy(pos);
+      scene.add(m);
+      const a = Math.random() * Math.PI * 2;
+      const up = 1 + Math.random() * 2;
+      sparksRef.current.push({
+        mesh: m,
+        life: 0.4,
+        vx: Math.cos(a) * (1 + Math.random()),
+        vy: up,
+        vz: Math.sin(a) * (1 + Math.random()),
+      });
+    }
+  };
+
   useFrame((_, delta) => {
     const tp = teleportRef?.current;
     if (tp) {
@@ -558,6 +581,7 @@ export function FighterRose({
           const wasAlive = targetCombatantRef.current.alive;
           targetCombatantRef.current = applyDamage(targetCombatantRef.current, MELEE_DAMAGE);
           targetFlashRef.current = 0.2;
+          spawnSparks(targetMesh.position, "#ffaa33");
           const xpAmt =
             !targetCombatantRef.current.alive && wasAlive ? XP_PER_KILL : XP_PER_MELEE_HIT;
           const r = awardXp(progressRef.current, xpAmt);
@@ -570,6 +594,7 @@ export function FighterRose({
           const wasAlive = bossCombatantRef.current.alive;
           bossCombatantRef.current = applyDamage(bossCombatantRef.current, MELEE_DAMAGE * 2);
           targetFlashRef.current = 0.2;
+          spawnSparks(bossMesh.position, "#ff5533");
           const xpAmt = !bossCombatantRef.current.alive && wasAlive ? 200 : XP_PER_MELEE_HIT * 2;
           const r = awardXp(progressRef.current, xpAmt);
           progressRef.current = r.progress;
@@ -633,6 +658,7 @@ export function FighterRose({
           const wasAlive = targetCombatantRef.current.alive;
           targetCombatantRef.current = applyDamage(targetCombatantRef.current, KI_BLAST_DAMAGE);
           targetFlashRef.current = 0.2;
+          spawnSparks(targetMesh.position, "#7fd6ff");
           const r1 = awardXp(progressRef.current, XP_PER_KI_HIT);
           progressRef.current = r1.progress;
           if (!targetCombatantRef.current.alive && wasAlive) {
@@ -651,6 +677,7 @@ export function FighterRose({
           const wasAlive = bossCombatantRef.current.alive;
           bossCombatantRef.current = applyDamage(bossCombatantRef.current, KI_BLAST_DAMAGE * 2);
           targetFlashRef.current = 0.2;
+          spawnSparks(bossMesh.position, "#7fd6ff");
           const r1 = awardXp(progressRef.current, XP_PER_KI_HIT * 2);
           progressRef.current = r1.progress;
           if (!bossCombatantRef.current.alive && wasAlive) {
@@ -846,6 +873,25 @@ export function FighterRose({
     const camTarget = new THREE.Vector3(camPos.x, camPos.y, camPos.z);
     camera.position.lerp(camTarget, 1 - Math.exp(-delta * 6));
     camera.lookAt(lookAt.x, lookAt.y, lookAt.z);
+
+    // Update hit sparks.
+    const sparks = sparksRef.current;
+    for (let i = sparks.length - 1; i >= 0; i--) {
+      const sp = sparks[i]!;
+      sp.mesh.position.x += sp.vx * delta;
+      sp.mesh.position.y += sp.vy * delta;
+      sp.mesh.position.z += sp.vz * delta;
+      sp.vy -= 9.8 * delta;
+      sp.life -= delta;
+      const mat = sp.mesh.material as THREE.MeshBasicMaterial;
+      mat.opacity = Math.max(0, sp.life / 0.4);
+      if (sp.life <= 0) {
+        scene.remove(sp.mesh);
+        (sp.mesh.geometry as THREE.BufferGeometry).dispose();
+        mat.dispose();
+        sparks.splice(i, 1);
+      }
+    }
 
     const acc = frames.current;
     // Quest progression check.
