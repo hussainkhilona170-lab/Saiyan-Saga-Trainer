@@ -1,9 +1,45 @@
 // Pure game rules: no React, no browser APIs. All state transitions live here.
-import { BOSSES, FORMS, LOCATIONS, PASSES, QUESTS, WISHES, SAGA_BONUSES, TOURNAMENT, EQUIPMENT, CONSUMABLES, TECHNIQUES, TECHNIQUE_RANKS, RAID_BOSSES, ENDLESS_ROSTER, ENDLESS_MODIFIERS, MAX_CUSTOM_TECHNIQUES, MAX_CUSTOM_TECHNIQUE_MULT, ASCENSION_NODES, type AscensionNode, type Boss, type Form, type Quest, type QuestKind, type StatKey, type EndlessModifierId, type CustomTechniqueScale, type CustomTechnique } from "./data";
+import {
+  BOSSES,
+  FORMS,
+  LOCATIONS,
+  PASSES,
+  QUESTS,
+  WISHES,
+  SAGA_BONUSES,
+  TOURNAMENT,
+  EQUIPMENT,
+  CONSUMABLES,
+  TECHNIQUES,
+  TECHNIQUE_RANKS,
+  RAID_BOSSES,
+  ENDLESS_ROSTER,
+  ENDLESS_MODIFIERS,
+  MAX_CUSTOM_TECHNIQUES,
+  MAX_CUSTOM_TECHNIQUE_MULT,
+  ASCENSION_NODES,
+  type AscensionNode,
+  type Boss,
+  type Form,
+  type Quest,
+  type QuestKind,
+  type StatKey,
+  type EndlessModifierId,
+  type CustomTechniqueScale,
+  type CustomTechnique,
+} from "./data";
 
 export type TournamentBoss = Boss & { tournament?: number };
 
-export type Transaction = { id: string; at: number; kind: "credit" | "debit"; currency: "zeni" | "tp" | "stamina" | "mastery" | "gravity" | "technique" | "form"; amount: number; label: string; balance: number };
+export type Transaction = {
+  id: string;
+  at: number;
+  kind: "credit" | "debit";
+  currency: "zeni" | "tp" | "stamina" | "mastery" | "gravity" | "technique" | "form";
+  amount: number;
+  label: string;
+  balance: number;
+};
 
 export type GameState = {
   stats: Record<StatKey, number>;
@@ -46,16 +82,39 @@ export type GameState = {
   ascensionNodes: string[];
 };
 
-export type AdminEvent = { id: string; at: number; action: string; target: string; previousValue: string; newValue: string; outcome: "ok" | "failed" | "blocked"; detail?: string };
+export type AdminEvent = {
+  id: string;
+  at: number;
+  action: string;
+  target: string;
+  previousValue: string;
+  newValue: string;
+  outcome: "ok" | "failed" | "blocked";
+  detail?: string;
+};
 
 export const initialState: GameState = {
-  stats: { strength: 1, agility: 1, ki: 1, defense: 1 }, level: 1, xp: 0,
+  stats: { strength: 1, agility: 1, ki: 1, defense: 1 },
+  level: 1,
+  xp: 0,
   mastery: { strength: 0, agility: 0, ki: 0, defense: 0 },
-  stamina: 100, maxStamina: 100, gravity: 1,
-  zeni: 0, tp: 0, dragonBalls: 0,
-  forms: ["base"], customForms: [], activeForm: "base", location: "roshi",
-  passes: [], defeated: [], quests: [], autoTarget: "strength",
-  godMode: false, infiniteZeni: false, darkAura: false,
+  stamina: 100,
+  maxStamina: 100,
+  gravity: 1,
+  zeni: 0,
+  tp: 0,
+  dragonBalls: 0,
+  forms: ["base"],
+  customForms: [],
+  activeForm: "base",
+  location: "roshi",
+  passes: [],
+  defeated: [],
+  quests: [],
+  autoTarget: "strength",
+  godMode: false,
+  infiniteZeni: false,
+  darkAura: false,
   maxStaminaBonus: 0,
   transactions: [],
   questProgress: {},
@@ -79,22 +138,52 @@ export const MAX_SAVE_NUMBER = 1e18;
 export const MAX_TRANSACTIONS = 200;
 
 /** Clamps a persisted number to a finite, non-negative bound (extreme-number protection). */
-export function clampSaveNumber(value: unknown, fallback = 0, max: number = MAX_SAVE_NUMBER): number {
-  return typeof value === "number" && isFinite(value) && value >= 0 ? Math.min(value, max) : fallback;
+export function clampSaveNumber(
+  value: unknown,
+  fallback = 0,
+  max: number = MAX_SAVE_NUMBER,
+): number {
+  return typeof value === "number" && isFinite(value) && value >= 0
+    ? Math.min(value, max)
+    : fallback;
 }
 
-export function logTransaction(d: GameState, kind: Transaction["kind"], currency: Transaction["currency"], amount: number, label: string, at = Date.now()): void {
+export function logTransaction(
+  d: GameState,
+  kind: Transaction["kind"],
+  currency: Transaction["currency"],
+  amount: number,
+  label: string,
+  at = Date.now(),
+): void {
   if (!Number.isFinite(amount) || amount <= 0) return;
   const balance = currency === "zeni" ? d.zeni : currency === "tp" ? d.tp : 0;
-  d.transactions.push({ id: `${at}-${d.transactions.length}`, at, kind, currency, amount: Math.floor(amount), label: label.slice(0, 80), balance: Math.floor(balance) });
-  if (d.transactions.length > MAX_TRANSACTIONS) d.transactions.splice(0, d.transactions.length - MAX_TRANSACTIONS);
+  d.transactions.push({
+    id: `${at}-${d.transactions.length}`,
+    at,
+    kind,
+    currency,
+    amount: Math.floor(amount),
+    label: label.slice(0, 80),
+    balance: Math.floor(balance),
+  });
+  if (d.transactions.length > MAX_TRANSACTIONS)
+    d.transactions.splice(0, d.transactions.length - MAX_TRANSACTIONS);
 }
 
 export const CUSTOM_FORM_MAX_MULT = 5000;
 
 /** Equipment effect totals, aggregated over currently-equipped items. */
-export function equipmentBonus(s: GameState): { defenseMult: number; allStatsMult: number; trainingMult: number; scoutBallBonus: number } {
-  let defenseMult = 0, allStatsMult = 0, trainingMult = 0, scoutBallBonus = 0;
+export function equipmentBonus(s: GameState): {
+  defenseMult: number;
+  allStatsMult: number;
+  trainingMult: number;
+  scoutBallBonus: number;
+} {
+  let defenseMult = 0,
+    allStatsMult = 0,
+    trainingMult = 0,
+    scoutBallBonus = 0;
   for (const id of s.equipped ?? []) {
     const item = EQUIPMENT.find((e) => e.id === id);
     if (!item) continue;
@@ -115,17 +204,24 @@ export const techniqueRank = (s: GameState, id: string): number => {
 
 /** Increments a technique counter (mutates draft; clamped to a sane ceiling). */
 export function bumpTechniqueUse(d: GameState, id: string, amount = 1): void {
-  const current = typeof d.techniqueUses[id] === "number" && isFinite(d.techniqueUses[id]!) ? d.techniqueUses[id]! : 0;
+  const current =
+    typeof d.techniqueUses[id] === "number" && isFinite(d.techniqueUses[id]!)
+      ? d.techniqueUses[id]!
+      : 0;
   d.techniqueUses[id] = Math.min(1_000_000, current + Math.max(1, Math.floor(amount)));
 }
 
 export const allForms = (s: GameState): Form[] => [...FORMS, ...(s.customForms ?? [])];
 export const findForm = (s: GameState, id: string) => allForms(s).find((f) => f.id === id);
-export const formMult = (s: GameState) => (findForm(s, s.activeForm)?.mult ?? 1) * (1 + 0.02 * (formLevel(s.formXp?.[s.activeForm] ?? 0) - 1));
+export const formMult = (s: GameState) =>
+  (findForm(s, s.activeForm)?.mult ?? 1) *
+  (1 + 0.02 * (formLevel(s.formXp?.[s.activeForm] ?? 0) - 1));
 export const gravMult = (s: GameState) => Math.min(1e6, 1 + (s.gravity - 1) * 0.25);
 export const powerLevel = (s: GameState) => {
   const equip = equipmentBonus(s);
-  const statSum = (s.stats.strength + s.stats.agility + s.stats.ki + s.stats.defense * (1 + equip.defenseMult)) * (1 + equip.allStatsMult);
+  const statSum =
+    (s.stats.strength + s.stats.agility + s.stats.ki + s.stats.defense * (1 + equip.defenseMult)) *
+    (1 + equip.allStatsMult);
   const pl = Math.floor(statSum * gravMult(s) * formMult(s) * 10);
   return Number.isFinite(pl) ? Math.min(pl, MAX_SAVE_NUMBER) : MAX_SAVE_NUMBER;
 };
@@ -133,11 +229,19 @@ export const powerLevel = (s: GameState) => {
 export const trainingGain = (s: GameState) => {
   const loc = LOCATIONS.find((l) => l.id === s.location)?.mult ?? 1;
   const equip = equipmentBonus(s);
-  const gain = loc * gravMult(s) * (s.passes.includes("x2") ? 2 : 1) * Math.pow(formMult(s), 0.75) * (1 + equip.trainingMult) * (1 + 0.1 * (s.prestige ?? 0)) * (1 + ascensionTrainingMult(s));
+  const gain =
+    loc *
+    gravMult(s) *
+    (s.passes.includes("x2") ? 2 : 1) *
+    Math.pow(formMult(s), 0.75) *
+    (1 + equip.trainingMult) *
+    (1 + 0.1 * (s.prestige ?? 0)) *
+    (1 + ascensionTrainingMult(s));
   return Number.isFinite(gain) ? Math.min(gain, MAX_SAVE_NUMBER) : MAX_SAVE_NUMBER;
 };
 
-export const xpRequiredForLevel = (level: number) => Math.max(0, (Math.max(1, Math.floor(level)) - 1) * Math.max(1, Math.floor(level)) * 50);
+export const xpRequiredForLevel = (level: number) =>
+  Math.max(0, (Math.max(1, Math.floor(level)) - 1) * Math.max(1, Math.floor(level)) * 50);
 
 export function levelForXp(xp: number): number {
   let level = 1;
@@ -165,16 +269,31 @@ export const statSoftCap = (level: number) => 100 + (Math.max(1, level) - 1) * 4
 /** Gravity chamber level the body has adapted to at a given level — one 10G step
  *  per 2 levels (Lv 1 → 10G, Lv 2 → 20G, Lv 100 → 510G). Applied automatically on
  *  level-up; there is no manual gravity training. */
-export const maxGravityForLevel = (level: number) => 1 + Math.floor(Math.max(1, Math.floor(level)) / 2);
+export const maxGravityForLevel = (level: number) =>
+  1 + Math.floor(Math.max(1, Math.floor(level)) / 2);
 
-export function effectiveTrainingGain(s: GameState, stat: StatKey, rawGain = trainingGain(s)): number {
+export function effectiveTrainingGain(
+  s: GameState,
+  stat: StatKey,
+  rawGain = trainingGain(s),
+): number {
   const cap = statSoftCap(s.level);
-  return rawGain * (1 + Math.min(100, Math.max(0, s.mastery[stat])) / 200) / (1 + Math.max(0, s.stats[stat]) / cap);
+  return (
+    (rawGain * (1 + Math.min(100, Math.max(0, s.mastery[stat])) / 200)) /
+    (1 + Math.max(0, s.stats[stat]) / cap)
+  );
 }
 
 export function canUnlockForm(s: GameState, formId: string): boolean {
   const form = findForm(s, formId);
-  return Boolean(form && !s.forms.includes(form.id) && s.level >= form.levelReq && powerLevel(s) >= form.req && (s.infiniteZeni || s.zeni >= form.cost) && (!form.pass || s.passes.includes(form.pass)));
+  return Boolean(
+    form &&
+    !s.forms.includes(form.id) &&
+    s.level >= form.levelReq &&
+    powerLevel(s) >= form.req &&
+    (s.infiniteZeni || s.zeni >= form.cost) &&
+    (!form.pass || s.passes.includes(form.pass)),
+  );
 }
 
 export function battleExperienceReward(boss: Boss): number {
@@ -192,7 +311,10 @@ export function bumpQuestProgress(d: GameState, kind: QuestKind, amount = 1, sta
   for (const q of QUESTS) {
     if (q.kind !== kind) continue;
     if (kind === "train" && q.stat && stat !== q.stat) continue;
-    const current = typeof d.questProgress[q.id] === "number" && isFinite(d.questProgress[q.id] ?? 0) ? d.questProgress[q.id]! : 0;
+    const current =
+      typeof d.questProgress[q.id] === "number" && isFinite(d.questProgress[q.id] ?? 0)
+        ? d.questProgress[q.id]!
+        : 0;
     d.questProgress[q.id] = current + amount;
   }
 }
@@ -201,7 +323,14 @@ export function prerequisitesMet(s: GameState, quest: Quest): boolean {
   return !quest.prereq || quest.prereq.every((p) => s.quests.includes(p));
 }
 
-export type QuestSummary = { quest: Quest; done: boolean; progress: number; target: number; locked: boolean; prereqs: string[] };
+export type QuestSummary = {
+  quest: Quest;
+  done: boolean;
+  progress: number;
+  target: number;
+  locked: boolean;
+  prereqs: string[];
+};
 
 export function questSummary(s: GameState, questId: string): QuestSummary | null {
   const quest = QUESTS.find((entry) => entry.id === questId);
@@ -210,10 +339,22 @@ export function questSummary(s: GameState, questId: string): QuestSummary | null
   let done = false;
   let progress = 0;
   switch (quest.kind) {
-    case "pl": progress = Math.min(powerLevel(s), quest.count); done = powerLevel(s) >= quest.count; break;
-    case "boss": progress = quest.boss && s.defeated.includes(quest.boss) ? 1 : 0; done = progress === 1; break;
-    case "level": progress = Math.min(s.level, quest.count); done = s.level >= quest.count; break;
-    default: progress = Math.min(d_clamp(s.questProgress[quest.id]), quest.count); done = progress >= quest.count; break;
+    case "pl":
+      progress = Math.min(powerLevel(s), quest.count);
+      done = powerLevel(s) >= quest.count;
+      break;
+    case "boss":
+      progress = quest.boss && s.defeated.includes(quest.boss) ? 1 : 0;
+      done = progress === 1;
+      break;
+    case "level":
+      progress = Math.min(s.level, quest.count);
+      done = s.level >= quest.count;
+      break;
+    default:
+      progress = Math.min(d_clamp(s.questProgress[quest.id]), quest.count);
+      done = progress >= quest.count;
+      break;
   }
   if (locked) done = false;
   return { quest, done, progress, target: quest.count, locked, prereqs: quest.prereq ?? [] };
@@ -233,13 +374,27 @@ export function sagaQuests(saga: string): Quest[] {
   return QUESTS.filter((q) => q.saga === saga);
 }
 
-export type SagaStatus = { saga: string; claimed: number; total: number; complete: boolean; bonusClaimed: boolean; bonus: { zeni: number; tp: number } };
+export type SagaStatus = {
+  saga: string;
+  claimed: number;
+  total: number;
+  complete: boolean;
+  bonusClaimed: boolean;
+  bonus: { zeni: number; tp: number };
+};
 
 export function sagaStatus(s: GameState, saga: string): SagaStatus {
   const quests = sagaQuests(saga);
   const claimed = quests.filter((q) => s.quests.includes(q.id)).length;
   const complete = quests.length > 0 && claimed === quests.length;
-  return { saga, claimed, total: quests.length, complete, bonusClaimed: s.sagaBonuses.includes(saga), bonus: SAGA_BONUSES[saga] ?? { zeni: 0, tp: 0 } };
+  return {
+    saga,
+    claimed,
+    total: quests.length,
+    complete,
+    bonusClaimed: s.sagaBonuses.includes(saga),
+    bonus: SAGA_BONUSES[saga] ?? { zeni: 0, tp: 0 },
+  };
 }
 
 export type GameAction =
@@ -297,11 +452,28 @@ export type BattleState = {
 };
 
 export const initialBattleState: BattleState = {
-  boss: null, phase: "idle", hp: 0, playerHp: 0, maxPlayerHp: 0, ki: 0,
-  clashProgress: 50, clashCount: 0, combo: 0, lastPunchAt: 0, message: "",
-  guardUntil: 0, guardCdUntil: 0, exposedUntil: 0, overloadedUntil: 0, weakPointHit: false,
-  phaseNumber: 1, bossSpecialAt: 0, enrageAt: 0,
-  meleeStreak: 0, kiStreak: 0, adaptMeleeUntil: 0,
+  boss: null,
+  phase: "idle",
+  hp: 0,
+  playerHp: 0,
+  maxPlayerHp: 0,
+  ki: 0,
+  clashProgress: 50,
+  clashCount: 0,
+  combo: 0,
+  lastPunchAt: 0,
+  message: "",
+  guardUntil: 0,
+  guardCdUntil: 0,
+  exposedUntil: 0,
+  overloadedUntil: 0,
+  weakPointHit: false,
+  phaseNumber: 1,
+  bossSpecialAt: 0,
+  enrageAt: 0,
+  meleeStreak: 0,
+  kiStreak: 0,
+  adaptMeleeUntil: 0,
   cooldowns: {},
 };
 
@@ -323,18 +495,31 @@ export type CombatAction =
   | { type: "CLASH_TICK"; pressurePerSecond: number; deltaSeconds: number; elapsedMs: number }
   | { type: "FLEE" };
 
-export const phaseScale = (phaseNumber: 1 | 2 | 3 | 4): number => phaseNumber === 4 ? 2.0 : phaseNumber === 3 ? 1.7 : phaseNumber === 2 ? 1.35 : 1;
+export const phaseScale = (phaseNumber: 1 | 2 | 3 | 4): number =>
+  phaseNumber === 4 ? 2.0 : phaseNumber === 3 ? 1.7 : phaseNumber === 2 ? 1.35 : 1;
 export const battlePhaseOf = (bossHp: number, bossMaxHp: number): 1 | 2 | 3 | 4 => {
   const frac = bossMaxHp > 0 ? bossHp / bossMaxHp : 1;
-  return frac > 0.66 ? 1 : frac > 0.33 ? 2 : frac > 0.10 ? 3 : 4;
+  return frac > 0.66 ? 1 : frac > 0.33 ? 2 : frac > 0.1 ? 3 : 4;
 };
 export type BattleGrade = "S" | "A" | "B" | "C" | "D";
 export const battleGrade = (playerHpFraction: number): BattleGrade =>
-  playerHpFraction >= 0.85 ? "S" : playerHpFraction >= 0.65 ? "A" : playerHpFraction >= 0.4 ? "B" : playerHpFraction >= 0.15 ? "C" : "D";
+  playerHpFraction >= 0.85
+    ? "S"
+    : playerHpFraction >= 0.65
+      ? "A"
+      : playerHpFraction >= 0.4
+        ? "B"
+        : playerHpFraction >= 0.15
+          ? "C"
+          : "D";
 export const GRADE_ORDER: BattleGrade[] = ["D", "C", "B", "A", "S"];
 
 /** Pure combat state transition. UI and timers dispatch actions; rules stay here. */
-export function resolveBattleAction(battle: BattleState, game: GameState, action: CombatAction): BattleState {
+export function resolveBattleAction(
+  battle: BattleState,
+  game: GameState,
+  action: CombatAction,
+): BattleState {
   const next = { ...battle };
   const boss = next.boss;
   const multiplier = formMult(game) * gravMult(game);
@@ -420,7 +605,8 @@ export function resolveBattleAction(battle: BattleState, game: GameState, action
       const finisher = techniqueRank(game, "heavy") >= 2 ? 1.75 : 1.5;
       const heavyBonus = next.combo >= 4 ? finisher : 1;
       damageBoss((game.stats.strength * 3 + game.stats.agility * 1.5) * multiplier * heavyBonus);
-      if (next.phase === "active") next.message = heavyBonus > 1 ? "Haymaker finisher!" : "Heavy Strike!";
+      if (next.phase === "active")
+        next.message = heavyBonus > 1 ? "Haymaker finisher!" : "Heavy Strike!";
       resolvePlayerDamage();
       refreshPhase();
       return next;
@@ -440,7 +626,8 @@ export function resolveBattleAction(battle: BattleState, game: GameState, action
       // Adaptive response: the boss anticipates Ki-spam and blunts it.
       const read = next.kiStreak >= 3 ? 0.75 : 1;
       damageBoss(game.stats.ki * 10 * multiplier * comboAssist * read);
-      if (next.phase === "active" && read < 1) next.message = `${boss.name} anticipates your Ki blast!`;
+      if (next.phase === "active" && read < 1)
+        next.message = `${boss.name} anticipates your Ki blast!`;
       else if (next.phase === "active" && comboAssist > 1) next.message = "Ki-assisted combo!";
       resolvePlayerDamage();
       refreshPhase();
@@ -454,8 +641,13 @@ export function resolveBattleAction(battle: BattleState, game: GameState, action
       const finalStretch = next.combo >= 5 ? 1.25 : 1;
       damageBoss((game.stats.ki * 40 + game.stats.strength * 10) * multiplier * finalStretch);
       // Ki Overload: massive cast staggers you — the boss punishes openings for a bit.
-      if (now > 0) next.overloadedUntil = now + (techniqueRank(game, "ultimate") >= 3 ? 1500 : 3000);
-      if (next.phase === "active") next.message = finalStretch > 1 ? "FINAL STRETCH — FINAL FLASH! (you are vulnerable!)" : "Ki overloads! You are vulnerable!";
+      if (now > 0)
+        next.overloadedUntil = now + (techniqueRank(game, "ultimate") >= 3 ? 1500 : 3000);
+      if (next.phase === "active")
+        next.message =
+          finalStretch > 1
+            ? "FINAL STRETCH — FINAL FLASH! (you are vulnerable!)"
+            : "Ki overloads! You are vulnerable!";
       resolvePlayerDamage();
       refreshPhase();
       return next;
@@ -485,7 +677,9 @@ export function resolveBattleAction(battle: BattleState, game: GameState, action
       const pRank = techniqueRank(game, "parry");
       next.guardUntil = now + (uiForm ? 750 : pRank >= 3 ? 550 : 450);
       next.guardCdUntil = now + (uiForm ? 800 : pRank >= 2 ? 800 : 1100);
-      next.message = uiForm ? "Perfect guard — time slows! (Ultra Instinct)" : "Perfect guard stance…";
+      next.message = uiForm
+        ? "Perfect guard — time slows! (Ultra Instinct)"
+        : "Perfect guard stance…";
       return next;
     }
     case "CHARGE":
@@ -516,7 +710,14 @@ export function resolveBattleAction(battle: BattleState, game: GameState, action
       }
       if (!game.infiniteKi && next.ki < tech.kiCost) return next;
       if (!game.infiniteKi) next.ki -= tech.kiCost;
-      const statTotal = tech.scale === "ki" ? game.stats.ki : tech.scale === "strength" ? game.stats.strength : tech.scale === "agility" ? game.stats.agility : game.stats.defense;
+      const statTotal =
+        tech.scale === "ki"
+          ? game.stats.ki
+          : tech.scale === "strength"
+            ? game.stats.strength
+            : tech.scale === "agility"
+              ? game.stats.agility
+              : game.stats.defense;
       // EXPOSED doubling is applied inside damageBoss for every attack — don't apply it twice here.
       damageBoss(statTotal * tech.mult * multiplier);
       if (next.phase === "active") next.message = `${tech.name}!`;
@@ -531,7 +732,10 @@ export function resolveBattleAction(battle: BattleState, game: GameState, action
       if (!game.godMode) {
         const scale = phaseScale(next.phaseNumber);
         const defenseMult = 1 + equipmentBonus(game).defenseMult;
-        let damage = Math.max(1, boss.atk * scale - game.stats.defense * defenseMult * multiplier * 0.5);
+        let damage = Math.max(
+          1,
+          boss.atk * scale - game.stats.defense * defenseMult * multiplier * 0.5,
+        );
         if (next.phase === "clash") damage *= 0.35;
         const parried = now > 0 && now <= next.guardUntil;
         if (parried) {
@@ -539,7 +743,12 @@ export function resolveBattleAction(battle: BattleState, game: GameState, action
           next.exposedUntil = Math.max(next.exposedUntil, now + 2500);
           next.weakPointHit = false;
           next.message = `PARRY! ${boss.name} is overexposed — strike now!`;
-        } else if ((boss.signatures?.[next.phaseNumber - 2] ?? boss.signature) && next.phaseNumber >= 2 && now > 0 && now >= next.bossSpecialAt) {
+        } else if (
+          (boss.signatures?.[next.phaseNumber - 2] ?? boss.signature) &&
+          next.phaseNumber >= 2 &&
+          now > 0 &&
+          now >= next.bossSpecialAt
+        ) {
           const sig = (boss.signatures?.[next.phaseNumber - 2] ?? boss.signature)!;
           damage = boss.atk * scale * sig.mult;
           next.bossSpecialAt = now + 6000;
@@ -558,7 +767,8 @@ export function resolveBattleAction(battle: BattleState, game: GameState, action
         next.playerHp -= damage;
         resolvePlayerDefeat();
       }
-      if (game.passes.includes("kicharge") && next.playerHp > 0) next.ki = 100 + ascensionKiMax(game);
+      if (game.passes.includes("kicharge") && next.playerHp > 0)
+        next.ki = 100 + ascensionKiMax(game);
       return next;
     case "CLASH_START":
       if (next.phase === "active" && boss) {
@@ -569,13 +779,22 @@ export function resolveBattleAction(battle: BattleState, game: GameState, action
       return next;
     case "CLASH_PUSH":
       if (next.phase !== "clash") return next;
-      next.clashProgress = Math.min(100, next.clashProgress + 3.5 + Math.min(4, Math.log10(action.agility + 1)) + ascensionClashPush(game));
+      next.clashProgress = Math.min(
+        100,
+        next.clashProgress +
+          3.5 +
+          Math.min(4, Math.log10(action.agility + 1)) +
+          ascensionClashPush(game),
+      );
       if (next.clashProgress >= 100) resolveClash(next, boss);
       refreshPhase();
       return next;
     case "CLASH_TICK":
       if (next.phase !== "clash") return next;
-      next.clashProgress = Math.max(0, next.clashProgress - action.pressurePerSecond * action.deltaSeconds);
+      next.clashProgress = Math.max(
+        0,
+        next.clashProgress - action.pressurePerSecond * action.deltaSeconds,
+      );
       if (next.clashProgress <= 0 || action.elapsedMs > 8000) {
         if (next.clashProgress >= 50) resolveClash(next, boss);
         else resolveClashLoss(next, boss);
@@ -631,7 +850,10 @@ export function battleSagaRank(boss: Boss): number {
   }
   const raid = RAID_BOSSES.find((r) => r.base.id === boss.id);
   if (raid) return BOSSES.length - 1; // raids sit at end-of-roster clash pressure
-  return Math.max(0, BOSSES.findIndex((entry) => entry.id === boss.id));
+  return Math.max(
+    0,
+    BOSSES.findIndex((entry) => entry.id === boss.id),
+  );
 }
 
 export function battleClashPressure(boss: Boss): number {
@@ -671,7 +893,8 @@ export function shadowDummyBoss(s: GameState): Boss {
  *  (×SHADOW_ZENKAI_MULT plus a full stamina refill) when the player barely survived. */
 export function applyShadowRewards(game: GameState, zenkai: boolean): void {
   const factor = zenkai ? SHADOW_ZENKAI_MULT : SHADOW_REWARD_MULT;
-  for (const k of ["strength", "agility", "ki", "defense"] as StatKey[]) game.stats[k] = clampSaveNumber(game.stats[k] * factor, game.stats[k]);
+  for (const k of ["strength", "agility", "ki", "defense"] as StatKey[])
+    game.stats[k] = clampSaveNumber(game.stats[k] * factor, game.stats[k]);
   if (zenkai) game.stamina = game.maxStamina;
   grantExperience(game, 60);
 }
@@ -694,11 +917,23 @@ export function applyTournamentRewards(d: GameState, roundIndex: number): void {
   const tp = Math.floor(round.tp * scale);
   if (zeni > 0) {
     d.zeni = clampSaveNumber(d.zeni + zeni, d.zeni);
-    logTransaction(d, "credit", "zeni", zeni, `Martial Arts Tournament — ${round.name}${firstClear ? "" : " (rematch)"}`);
+    logTransaction(
+      d,
+      "credit",
+      "zeni",
+      zeni,
+      `Martial Arts Tournament — ${round.name}${firstClear ? "" : " (rematch)"}`,
+    );
   }
   if (tp > 0) {
     d.tp = clampSaveNumber(d.tp + tp, d.tp);
-    logTransaction(d, "credit", "tp", tp, `Martial Arts Tournament — ${round.name}${firstClear ? "" : " (rematch)"}`);
+    logTransaction(
+      d,
+      "credit",
+      "tp",
+      tp,
+      `Martial Arts Tournament — ${round.name}${firstClear ? "" : " (rematch)"}`,
+    );
   }
   if (firstClear) d.tournamentRound = Math.min(TOURNAMENT.length, d.tournamentRound + 1);
   bumpQuestProgress(d, "tournament", 1);
@@ -784,7 +1019,8 @@ export function grantExperience(state: GameState, amount: number): void {
   state.xp = clampSaveNumber(state.xp + Math.max(0, Math.floor(amount)), state.xp);
   const nextLevel = levelForXp(state.xp);
   // Gravity adapts with the body: leveling up raises the chamber automatically.
-  if (nextLevel > state.level) state.gravity = Math.max(state.gravity, maxGravityForLevel(nextLevel));
+  if (nextLevel > state.level)
+    state.gravity = Math.max(state.gravity, maxGravityForLevel(nextLevel));
   state.level = nextLevel;
 }
 
@@ -792,7 +1028,10 @@ export function grantExperience(state: GameState, amount: number): void {
 export function grantFormXp(state: GameState, formId: string, amount: number): void {
   if (!formId || formId === "base" || formId.startsWith("custom-")) return;
   if (!state.formXp) state.formXp = {};
-  state.formXp[formId] = clampSaveNumber((state.formXp[formId] ?? 0) + Math.max(0, Math.floor(amount)), 0);
+  state.formXp[formId] = clampSaveNumber(
+    (state.formXp[formId] ?? 0) + Math.max(0, Math.floor(amount)),
+    0,
+  );
 }
 
 /** Sum of ascension node effects for a given key. */
@@ -816,7 +1055,10 @@ function applyTraining(state: GameState, stat: StatKey, rawGain: number, xpScale
   const gain = effectiveTrainingGain(state, stat, rawGain);
   state.stats[stat] = clampSaveNumber(state.stats[stat] + gain, state.stats[stat]);
   const cap = statSoftCap(state.level);
-  state.mastery[stat] = Math.min(100, state.mastery[stat] + Math.min(0.3, 0.05 + gain / (cap * 20)));
+  state.mastery[stat] = Math.min(
+    100,
+    state.mastery[stat] + Math.min(0.3, 0.05 + gain / (cap * 20)),
+  );
   const xp = Math.max(1, Math.floor((2 + Math.log10(1 + Math.max(0, gain)) * 2) * xpScale));
   grantExperience(state, xp);
   return gain;
@@ -839,14 +1081,25 @@ export function applyAction(d: GameState, a: GameAction): void {
       if (d.stamina < 1 && !d.godMode) return;
       if (!d.godMode) d.stamina -= 1;
       const g = applyTraining(d, a.stat, trainingGain(d));
-      d.zeni = clampSaveNumber(d.zeni + Math.ceil(g * 0.75 * (d.passes.includes("vip") ? 1.5 : 1) * (1 + ascensionZeniMult(d))), d.zeni);
+      d.zeni = clampSaveNumber(
+        d.zeni +
+          Math.ceil(g * 0.75 * (d.passes.includes("vip") ? 1.5 : 1) * (1 + ascensionZeniMult(d))),
+        d.zeni,
+      );
       if ((a.rand ?? Math.random()) < 0.002) grantBall(d);
       bumpQuestProgress(d, "train", 1, a.stat);
       grantFormXp(d, d.activeForm, Math.round(1 * (1 + ascensionFormXpMult(d))));
       return;
     }
     case "TICK": {
-      d.maxStamina = Math.min(MAX_SAVE_NUMBER, 100 + Math.floor(d.stats.defense / 5) + Math.floor(d.maxStaminaBonus ?? 0) + (d.prestige ?? 0) * 10 + ascensionStamina(d));
+      d.maxStamina = Math.min(
+        MAX_SAVE_NUMBER,
+        100 +
+          Math.floor(d.stats.defense / 5) +
+          Math.floor(d.maxStaminaBonus ?? 0) +
+          (d.prestige ?? 0) * 10 +
+          ascensionStamina(d),
+      );
       const regen = (2 + d.maxStamina * 0.02) * (d.passes.includes("vip") ? 2 : 1);
       d.stamina = Math.min(d.maxStamina, d.stamina + regen);
       if (d.passes.includes("auto")) {
@@ -883,7 +1136,8 @@ export function applyAction(d: GameState, a: GameAction): void {
     case "BUY_ITEM": {
       const equip = EQUIPMENT.find((e) => e.id === a.itemId);
       if (equip) {
-        if (countItem(d, equip.id) > 0 || d.equipped.includes(equip.id) || d.zeni < equip.cost) return;
+        if (countItem(d, equip.id) > 0 || d.equipped.includes(equip.id) || d.zeni < equip.cost)
+          return;
         d.zeni = clampSaveNumber(d.zeni - equip.cost, 0);
         logTransaction(d, "debit", "zeni", equip.cost, `Equipment — ${equip.name}`);
         d.inventory[equip.id] = 1;
@@ -904,7 +1158,9 @@ export function applyAction(d: GameState, a: GameAction): void {
       d.inventory[equip.id] = countItem(d, equip.id) - 1;
       if (d.inventory[equip.id] === 0) delete d.inventory[equip.id];
       // One item per slot: the currently-equipped piece in this slot returns to the bag.
-      const current = d.equipped.find((id) => EQUIPMENT.find((e) => e.id === id)?.slot === equip.slot);
+      const current = d.equipped.find(
+        (id) => EQUIPMENT.find((e) => e.id === id)?.slot === equip.slot,
+      );
       if (current) {
         d.equipped = d.equipped.filter((id) => id !== current);
         d.inventory[current] = countItem(d, current) + 1;
@@ -935,7 +1191,8 @@ export function applyAction(d: GameState, a: GameAction): void {
         d.zeni = clampSaveNumber(d.zeni + amount, d.zeni);
         logTransaction(d, "credit", "zeni", amount, "Shenron wish — Infinite riches");
       } else if (wish.id === "power") {
-        for (const k of Object.keys(d.stats) as StatKey[]) d.stats[k] = clampSaveNumber(d.stats[k] * 2, d.stats[k]);
+        for (const k of Object.keys(d.stats) as StatKey[])
+          d.stats[k] = clampSaveNumber(d.stats[k] * 2, d.stats[k]);
         logTransaction(d, "credit", "zeni", 0, "Shenron wish — Become stronger");
       } else if (wish.id === "tp") {
         d.tp = clampSaveNumber(d.tp + 500, d.tp);
@@ -946,28 +1203,45 @@ export function applyAction(d: GameState, a: GameAction): void {
         d.stamina = d.maxStamina;
         logTransaction(d, "credit", "stamina", 50, "Shenron wish — Endless stamina");
       } else if (wish.id === "mastery") {
-        for (const k of Object.keys(d.stats) as StatKey[]) d.mastery[k] = Math.min(100, d.mastery[k] + 25);
+        for (const k of Object.keys(d.stats) as StatKey[])
+          d.mastery[k] = Math.min(100, d.mastery[k] + 25);
         logTransaction(d, "credit", "mastery", 25, "Shenron wish — Mastery breakthrough");
       } else if (wish.id === "gravity") {
         d.gravity = Math.min(510, d.gravity + 5);
         logTransaction(d, "credit", "gravity", 5, "Shenron wish — Heavier gravity");
       } else if (wish.id === "technique") {
-        for (const k of Object.keys(d.techniqueUses)) d.techniqueUses[k] = clampSaveNumber((d.techniqueUses[k] ?? 0) + 50, 0);
+        for (const k of Object.keys(d.techniqueUses))
+          d.techniqueUses[k] = clampSaveNumber((d.techniqueUses[k] ?? 0) + 50, 0);
         // ensure all known techniques get the boost even if unused
-        for (const t of TECHNIQUES) d.techniqueUses[t.id] = clampSaveNumber((d.techniqueUses[t.id] ?? 0) + 50, 0);
+        for (const t of TECHNIQUES)
+          d.techniqueUses[t.id] = clampSaveNumber((d.techniqueUses[t.id] ?? 0) + 50, 0);
         logTransaction(d, "credit", "technique", 50, "Shenron wish — Technique mastery");
       } else if (wish.id === "form") {
         const owned = new Set(d.forms);
-        const candidates = FORMS.filter((f) => !f.custom && !owned.has(f.id) && canUnlockForm(d, f.id));
+        const candidates = FORMS.filter(
+          (f) => !f.custom && !owned.has(f.id) && canUnlockForm(d, f.id),
+        );
         if (candidates.length > 0) {
           const pick = candidates[Math.floor(Math.random() * candidates.length)]!;
           d.forms.push(pick.id);
-          logTransaction(d, "credit", "form", 1, `Shenron wish — New transformation (${pick.name})`);
+          logTransaction(
+            d,
+            "credit",
+            "form",
+            1,
+            `Shenron wish — New transformation (${pick.name})`,
+          );
         } else {
           // fallback: grant zeni
           const amount = Math.floor(powerLevel(d) * 50);
           d.zeni = clampSaveNumber(d.zeni + amount, d.zeni);
-          logTransaction(d, "credit", "zeni", amount, "Shenron wish — New transformation (no unlockable form; zeni)");
+          logTransaction(
+            d,
+            "credit",
+            "zeni",
+            amount,
+            "Shenron wish — New transformation (no unlockable form; zeni)",
+          );
         }
       }
       bumpQuestProgress(d, "wish", 1);
@@ -1024,9 +1298,13 @@ export function applyAction(d: GameState, a: GameAction): void {
       if (!d.godMode) d.stamina -= 2;
       const loc = LOCATIONS.find((l) => l.id === d.location) ?? LOCATIONS[0]!;
       const mult = loc.mult;
-      const r = typeof a.rand === "number" && isFinite(a.rand) ? Math.min(0.999999, Math.max(0, a.rand)) : Math.random();
+      const r =
+        typeof a.rand === "number" && isFinite(a.rand)
+          ? Math.min(0.999999, Math.max(0, a.rand))
+          : Math.random();
       if (r < 0.05 + equipmentBonus(d).scoutBallBonus) grantBall(d);
-      else if (r < 0.22) d.zeni = clampSaveNumber(d.zeni + Math.floor(mult * (80 + r * 600)), d.zeni);
+      else if (r < 0.22)
+        d.zeni = clampSaveNumber(d.zeni + Math.floor(mult * (80 + r * 600)), d.zeni);
       grantExperience(d, Math.max(2, Math.floor(mult * 2)));
       bumpQuestProgress(d, "explore", 1);
       return;
@@ -1049,7 +1327,8 @@ export function applyAction(d: GameState, a: GameAction): void {
     case "RECORD_BOSS_GRADE": {
       const entry = a.bossId.slice(0, 60);
       const current = d.bestGrades[entry];
-      if (!current || GRADE_ORDER.indexOf(a.grade) > GRADE_ORDER.indexOf(current)) d.bestGrades[entry] = a.grade;
+      if (!current || GRADE_ORDER.indexOf(a.grade) > GRADE_ORDER.indexOf(current))
+        d.bestGrades[entry] = a.grade;
       return;
     }
     case "TRANSFORM":
@@ -1058,8 +1337,21 @@ export function applyAction(d: GameState, a: GameAction): void {
     case "CREATE_FORM": {
       const name = a.name.trim().slice(0, 30);
       if (!name || !a.id.startsWith("custom-") || findForm(d, a.id)) return;
-      const mult = Math.max(1, Math.min(CUSTOM_FORM_MAX_MULT, Number.isFinite(a.mult) ? a.mult : 1));
-      d.customForms.push({ id: a.id, name, mult, req: 0, cost: 0, aura: a.aura, hair: a.hair, levelReq: 1, custom: true });
+      const mult = Math.max(
+        1,
+        Math.min(CUSTOM_FORM_MAX_MULT, Number.isFinite(a.mult) ? a.mult : 1),
+      );
+      d.customForms.push({
+        id: a.id,
+        name,
+        mult,
+        req: 0,
+        cost: 0,
+        aura: a.aura,
+        hair: a.hair,
+        levelReq: 1,
+        custom: true,
+      });
       d.forms.push(a.id);
       return;
     }
@@ -1089,39 +1381,91 @@ export function hydrate(raw: unknown): GameState {
   out.mastery = { ...base.mastery };
   for (const k of Object.keys(base.mastery) as StatKey[]) {
     const mastery = r.mastery?.[k];
-    if (typeof mastery === "number" && isFinite(mastery)) out.mastery[k] = Math.max(0, Math.min(100, mastery));
+    if (typeof mastery === "number" && isFinite(mastery))
+      out.mastery[k] = Math.max(0, Math.min(100, mastery));
   }
   // Dedupe string arrays so a corrupted save cannot double-pay rewards or spam ids.
-  const cleanStrings = (input: unknown, fallback: string[], allowed?: ReadonlySet<string>): string[] => {
+  const cleanStrings = (
+    input: unknown,
+    fallback: string[],
+    allowed?: ReadonlySet<string>,
+  ): string[] => {
     if (!Array.isArray(input)) return [...fallback];
     const seen = new Set<string>();
-    for (const entry of input) if (typeof entry === "string" && entry && !seen.has(entry) && (!allowed || allowed.has(entry))) seen.add(entry);
+    for (const entry of input)
+      if (
+        typeof entry === "string" &&
+        entry &&
+        !seen.has(entry) &&
+        (!allowed || allowed.has(entry))
+      )
+        seen.add(entry);
     return [...seen];
   };
   const FORM_IDS = new Set(allForms(base).map((f) => f.id));
-  out.forms = cleanStrings(out.forms, base.forms, undefined).filter((id) => FORM_IDS.has(id) || id.startsWith("custom-"));
+  out.forms = cleanStrings(out.forms, base.forms, undefined).filter(
+    (id) => FORM_IDS.has(id) || id.startsWith("custom-"),
+  );
   for (const k of ["passes", "defeated", "quests"] as const) out[k] = cleanStrings(out[k], base[k]);
   out.zeni = clampSaveNumber(r.zeni, 0);
   out.tp = clampSaveNumber(r.tp, 0);
   out.dragonBalls = Math.floor(clampSaveNumber(r.dragonBalls, 0, 7));
   out.maxStaminaBonus = clampSaveNumber(r.maxStaminaBonus, 0);
   out.maxStamina = Math.max(1, Math.min(MAX_SAVE_NUMBER, clampSaveNumber(r.maxStamina, 100)));
-  out.stamina = Math.max(0, Math.min(out.maxStamina, clampSaveNumber(r.stamina, base.stamina, out.maxStamina)));
+  out.stamina = Math.max(
+    0,
+    Math.min(out.maxStamina, clampSaveNumber(r.stamina, base.stamina, out.maxStamina)),
+  );
   out.gravity = Math.max(1, Math.min(1000, Math.floor(clampSaveNumber(r.gravity, 1, 1000))));
   // gravityProgress was removed — gravity now adapts automatically on level-up.
-  if (typeof out.autoTarget !== "string" || !(out.autoTarget in base.stats)) out.autoTarget = base.autoTarget;
+  if (typeof out.autoTarget !== "string" || !(out.autoTarget in base.stats))
+    out.autoTarget = base.autoTarget;
   out.godMode = r.godMode === true;
   out.infiniteZeni = r.infiniteZeni === true;
   out.customForms = Array.isArray(r.customForms)
-    ? r.customForms.filter((f): f is Form => !!f && typeof f.id === "string" && f.id.startsWith("custom-") && typeof f.name === "string" && typeof f.mult === "number" && isFinite(f.mult))
-      .map((f) => ({ ...f, mult: Math.max(1, Math.min(CUSTOM_FORM_MAX_MULT, f.mult)), custom: true }))
+    ? r.customForms
+        .filter(
+          (f): f is Form =>
+            !!f &&
+            typeof f.id === "string" &&
+            f.id.startsWith("custom-") &&
+            typeof f.name === "string" &&
+            typeof f.mult === "number" &&
+            isFinite(f.mult),
+        )
+        .map((f) => ({
+          ...f,
+          mult: Math.max(1, Math.min(CUSTOM_FORM_MAX_MULT, f.mult)),
+          custom: true,
+        }))
     : [];
   // Transactions: keep only well-formed rows, cap the log.
   out.transactions = Array.isArray(r.transactions)
     ? r.transactions
-      .filter((t): t is Transaction => !!t && typeof t.id === "string" && typeof t.at === "number" && isFinite(t.at) && (t.kind === "credit" || t.kind === "debit") && (t.currency === "zeni" || t.currency === "tp" || t.currency === "stamina" || t.currency === "mastery" || t.currency === "gravity" || t.currency === "technique" || t.currency === "form") && typeof t.amount === "number" && isFinite(t.amount) && typeof t.label === "string")
-      .slice(-MAX_TRANSACTIONS)
-      .map((t) => ({ ...t, amount: Math.floor(Math.abs(t.amount)), balance: Math.floor(Math.abs(t.balance ?? 0)) }))
+        .filter(
+          (t): t is Transaction =>
+            !!t &&
+            typeof t.id === "string" &&
+            typeof t.at === "number" &&
+            isFinite(t.at) &&
+            (t.kind === "credit" || t.kind === "debit") &&
+            (t.currency === "zeni" ||
+              t.currency === "tp" ||
+              t.currency === "stamina" ||
+              t.currency === "mastery" ||
+              t.currency === "gravity" ||
+              t.currency === "technique" ||
+              t.currency === "form") &&
+            typeof t.amount === "number" &&
+            isFinite(t.amount) &&
+            typeof t.label === "string",
+        )
+        .slice(-MAX_TRANSACTIONS)
+        .map((t) => ({
+          ...t,
+          amount: Math.floor(Math.abs(t.amount)),
+          balance: Math.floor(Math.abs(t.balance ?? 0)),
+        }))
     : [];
   if (!out.forms.includes("base")) out.forms.unshift("base");
   // Quest progress: keep only COUNTED quest ids (train/explore/collect/wish/tournament) with finite non-negative counters.
@@ -1135,7 +1479,13 @@ export function hydrate(raw: unknown): GameState {
     }
   }
   out.sagaBonuses = cleanStrings(r.sagaBonuses, []).filter((saga) => saga in SAGA_BONUSES);
-  out.tournamentRound = Math.max(0, Math.min(TOURNAMENT.length, Math.floor(clampSaveNumber(r.tournamentRound, 0, TOURNAMENT.length))));
+  out.tournamentRound = Math.max(
+    0,
+    Math.min(
+      TOURNAMENT.length,
+      Math.floor(clampSaveNumber(r.tournamentRound, 0, TOURNAMENT.length)),
+    ),
+  );
   // Inventory: item ids must exist in a registry; consumables cap at 999, gear at 1.
   out.inventory = {};
   if (r.inventory && typeof r.inventory === "object" && !Array.isArray(r.inventory)) {
@@ -1156,11 +1506,21 @@ export function hydrate(raw: unknown): GameState {
       if (typeof raw !== "string" || seen.has(raw)) continue;
       const def = EQUIPMENT.find((e) => e.id === raw);
       if (!def || slots.has(def.slot)) continue;
-      seen.add(raw); slots.add(def.slot); out.equipped.push(raw);
+      seen.add(raw);
+      slots.add(def.slot);
+      out.equipped.push(raw);
     }
   }
   // Technique counters: known ids only, clamped.
-  const TECHNIQUE_IDS = new Set(["punch", "heavy", "blast", "ultimate", "vanish", "charge", "parry"]);
+  const TECHNIQUE_IDS = new Set([
+    "punch",
+    "heavy",
+    "blast",
+    "ultimate",
+    "vanish",
+    "charge",
+    "parry",
+  ]);
   out.techniqueUses = {};
   if (r.techniqueUses && typeof r.techniqueUses === "object" && !Array.isArray(r.techniqueUses)) {
     for (const [id, uses] of Object.entries(r.techniqueUses as Record<string, unknown>)) {
@@ -1169,7 +1529,10 @@ export function hydrate(raw: unknown): GameState {
       if (v > 0) out.techniqueUses[id] = Math.floor(v);
     }
   }
-  out.survivalBest = Math.max(0, Math.min(9999, Math.floor(clampSaveNumber(r.survivalBest, 0, 9999))));
+  out.survivalBest = Math.max(
+    0,
+    Math.min(9999, Math.floor(clampSaveNumber(r.survivalBest, 0, 9999))),
+  );
   out.infiniteKi = r.infiniteKi === true;
   // Form mastery XP: clamp per-form.
   out.formXp = {};
@@ -1181,8 +1544,13 @@ export function hydrate(raw: unknown): GameState {
     }
   }
   out.prestige = Math.max(0, Math.min(100, Math.floor(clampSaveNumber(r.prestige, 0, 100))));
-  out.ascensionPoints = Math.max(0, Math.min(1000, Math.floor(clampSaveNumber(r.ascensionPoints, 0, 1000))));
-  out.ascensionNodes = Array.isArray(r.ascensionNodes) ? r.ascensionNodes.filter((x): x is string => typeof x === "string").slice(0, 64) : [];
+  out.ascensionPoints = Math.max(
+    0,
+    Math.min(1000, Math.floor(clampSaveNumber(r.ascensionPoints, 0, 1000))),
+  );
+  out.ascensionNodes = Array.isArray(r.ascensionNodes)
+    ? r.ascensionNodes.filter((x): x is string => typeof x === "string").slice(0, 64)
+    : [];
   // Custom techniques: strict shape enforcement — they execute in real combat.
   const TECH_SCALES: readonly CustomTechniqueScale[] = ["ki", "strength", "agility", "defense"];
   out.customTechniques = [];
@@ -1194,11 +1562,29 @@ export function hydrate(raw: unknown): GameState {
       if (typeof t.name !== "string" || !t.name.trim() || t.name.length > 40) continue;
       if (typeof t.desc !== "string") continue;
       if (!TECH_SCALES.includes(t.scale as CustomTechniqueScale)) continue;
-      const mult = typeof t.mult === "number" && isFinite(t.mult) ? Math.max(0.1, Math.min(MAX_CUSTOM_TECHNIQUE_MULT, t.mult)) : 1;
-      const kiCost = typeof t.kiCost === "number" && isFinite(t.kiCost) ? Math.max(0, Math.min(100, Math.floor(t.kiCost))) : 10;
-      const cooldownMs = typeof t.cooldownMs === "number" && isFinite(t.cooldownMs) ? Math.max(0, Math.min(15000, Math.floor(t.cooldownMs))) : 1000;
+      const mult =
+        typeof t.mult === "number" && isFinite(t.mult)
+          ? Math.max(0.1, Math.min(MAX_CUSTOM_TECHNIQUE_MULT, t.mult))
+          : 1;
+      const kiCost =
+        typeof t.kiCost === "number" && isFinite(t.kiCost)
+          ? Math.max(0, Math.min(100, Math.floor(t.kiCost)))
+          : 10;
+      const cooldownMs =
+        typeof t.cooldownMs === "number" && isFinite(t.cooldownMs)
+          ? Math.max(0, Math.min(15000, Math.floor(t.cooldownMs)))
+          : 1000;
       const aura = typeof t.aura === "string" && t.aura.length <= 40 ? t.aura : "#7c58ff";
-      out.customTechniques.push({ id: t.id.slice(0, 48), name: t.name.trim(), desc: t.desc.slice(0, 200), scale: t.scale as CustomTechniqueScale, mult, kiCost, cooldownMs, aura });
+      out.customTechniques.push({
+        id: t.id.slice(0, 48),
+        name: t.name.trim(),
+        desc: t.desc.slice(0, 200),
+        scale: t.scale as CustomTechniqueScale,
+        mult,
+        kiCost,
+        cooldownMs,
+        aura,
+      });
       if (out.customTechniques.length >= MAX_CUSTOM_TECHNIQUES) break;
     }
   }
@@ -1212,9 +1598,12 @@ export function hydrate(raw: unknown): GameState {
       if (typeof e.action !== "string" || typeof e.target !== "string") continue;
       const outcome = e.outcome === "blocked" || e.outcome === "failed" ? e.outcome : "ok";
       out.adminEvents.push({
-        id: e.id.slice(0, 64), at: Math.floor(e.at),
-        action: e.action.slice(0, 60), target: e.target.slice(0, 120),
-        previousValue: String(e.previousValue ?? "").slice(0, 120), newValue: String(e.newValue ?? "").slice(0, 120),
+        id: e.id.slice(0, 64),
+        at: Math.floor(e.at),
+        action: e.action.slice(0, 60),
+        target: e.target.slice(0, 120),
+        previousValue: String(e.previousValue ?? "").slice(0, 120),
+        newValue: String(e.newValue ?? "").slice(0, 120),
         outcome,
         ...(typeof e.detail === "string" ? { detail: e.detail.slice(0, 200) } : {}),
       });
@@ -1225,7 +1614,11 @@ export function hydrate(raw: unknown): GameState {
   out.bestGrades = {};
   if (r.bestGrades && typeof r.bestGrades === "object" && !Array.isArray(r.bestGrades)) {
     for (const [bossId, grade] of Object.entries(r.bestGrades as Record<string, unknown>)) {
-      if (typeof bossId === "string" && typeof grade === "string" && (GRADE_ORDER as readonly string[]).includes(grade)) {
+      if (
+        typeof bossId === "string" &&
+        typeof grade === "string" &&
+        (GRADE_ORDER as readonly string[]).includes(grade)
+      ) {
         out.bestGrades[bossId.slice(0, 60)] = grade as BattleGrade;
       }
     }
@@ -1267,10 +1660,16 @@ export function migrateSave(raw: unknown, fromVersion = 1): GameState {
 export function openSave(text: string | null | undefined): GameState | null {
   if (typeof text !== "string" || !text) return null;
   let parsed: unknown;
-  try { parsed = JSON.parse(text); } catch { return null; }
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return null;
+  }
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
   const obj = parsed as Record<string, unknown>;
-  const version = typeof obj["v"] === "number" && isFinite(obj["v"]) ? Math.max(1, Math.floor(obj["v"])) : 1;
-  const payload = version >= 2 && obj["data"] && typeof obj["data"] === "object" ? obj["data"] : obj;
+  const version =
+    typeof obj["v"] === "number" && isFinite(obj["v"]) ? Math.max(1, Math.floor(obj["v"])) : 1;
+  const payload =
+    version >= 2 && obj["data"] && typeof obj["data"] === "object" ? obj["data"] : obj;
   return migrateSave(payload, Math.min(version, SAVE_VERSION));
 }

@@ -1,8 +1,15 @@
 // Deterministic boss-fight simulation for the God Engine's automated tester.
 // Same inputs → same outputs. NOT a substitute for a live canvas battle: RNG-free, no human reflexes.
 import {
-  battleClashPressure, battleGrade, formMult, gravMult, initialBattleState, resolveBattleAction,
-  type BattleState, type GameState, type BattleGrade,
+  battleClashPressure,
+  battleGrade,
+  formMult,
+  gravMult,
+  initialBattleState,
+  resolveBattleAction,
+  type BattleState,
+  type GameState,
+  type BattleGrade,
 } from "./engine";
 import type { Boss } from "./data";
 
@@ -23,7 +30,8 @@ export function simulateBossFight(game: GameState, boss: Boss, maxSeconds = 240)
   const g = structuredClone(game);
   let battle: BattleState = structuredClone(initialBattleState);
   battle = resolveBattleAction(battle, g, {
-    type: "START_BATTLE", boss: structuredClone(boss),
+    type: "START_BATTLE",
+    boss: structuredClone(boss),
     // Same player-HP formula as the live BattleTab: base + DEF, scaled by form × gravity.
     playerMaxHp: Math.floor((100 + g.stats.defense * 20) * formMult(g) * gravMult(g)),
     initialKi: g.passes.includes("kicharge") ? 100 : 0,
@@ -38,24 +46,34 @@ export function simulateBossFight(game: GameState, boss: Boss, maxSeconds = 240)
     if (battle.phase === "clash") {
       battle = resolveBattleAction(battle, g, { type: "CLASH_PUSH", agility: g.stats.agility });
       // The clash drains the enemy every 100ms in the real arena; simulate the same pressure.
-      battle = resolveBattleAction(battle, g, { type: "CLASH_TICK", pressurePerSecond: battleClashPressure(boss), deltaSeconds: 0.25, elapsedMs: tick * 250 });
+      battle = resolveBattleAction(battle, g, {
+        type: "CLASH_TICK",
+        pressurePerSecond: battleClashPressure(boss),
+        deltaSeconds: 0.25,
+        elapsedMs: tick * 250,
+      });
       now += 250;
       continue;
     }
     const kiCost = 15; // blast is the cheapest reliable energy spend; rank effects are passthrough anyway
     const doBlast = g.infiniteKi || battle.ki >= 60;
-    const action = tick % 10 === 0 && doBlast
-      ? { type: "BLAST" as const }
-      : tick % 25 === 0 && battle.ki >= 100
-        ? { type: "ULTIMATE" as const }
-        : { type: "PUNCH" as const, now };
+    const action =
+      tick % 10 === 0 && doBlast
+        ? { type: "BLAST" as const }
+        : tick % 25 === 0 && battle.ki >= 100
+          ? { type: "ULTIMATE" as const }
+          : { type: "PUNCH" as const, now };
     const prevBossHp = battle.hp;
     const prevPlayerHp = battle.playerHp;
     battle = resolveBattleAction(battle, g, { ...action, now });
     damageDealtTotal += Math.max(0, prevBossHp - battle.hp);
     if (tick % 4 === 0) {
       const prevP = battle.playerHp;
-      battle = resolveBattleAction(battle, g, { type: "ENEMY_TICK", playerMaxHp: maxPlayerHp, now });
+      battle = resolveBattleAction(battle, g, {
+        type: "ENEMY_TICK",
+        playerMaxHp: maxPlayerHp,
+        now,
+      });
       damageTakenTotal += Math.max(0, prevP - battle.playerHp);
     }
     now += 250;
@@ -80,6 +98,13 @@ export function simulateBossFight(game: GameState, boss: Boss, maxSeconds = 240)
 }
 
 /** Compares a roster of candidate builds... kept deliberately tiny: one game, many bosses. */
-export function simulateBossLadder(game: GameState, bosses: Boss[], maxSeconds = 180): Array<{ bossId: string; result: FightSimResult }> {
-  return bosses.map((boss) => ({ bossId: boss.id, result: simulateBossFight(game, boss, maxSeconds) }));
+export function simulateBossLadder(
+  game: GameState,
+  bosses: Boss[],
+  maxSeconds = 180,
+): Array<{ bossId: string; result: FightSimResult }> {
+  return bosses.map((boss) => ({
+    bossId: boss.id,
+    result: simulateBossFight(game, boss, maxSeconds),
+  }));
 }

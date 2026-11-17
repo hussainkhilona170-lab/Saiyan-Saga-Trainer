@@ -1,6 +1,12 @@
 // Scenario Creator persistence: named, validated, reusable battle configurations. Pure module.
 import { FORMS, type Form, type StatKey } from "./data";
-import { clampSaveNumber, findForm, levelForXp, xpRequiredForLevel, type GameState } from "./engine";
+import {
+  clampSaveNumber,
+  findForm,
+  levelForXp,
+  xpRequiredForLevel,
+  type GameState,
+} from "./engine";
 
 export const SCENARIOS_KEY = "db-god-engine-scenarios";
 const MAX_SCENARIOS = 50;
@@ -24,7 +30,13 @@ export type Scenario = {
   build: ScenarioBuild;
 };
 
-export function createScenario(s: GameState, name: string, bossId: string, notes = "", now = Date.now()): Scenario {
+export function createScenario(
+  s: GameState,
+  name: string,
+  bossId: string,
+  notes = "",
+  now = Date.now(),
+): Scenario {
   return {
     id: `sc-${now}-${Math.floor(Math.random() * 1e6).toString(36)}`.slice(0, 40),
     name: name.trim().slice(0, 60) || "Untitled scenario",
@@ -32,10 +44,20 @@ export function createScenario(s: GameState, name: string, bossId: string, notes
     createdAt: now,
     bossId: bossId.slice(0, 60),
     build: {
-      stats: { strength: s.stats.strength, agility: s.stats.agility, ki: s.stats.ki, defense: s.stats.defense },
+      stats: {
+        strength: s.stats.strength,
+        agility: s.stats.agility,
+        ki: s.stats.ki,
+        defense: s.stats.defense,
+      },
       level: s.level,
       xp: s.xp,
-      mastery: { strength: s.mastery.strength, agility: s.mastery.agility, ki: s.mastery.ki, defense: s.mastery.defense },
+      mastery: {
+        strength: s.mastery.strength,
+        agility: s.mastery.agility,
+        ki: s.mastery.ki,
+        defense: s.mastery.defense,
+      },
       gravity: s.gravity,
       formId: s.activeForm,
       customForms: structuredClone(s.customForms),
@@ -54,9 +76,19 @@ export function parseCustomForms(raw: unknown): Form[] {
     const f = entry as Partial<Form>;
     if (typeof f.id !== "string" || !f.id.startsWith("custom-")) continue;
     if (typeof f.name !== "string" || !f.name.trim() || f.name.length > 30) continue;
-    const mult = typeof f.mult === "number" && isFinite(f.mult) ? Math.max(1, Math.min(1e5, f.mult)) : 1;
+    const mult =
+      typeof f.mult === "number" && isFinite(f.mult) ? Math.max(1, Math.min(1e5, f.mult)) : 1;
     const aura = typeof f.aura === "string" && f.aura.length <= 40 ? f.aura : "#ffd166";
-    out.push({ id: f.id.slice(0, 40), name: f.name.trim(), mult, req: 0, cost: 0, aura, levelReq: 1, custom: true });
+    out.push({
+      id: f.id.slice(0, 40),
+      name: f.name.trim(),
+      mult,
+      req: 0,
+      cost: 0,
+      aura,
+      levelReq: 1,
+      custom: true,
+    });
     if (out.length >= 20) break;
   }
   return out;
@@ -65,7 +97,8 @@ export function parseCustomForms(raw: unknown): Form[] {
 export function parseScenario(raw: unknown): Scenario | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const r = raw as Partial<Scenario>;
-  if (typeof r.id !== "string" || typeof r.name !== "string" || typeof r.bossId !== "string") return null;
+  if (typeof r.id !== "string" || typeof r.name !== "string" || typeof r.bossId !== "string")
+    return null;
   if (!r.build || typeof r.build !== "object") return null;
   const build = r.build as Partial<ScenarioBuild>;
   const stats = {} as Record<StatKey, number>;
@@ -87,7 +120,11 @@ export function parseScenario(raw: unknown): Scenario | null {
       xp: clampSaveNumber(build.xp, xpRequiredForLevel(level)),
       mastery,
       gravity: Math.max(1, Math.min(1000, Math.floor(clampSaveNumber(build.gravity, 1, 1000)))),
-      formId: typeof build.formId === "string" && (FORMS.some((f) => f.id === build.formId) || build.formId.startsWith("custom-")) ? build.formId.slice(0, 40) : "base",
+      formId:
+        typeof build.formId === "string" &&
+        (FORMS.some((f) => f.id === build.formId) || build.formId.startsWith("custom-"))
+          ? build.formId.slice(0, 40)
+          : "base",
       customForms: parseCustomForms(build.customForms),
     },
   };
@@ -97,7 +134,10 @@ export function parseScenarioList(text: string): Scenario[] {
   try {
     const raw: unknown = JSON.parse(text);
     if (!Array.isArray(raw)) return [];
-    return raw.map(parseScenario).filter((sc): sc is Scenario => sc !== null).slice(-MAX_SCENARIOS);
+    return raw
+      .map(parseScenario)
+      .filter((sc): sc is Scenario => sc !== null)
+      .slice(-MAX_SCENARIOS);
   } catch {
     return [];
   }
@@ -119,7 +159,8 @@ export function applyScenarioBuild(d: GameState, build: ScenarioBuild): string {
   // Re-register scenario-carried custom transformations so custom-form scenarios work on any save.
   const carried = parseCustomForms(build.customForms);
   for (const form of carried) {
-    if (!findForm(d, form.id) && !d.customForms.some((f) => f.id === form.id)) d.customForms.push(form);
+    if (!findForm(d, form.id) && !d.customForms.some((f) => f.id === form.id))
+      d.customForms.push(form);
   }
   const formId = findForm(d, build.formId) ? build.formId : "base";
   if (!d.forms.includes(formId)) d.forms.push(formId);
@@ -130,4 +171,3 @@ export function applyScenarioBuild(d: GameState, build: ScenarioBuild): string {
 /** One-line human-readable summary for the scenario list (power level omitted — needs engine context). */
 export const scenarioSummary = (scenario: Scenario): string =>
   `Lv ${scenario.build.level} · ${scenario.build.formId} · Gravity ${scenario.build.gravity}× · STR ${Math.floor(scenario.build.stats.strength)}/AGI ${Math.floor(scenario.build.stats.agility)}/KI ${Math.floor(scenario.build.stats.ki)}/DEF ${Math.floor(scenario.build.stats.defense)} → ${scenario.bossId}`;
-

@@ -10,7 +10,11 @@ export const backupKey = (slot: SlotKind): string => slotKey(slot) + BACKUP_SUFF
 
 /** Pretty, versioned export text (envelope + indentation) for the God Engine export box. */
 export function exportSlotText(state: GameState): string {
-  return JSON.stringify({ v: SAVE_VERSION, data: state } satisfies { v: number; data: GameState }, null, 2);
+  return JSON.stringify(
+    { v: SAVE_VERSION, data: state } satisfies { v: number; data: GameState },
+    null,
+    2,
+  );
 }
 
 export type LoadResult = { state: GameState | null; recoveredFromBackup: boolean };

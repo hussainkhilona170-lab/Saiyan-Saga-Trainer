@@ -6,6 +6,7 @@ import { CHARACTERS } from "../genesis/characters";
 export function GenesisSection() {
   const [x, setX] = useState(0);
   const [z, setZ] = useState(0);
+  const [xp, setXp] = useState(100);
   return (
     <div className="space-y-3">
       <Card>
@@ -41,6 +42,20 @@ export function GenesisSection() {
           />
           <Btn onClick={() => sendGenesisCommand({ type: "teleport", x, y: 0, z })}>Go</Btn>
           <Btn onClick={() => sendGenesisCommand({ type: "reset" })}>Reset</Btn>
+        </div>
+      </Card>
+      <Card>
+        <div className="font-display">Live controls</div>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <Btn onClick={() => sendGenesisCommand({ type: "heal" })}>Heal</Btn>
+          <Btn onClick={() => sendGenesisCommand({ type: "killEnemies" })}>Kill enemies</Btn>
+          <input
+            type="number"
+            value={xp}
+            onChange={(e) => setXp(Number(e.target.value))}
+            className="w-20 rounded bg-secondary px-2 py-1 text-foreground"
+          />
+          <Btn onClick={() => sendGenesisCommand({ type: "giveXp", amount: xp })}>Give XP</Btn>
         </div>
       </Card>
     </div>

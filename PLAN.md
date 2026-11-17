@@ -1,6 +1,6 @@
 # Dragon Ball RPG — Development Plan
 
-**Version:** PRE ALPHA 0.26
+**Version:** PRE ALPHA 0.27
 **Last updated:** 2026-11-17
 **Branch:** main (Lovable-connected — do not rewrite published history)
 
@@ -147,6 +147,10 @@ src/genesis/hud/        GENESIS 3D: HUD reusing Card + design tokens (AGENTS.md 
 - Skin weights are analytic (nearest two bone segments, inverse-distance^3.6) instead of rigid per-part binding, so joints bend smoothly
 - Set as the default character; cycle with the Character button
 - Before/after previews rendered headlessly with Cycles (`preview_dir` arg) — no desktop window is touched
+
+### God Engine Genesis expansion (`0.27`)
+- **Extended genesis bus**: `heal`, `giveXp`, `killEnemies` commands; GenesisScene queues them and FighterRose applies them (full HP/Ki, XP award with level-up, enemy wipe).
+- **GenesisSection** (God Engine panel) gained a "Live controls" card: Heal, Kill enemies, and a numeric Give XP input.
 
 ### Genesis entry point in Trainer (`0.26`)
 - **Nav link + Train-tab card** in the 2D Trainer app: a `🌌 Genesis` button in the tab bar and a "Enter Genesis →" card on the Train tab both route to `/genesis` (TanStack `Link`), so the 3D game is reachable from inside the Trainer without typing a URL.
@@ -321,6 +325,7 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 - PRE ALPHA 0.24 (enemy AI: chase, attack, respawn, player HP)
 - PRE ALPHA 0.25 (save/load: versioned envelope, persist on interval + unmount)
 - PRE ALPHA 0.26 (Genesis entry point in Trainer: nav link + Train-tab card)
+- PRE ALPHA 0.27 (God Engine Genesis expansion: heal, giveXp, killEnemies)
 
 ## 9. Test counts
 

@@ -1,6 +1,20 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { BOSSES, type Boss, type StatKey } from "./data";
-import { applyAction, effectiveTrainingGain, hydrate, initialState as initial, type GameState } from "./engine";
+import {
+  applyAction,
+  effectiveTrainingGain,
+  hydrate,
+  initialState as initial,
+  type GameState,
+} from "./engine";
 import { backupKey, encodeSlot, resolveInitialLoad, slotKey, type SlotKind } from "./persistence";
 
 export type { GameState } from "./engine";
@@ -62,7 +76,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     try {
-      const result = resolveInitialLoad(localStorage.getItem(slotKey("main")), localStorage.getItem(backupKey("main")));
+      const result = resolveInitialLoad(
+        localStorage.getItem(slotKey("main")),
+        localStorage.getItem(backupKey("main")),
+      );
       if (result.state) setS(result.state);
       setRecoveredFromBackup(result.recoveredFromBackup);
     } catch {
@@ -97,7 +114,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
   // Flush the pending save on exit so a mid-throttle page close never loses work.
   useEffect(() => {
-    const flush = () => { if (pendingSaveRef.current) persist(slotRef.current, pendingSaveRef.current); };
+    const flush = () => {
+      if (pendingSaveRef.current) persist(slotRef.current, pendingSaveRef.current);
+    };
     window.addEventListener("pagehide", flush);
     window.addEventListener("beforeunload", flush);
     return () => {
@@ -108,44 +127,57 @@ export function GameProvider({ children }: { children: ReactNode }) {
   }, [persist]);
 
   const update = useCallback((fn: (d: GameState) => void) => {
-    setS((prev) => { const d = structuredClone(prev); fn(d); return d; });
+    setS((prev) => {
+      const d = structuredClone(prev);
+      fn(d);
+      return d;
+    });
   }, []);
 
-  const train = useCallback((stat: StatKey) => {
-    // Report what the engine will actually apply (soft cap + mastery), not the
-    // raw multiplier product — the Turbo meter and click floaters must match
-    // the stat growth the player actually observes.
-    const applied = effectiveTrainingGain(ref.current, stat);
-    update((d) => applyAction(d, { type: "TRAIN_STAT", stat }));
-    return applied;
-  }, [update]);
+  const train = useCallback(
+    (stat: StatKey) => {
+      // Report what the engine will actually apply (soft cap + mastery), not the
+      // raw multiplier product — the Turbo meter and click floaters must match
+      // the stat growth the player actually observes.
+      const applied = effectiveTrainingGain(ref.current, stat);
+      update((d) => applyAction(d, { type: "TRAIN_STAT", stat }));
+      return applied;
+    },
+    [update],
+  );
 
   // Switch save slots: persists the current slot, loads the target one.
   // A fresh sandbox starts as a clone of the main save; both stay isolated.
-  const switchSlot = useCallback((target: SaveSlot) => {
-    if (target === slotRef.current) return;
-    const currentSlot = slotRef.current;
-    const current = ref.current;
-    if (saveTimerRef.current) {
-      clearTimeout(saveTimerRef.current);
-      saveTimerRef.current = null;
-    }
-    persist(currentSlot, current);
-    let next: GameState | null = null;
-    let recovered = false;
-    try {
-      const result = resolveInitialLoad(localStorage.getItem(slotKey(target)), localStorage.getItem(backupKey(target)));
-      next = result.state;
-      recovered = result.recoveredFromBackup;
-    } catch {
-      next = null;
-    }
-    if (!next && target === "sandbox") next = structuredClone(current);
-    if (!next) next = structuredClone(initial);
-    setSlot(target);
-    setRecoveredFromBackup(recovered);
-    setS(next);
-  }, [persist]);
+  const switchSlot = useCallback(
+    (target: SaveSlot) => {
+      if (target === slotRef.current) return;
+      const currentSlot = slotRef.current;
+      const current = ref.current;
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+      persist(currentSlot, current);
+      let next: GameState | null = null;
+      let recovered = false;
+      try {
+        const result = resolveInitialLoad(
+          localStorage.getItem(slotKey(target)),
+          localStorage.getItem(backupKey(target)),
+        );
+        next = result.state;
+        recovered = result.recoveredFromBackup;
+      } catch {
+        next = null;
+      }
+      if (!next && target === "sandbox") next = structuredClone(current);
+      if (!next) next = structuredClone(initial);
+      setSlot(target);
+      setRecoveredFromBackup(recovered);
+      setS(next);
+    },
+    [persist],
+  );
 
   // Restores a snapshot/imported save: hydrate re-validates shape, so garbage
   // inputs can never reach the live state.
@@ -159,18 +191,41 @@ export function GameProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(t);
   }, [update]);
 
-  const triggerShake = useCallback(() => { setShake((n) => n + 1); }, []);
+  const triggerShake = useCallback(() => {
+    setShake((n) => n + 1);
+  }, []);
   const reset = useCallback(() => {
     if (saveTimerRef.current) {
       clearTimeout(saveTimerRef.current);
       saveTimerRef.current = null;
     }
     pendingSaveRef.current = null;
-    try { localStorage.removeItem(slotKey(slotRef.current)); } catch { /* slot may be locked; the fresh state below still lands */ }
+    try {
+      localStorage.removeItem(slotKey(slotRef.current));
+    } catch {
+      /* slot may be locked; the fresh state below still lands */
+    }
     setS(structuredClone(initial));
   }, []);
 
-  return <GameCtx.Provider value={{ s, slot, recoveredFromBackup, update, train, reset, switchSlot, restore, shake, triggerShake }}>{children}</GameCtx.Provider>;
+  return (
+    <GameCtx.Provider
+      value={{
+        s,
+        slot,
+        recoveredFromBackup,
+        update,
+        train,
+        reset,
+        switchSlot,
+        restore,
+        shake,
+        triggerShake,
+      }}
+    >
+      {children}
+    </GameCtx.Provider>
+  );
 }
 
 export function useGame() {

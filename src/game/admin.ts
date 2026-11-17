@@ -1,13 +1,18 @@
 // Typed GOD ENGINE admin API. Pure, validated, logged. No React, no storage.
 // Every privileged operation the God Engine exposes funnels through executeAdminAction,
 // so extreme-number protection, audit logging and destructive-action flags are uniform.
+import { BOSSES, LOCATIONS, QUESTS, type StatKey } from "./data";
 import {
-  BOSSES, LOCATIONS, QUESTS,
-  type StatKey,
-} from "./data";
-import {
-  allForms, clampSaveNumber, findForm, grantExperience, levelForXp, logTransaction,
-  MAX_SAVE_NUMBER, powerLevel, xpRequiredForLevel, type GameState,
+  allForms,
+  clampSaveNumber,
+  findForm,
+  grantExperience,
+  levelForXp,
+  logTransaction,
+  MAX_SAVE_NUMBER,
+  powerLevel,
+  xpRequiredForLevel,
+  type GameState,
 } from "./engine";
 // re-use the engine's internal quest-claim path by dispatching a synthetic action is not
 // possible from here; force-claims are reimplemented with the same validation.
@@ -46,7 +51,12 @@ export type AdminAction =
   | { type: "SNAPSHOT_CREATE"; name: string };
 
 export type AdminOutcome = "ok" | "failed" | "blocked";
-export type AdminResult = { ok: boolean; message: string; outcome: AdminOutcome; confirmRequired?: boolean };
+export type AdminResult = {
+  ok: boolean;
+  message: string;
+  outcome: AdminOutcome;
+  confirmRequired?: boolean;
+};
 
 const STAT_KEYS: readonly StatKey[] = ["strength", "agility", "ki", "defense"];
 export const isStatKey = (k: string): k is StatKey => (STAT_KEYS as readonly string[]).includes(k);
@@ -65,28 +75,66 @@ export function adminActionRequiresConfirmation(action: AdminAction): boolean {
 }
 
 /** Appends a single admin event row (capped at 100). Exported so direct UI mutations can still be audited. */
-export function recordAdminEvent(d: GameState, action: string, target: string, previousValue: unknown, newValue: unknown, outcome: AdminOutcome, at = Date.now(), detail?: string): void {
+export function recordAdminEvent(
+  d: GameState,
+  action: string,
+  target: string,
+  previousValue: unknown,
+  newValue: unknown,
+  outcome: AdminOutcome,
+  at = Date.now(),
+  detail?: string,
+): void {
   record(d, action, target, previousValue, newValue, outcome, at, detail);
 }
 
-function record(d: GameState, action: string, target: string, previousValue: unknown, newValue: unknown, outcome: AdminOutcome, at: number, detail?: string): void {
+function record(
+  d: GameState,
+  action: string,
+  target: string,
+  previousValue: unknown,
+  newValue: unknown,
+  outcome: AdminOutcome,
+  at: number,
+  detail?: string,
+): void {
   d.adminEvents.push({
-    id: `${at}-${d.adminEvents.length}`, at, action, target: String(target).slice(0, 120),
-    previousValue: String(previousValue).slice(0, 120), newValue: String(newValue).slice(0, 120),
+    id: `${at}-${d.adminEvents.length}`,
+    at,
+    action,
+    target: String(target).slice(0, 120),
+    previousValue: String(previousValue).slice(0, 120),
+    newValue: String(newValue).slice(0, 120),
     outcome,
     ...(detail ? { detail: detail.slice(0, 200) } : {}),
   });
   if (d.adminEvents.length > 100) d.adminEvents.splice(0, d.adminEvents.length - 100);
 }
 
-const fmtN = (n: number): string => (Number.isFinite(n) ? Math.floor(n).toLocaleString("en-US") : "∞");
+const fmtN = (n: number): string =>
+  Number.isFinite(n) ? Math.floor(n).toLocaleString("en-US") : "∞";
 const finiteClamp = (n: number, max = MAX_SAVE_NUMBER): number => clampSaveNumber(n, 0, max);
 
 /** Executes an admin action against the draft. All inputs are clamped; everything is logged. */
-export function executeAdminAction(d: GameState, action: AdminAction, at = Date.now()): AdminResult {
-  const ok = (message: string, extra?: Partial<AdminResult>): AdminResult => ({ ok: true, message, outcome: "ok", ...extra });
-  const fail = (message: string): AdminResult => { record(d, action.type, targetOf(action), "", "", "failed", at, message); return { ok: false, message, outcome: "failed" }; };
-  const block = (message: string): AdminResult => { record(d, action.type, targetOf(action), "", "", "blocked", at, message); return { ok: false, message, outcome: "blocked" }; };
+export function executeAdminAction(
+  d: GameState,
+  action: AdminAction,
+  at = Date.now(),
+): AdminResult {
+  const ok = (message: string, extra?: Partial<AdminResult>): AdminResult => ({
+    ok: true,
+    message,
+    outcome: "ok",
+    ...extra,
+  });
+  const fail = (message: string): AdminResult => {
+    record(d, action.type, targetOf(action), "", "", "failed", at, message);
+    return { ok: false, message, outcome: "failed" };
+  };
+  const block = (message: string): AdminResult => {
+    record(d, action.type, targetOf(action), "", "", "blocked", at, message);
+    return { ok: false, message, outcome: "blocked" };
+  };
 
   switch (action.type) {
     case "SET_STAT": {
@@ -99,19 +147,30 @@ export function executeAdminAction(d: GameState, action: AdminAction, at = Date.
     case "ADD_STAT": {
       if (!isStatKey(action.stat)) return fail("Unknown stat");
       const prev = d.stats[action.stat];
-      d.stats[action.stat] = finiteClamp(prev + (Number.isFinite(action.delta) ? action.delta : 0), 1e15);
+      d.stats[action.stat] = finiteClamp(
+        prev + (Number.isFinite(action.delta) ? action.delta : 0),
+        1e15,
+      );
       record(d, action.type, action.stat, prev, d.stats[action.stat], "ok", at);
-      return ok(`Stat ${action.stat} ${action.delta >= 0 ? "+" : ""}${fmtN(Math.abs(action.delta))} → ${fmtN(d.stats[action.stat])}`);
+      return ok(
+        `Stat ${action.stat} ${action.delta >= 0 ? "+" : ""}${fmtN(Math.abs(action.delta))} → ${fmtN(d.stats[action.stat])}`,
+      );
     }
     case "SET_MASTERY": {
       if (!isStatKey(action.stat)) return fail("Unknown stat");
       const prev = d.mastery[action.stat];
-      d.mastery[action.stat] = Math.max(0, Math.min(100, Number.isFinite(action.value) ? action.value : 0));
+      d.mastery[action.stat] = Math.max(
+        0,
+        Math.min(100, Number.isFinite(action.value) ? action.value : 0),
+      );
       record(d, action.type, action.stat, prev, d.mastery[action.stat], "ok", at);
       return ok(`Mastery ${action.stat} set to ${d.mastery[action.stat]}%`);
     }
     case "SET_LEVEL": {
-      const level = Math.max(1, Math.min(100, Math.floor(Number.isFinite(action.level) ? action.level : 1)));
+      const level = Math.max(
+        1,
+        Math.min(100, Math.floor(Number.isFinite(action.level) ? action.level : 1)),
+      );
       const prev = d.level;
       d.level = level;
       d.xp = xpRequiredForLevel(level);
@@ -131,7 +190,16 @@ export function executeAdminAction(d: GameState, action: AdminAction, at = Date.
       if (current <= 0) return fail("Cannot compute a scale from zero Power Level");
       const scale = target / current;
       for (const k of STAT_KEYS) d.stats[k] = finiteClamp(d.stats[k] * scale, 1e15);
-      record(d, action.type, "powerLevel", current, powerLevel(d), "ok", at, `scale ×${scale.toFixed(4)}`);
+      record(
+        d,
+        action.type,
+        "powerLevel",
+        current,
+        powerLevel(d),
+        "ok",
+        at,
+        `scale ×${scale.toFixed(4)}`,
+      );
       return ok(`Stats scaled ×${scale.toFixed(4)} → Power Level ${fmtN(powerLevel(d))}`);
     }
     case "SET_ZENI": {
@@ -169,13 +237,19 @@ export function executeAdminAction(d: GameState, action: AdminAction, at = Date.
     }
     case "SET_GRAVITY": {
       const prev = d.gravity;
-      d.gravity = Math.max(1, Math.min(1000, Math.floor(Number.isFinite(action.gravity) ? action.gravity : 1)));
+      d.gravity = Math.max(
+        1,
+        Math.min(1000, Math.floor(Number.isFinite(action.gravity) ? action.gravity : 1)),
+      );
       record(d, action.type, "gravity", prev, d.gravity, "ok", at);
       return ok(`Gravity set to ${d.gravity}×`);
     }
     case "SET_DRAGON_BALLS": {
       const prev = d.dragonBalls;
-      d.dragonBalls = Math.max(0, Math.min(7, Math.floor(Number.isFinite(action.count) ? action.count : 0)));
+      d.dragonBalls = Math.max(
+        0,
+        Math.min(7, Math.floor(Number.isFinite(action.count) ? action.count : 0)),
+      );
       record(d, action.type, "dragonBalls", prev, d.dragonBalls, "ok", at);
       return ok(`Dragon Balls set to ${d.dragonBalls}/7`);
     }
@@ -201,7 +275,16 @@ export function executeAdminAction(d: GameState, action: AdminAction, at = Date.
       const ids = allForms(d).map((f) => f.id);
       const before = d.forms.length;
       d.forms = [...new Set([...d.forms, ...ids])];
-      record(d, action.type, "all forms", before, d.forms.length, "ok", at, "confirm required by caller");
+      record(
+        d,
+        action.type,
+        "all forms",
+        before,
+        d.forms.length,
+        "ok",
+        at,
+        "confirm required by caller",
+      );
       return ok(`Unlocked every form (${d.forms.length} total)`, { confirmRequired: true });
     }
     case "LOCK_ALL_FORMS": {
@@ -243,14 +326,28 @@ export function executeAdminAction(d: GameState, action: AdminAction, at = Date.
         paid++;
         record(d, action.type, quest.id, "unclaimed", "claimed", "ok", at);
       }
-      return ok(`Quest${targets.length > 1 ? "s" : ""} completed and claimed: ${paid}`, { confirmRequired: true });
+      return ok(`Quest${targets.length > 1 ? "s" : ""} completed and claimed: ${paid}`, {
+        confirmRequired: true,
+      });
     }
     case "RESET_QUEST": {
       const targets = action.questId === "all" ? [...d.quests] : [action.questId];
       const before = d.quests.length;
       d.quests = d.quests.filter((q) => !targets.includes(q));
-      record(d, action.type, action.questId, before, d.quests.length, "ok", at, "rewards are NOT refunded");
-      return ok(`Quest progress reset (${before - d.quests.length} quests). Rewards were not refunded.`, { confirmRequired: true });
+      record(
+        d,
+        action.type,
+        action.questId,
+        before,
+        d.quests.length,
+        "ok",
+        at,
+        "rewards are NOT refunded",
+      );
+      return ok(
+        `Quest progress reset (${before - d.quests.length} quests). Rewards were not refunded.`,
+        { confirmRequired: true },
+      );
     }
     case "UNLOCK_BOSS": {
       const boss = BOSSES.find((b) => b.id === action.bossId);
@@ -258,14 +355,27 @@ export function executeAdminAction(d: GameState, action: AdminAction, at = Date.
       // "Unlocking" a boss means marking it defeated so quest-gated content opens, plus we log it clearly.
       const already = d.defeated.includes(boss.id);
       if (!already) d.defeated.push(boss.id);
-      record(d, action.type, boss.id, already ? "already marked" : "not marked", "defeated", "ok", at, "marks the boss defeated for quest progress");
-      return ok(already ? `${boss.name} was already marked defeated` : `Marked ${boss.name} as defeated`);
+      record(
+        d,
+        action.type,
+        boss.id,
+        already ? "already marked" : "not marked",
+        "defeated",
+        "ok",
+        at,
+        "marks the boss defeated for quest progress",
+      );
+      return ok(
+        already ? `${boss.name} was already marked defeated` : `Marked ${boss.name} as defeated`,
+      );
     }
     case "SET_GOD_MODE": {
       const prev = d.godMode;
       d.godMode = action.flag;
       record(d, action.type, "godMode", prev, d.godMode, "ok", at);
-      return ok(`God Mode ${d.godMode ? "ENABLED" : "disabled"}${d.godMode ? " — no damage, no costs" : ""}`);
+      return ok(
+        `God Mode ${d.godMode ? "ENABLED" : "disabled"}${d.godMode ? " — no damage, no costs" : ""}`,
+      );
     }
     case "SET_INFINITE_KI": {
       const prev = d.infiniteKi;
@@ -287,15 +397,38 @@ export function executeAdminAction(d: GameState, action: AdminAction, at = Date.
     }
     case "SPAWN_BOSS": {
       const boss = BOSSES.find((b) => b.id === action.bossId);
-      if (!boss && !action.bossId.startsWith("raid-") && !action.bossId.startsWith("endless-") && !action.bossId.startsWith("tournament-")) {
+      if (
+        !boss &&
+        !action.bossId.startsWith("raid-") &&
+        !action.bossId.startsWith("endless-") &&
+        !action.bossId.startsWith("tournament-")
+      ) {
         return fail("Unknown boss id");
       }
-      record(d, action.type, action.bossId, "", "spawn", "ok", at, "routed to battle via command bus");
+      record(
+        d,
+        action.type,
+        action.bossId,
+        "",
+        "spawn",
+        "ok",
+        at,
+        "routed to battle via command bus",
+      );
       return ok(`Spawn request routed to the battle tab: ${action.bossId}`);
     }
     case "SNAPSHOT_CREATE": {
       // Snapshot persistence is module-level (snapshots.ts); console surfaces the CTA instead.
-      record(d, action.type, action.name, "", "queued", "ok", at, "snapshot handled by snapshot manager");
+      record(
+        d,
+        action.type,
+        action.name,
+        "",
+        "queued",
+        "ok",
+        at,
+        "snapshot handled by snapshot manager",
+      );
       return ok(`Snapshot "${action.name}" queued`);
     }
   }

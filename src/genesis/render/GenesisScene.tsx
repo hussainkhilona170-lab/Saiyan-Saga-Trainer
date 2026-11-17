@@ -69,6 +69,7 @@ export default function GenesisScene() {
   const stateRef = useRef<CharacterState>(createCharacterState());
   const keysRef = useKeyboard();
   const teleportRef = useRef<{ x: number; y: number; z: number } | null>(null);
+  const commandQueueRef = useRef<GenesisCommand[]>([]);
   const [characterID, setCharacterID] = useState(DEFAULT_CHARACTER_ID);
   const [stats, setStats] = useState<HudStats>({
     fps: 0,
@@ -84,6 +85,7 @@ export default function GenesisScene() {
   // God Engine → Genesis command channel (cross-tab).
   useEffect(() => {
     return subscribeGenesisCommands((cmd: GenesisCommand) => {
+      commandQueueRef.current.push(cmd);
       switch (cmd.type) {
         case "setCharacter":
           setCharacterID(cmd.id);
@@ -140,6 +142,7 @@ export default function GenesisScene() {
           character={character}
           teleportRef={teleportRef}
           modelUrl={character.model ?? "/assets/characters/rose_saiyan.glb"}
+          commandQueueRef={commandQueueRef}
         />
       </Canvas>
       <GenesisHud

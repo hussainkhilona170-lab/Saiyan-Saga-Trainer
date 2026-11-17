@@ -11,7 +11,10 @@ export type GenesisCommand =
   | { type: "teleport"; x: number; y: number; z: number }
   | { type: "reset" }
   | { type: "spawnPillar"; x: number; z: number; h: number }
-  | { type: "clearPillars" };
+  | { type: "clearPillars" }
+  | { type: "heal" }
+  | { type: "giveXp"; amount: number }
+  | { type: "killEnemies" };
 
 const CHANNEL_NAME = "genesis-bus";
 const LOCAL_EVENT = "genesis-command";

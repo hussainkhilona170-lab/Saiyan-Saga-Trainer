@@ -16,6 +16,7 @@ import type { HudStats } from "../hud/GenesisHud";
 import type { RawKeys } from "./useKeyboard";
 import { moveIntent, resolveCameraPosition } from "./cameraRelative";
 import { resolveBones } from "./boneNames";
+import type { GenesisCommand } from "../genesisBus";
 import { OBSTACLES } from "../world";
 import {
   applyDamage,
@@ -102,6 +103,7 @@ type FighterProps = {
   character: CharacterDef;
   teleportRef?: RefObject<{ x: number; y: number; z: number } | null>;
   modelUrl: string;
+  commandQueueRef?: RefObject<GenesisCommand[]>;
 };
 
 type Bones = {
@@ -128,6 +130,7 @@ export function FighterRose({
   character,
   teleportRef,
   modelUrl,
+  commandQueueRef,
 }: FighterProps) {
   const { camera, scene } = useThree();
   const groupRef = useRef<THREE.Group>(null);
@@ -361,6 +364,37 @@ export function FighterRose({
     if (tp) {
       stateRef.current = { ...stateRef.current, x: tp.x, y: tp.y, z: tp.z, vx: 0, vy: 0, vz: 0 };
       teleportRef.current = null;
+    }
+    // Drain God Engine commands targeted at the fighter.
+    const q = commandQueueRef?.current;
+    if (q && q.length) {
+      for (const cmd of q) {
+        switch (cmd.type) {
+          case "heal":
+            playerCombatantRef.current = createCombatant(
+              maxHpForLevel(progressRef.current.level),
+              maxKiForLevel(progressRef.current.level),
+            );
+            break;
+          case "giveXp":
+            {
+              const r = awardXp(progressRef.current, cmd.amount);
+              progressRef.current = r.progress;
+            }
+            break;
+          case "killEnemies":
+            enemyCombatantRef.current = { ...enemyCombatantRef.current, hp: 0, alive: false };
+            break;
+          case "reset":
+            progressRef.current = createProgress();
+            playerCombatantRef.current = createCombatant(100, 100);
+            enemyCombatantRef.current = createCombatant(60);
+            enemyRespawnRef.current = 0;
+            targetCombatantRef.current = createCombatant(100);
+            break;
+        }
+      }
+      q.length = 0;
     }
     const keys = keysRef.current;
     const move = moveIntent(keys, camera);

@@ -23,7 +23,12 @@ export function useBattleControls(actions: BattleControls) {
     };
 
     const onDown = (event: KeyboardEvent) => {
-      if (event.target instanceof HTMLElement && (event.target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(event.target.tagName))) return;
+      if (
+        event.target instanceof HTMLElement &&
+        (event.target.isContentEditable ||
+          ["INPUT", "TEXTAREA", "SELECT"].includes(event.target.tagName))
+      )
+        return;
       const key = event.key.toLowerCase();
       if (key === " " || key === "j") {
         event.preventDefault();
@@ -45,7 +50,8 @@ export function useBattleControls(actions: BattleControls) {
       } else if (key === "c") {
         event.preventDefault();
         if (!event.repeat && !chargeTimerRef.current) actionsRef.current.charge();
-        if (!chargeTimerRef.current) chargeTimerRef.current = setInterval(() => actionsRef.current.charge(), 110);
+        if (!chargeTimerRef.current)
+          chargeTimerRef.current = setInterval(() => actionsRef.current.charge(), 110);
       }
     };
 
