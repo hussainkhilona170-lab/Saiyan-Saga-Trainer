@@ -1,6 +1,6 @@
 # Dragon Ball RPG — Development Plan
 
-**Version:** PRE ALPHA 0.30
+**Version:** PRE ALPHA 0.31
 **Last updated:** 2026-11-17
 **Branch:** main (Lovable-connected — do not rewrite published history)
 
@@ -147,6 +147,9 @@ src/genesis/hud/        GENESIS 3D: HUD reusing Card + design tokens (AGENTS.md 
 - Skin weights are analytic (nearest two bone segments, inverse-distance^3.6) instead of rigid per-part binding, so joints bend smoothly
 - Set as the default character; cycle with the Character button
 - Before/after previews rendered headlessly with Cycles (`preview_dir` arg) — no desktop window is touched
+
+### God Engine Genesis responsiveness (`0.31`)
+- Commands (`heal`, `giveXp`, `killEnemies`, `spawnBoss`, `reset`) now apply **immediately** via a registered handler instead of waiting for the next render frame, so the God Engine works even when the Genesis tab is throttled.
 
 ### God Engine Genesis fix (`0.30`)
 - **HUD character name** now updates immediately when a `setCharacter` command arrives (no longer waits for the next render frame's `onStats`), so the God Engine's character swap is visible even when the scene is throttled.
@@ -342,6 +345,7 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 - PRE ALPHA 0.28 (boss fight: 300 HP boss, chase/attack, respawn, XP)
 - PRE ALPHA 0.29 (quest system: 3 sequential quests, HUD progress, XP rewards)
 - PRE ALPHA 0.30 (God Engine Genesis fix: immediate HUD character update)
+- PRE ALPHA 0.31 (God Engine responsiveness: immediate command application via handler ref)
 
 ## 9. Test counts
 

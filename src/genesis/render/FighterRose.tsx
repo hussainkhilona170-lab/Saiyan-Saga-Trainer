@@ -110,6 +110,7 @@ type FighterProps = {
   teleportRef?: RefObject<{ x: number; y: number; z: number } | null>;
   modelUrl: string;
   commandQueueRef?: RefObject<GenesisCommand[]>;
+  commandHandlerRef?: RefObject<((cmd: GenesisCommand) => void) | null>;
 };
 
 type Bones = {
@@ -137,6 +138,7 @@ export function FighterRose({
   teleportRef,
   modelUrl,
   commandQueueRef,
+  commandHandlerRef,
 }: FighterProps) {
   const { camera, scene } = useThree();
   const groupRef = useRef<THREE.Group>(null);
@@ -396,6 +398,56 @@ export function FighterRose({
     };
   }, []);
 
+  const applyCommand = (cmd: GenesisCommand) => {
+    switch (cmd.type) {
+      case "heal":
+        playerCombatantRef.current = createCombatant(
+          maxHpForLevel(progressRef.current.level),
+          maxKiForLevel(progressRef.current.level),
+        );
+        break;
+      case "giveXp":
+        {
+          const r = awardXp(progressRef.current, cmd.amount);
+          progressRef.current = r.progress;
+        }
+        break;
+      case "killEnemies":
+        enemyCombatantRef.current = { ...enemyCombatantRef.current, hp: 0, alive: false };
+        break;
+      case "spawnBoss":
+        bossCombatantRef.current = createCombatant(300);
+        bossRespawnRef.current = 0;
+        bossWasAliveRef.current = true;
+        if (bossMeshRef.current) {
+          bossMeshRef.current.visible = true;
+          bossMeshRef.current.position.set(8, 1.0, -6);
+        }
+        break;
+      case "reset":
+        progressRef.current = createProgress();
+        playerCombatantRef.current = createCombatant(100, 100);
+        enemyCombatantRef.current = createCombatant(60);
+        enemyRespawnRef.current = 0;
+        enemyWasAliveRef.current = true;
+        targetCombatantRef.current = createCombatant(100);
+        bossCombatantRef.current = createCombatant(300);
+        bossRespawnRef.current = 30;
+        bossWasAliveRef.current = false;
+        break;
+      default:
+        break;
+    }
+  };
+
+  useEffect(() => {
+    if (!commandHandlerRef) return;
+    commandHandlerRef.current = applyCommand;
+    return () => {
+      commandHandlerRef.current = null;
+    };
+  }, [commandHandlerRef]);
+
   useFrame((_, delta) => {
     const tp = teleportRef?.current;
     if (tp) {
@@ -405,41 +457,7 @@ export function FighterRose({
     // Drain God Engine commands targeted at the fighter.
     const q = commandQueueRef?.current;
     if (q && q.length) {
-      for (const cmd of q) {
-        switch (cmd.type) {
-          case "heal":
-            playerCombatantRef.current = createCombatant(
-              maxHpForLevel(progressRef.current.level),
-              maxKiForLevel(progressRef.current.level),
-            );
-            break;
-          case "giveXp":
-            {
-              const r = awardXp(progressRef.current, cmd.amount);
-              progressRef.current = r.progress;
-            }
-            break;
-          case "killEnemies":
-            enemyCombatantRef.current = { ...enemyCombatantRef.current, hp: 0, alive: false };
-            break;
-          case "spawnBoss":
-            bossCombatantRef.current = createCombatant(300);
-            bossRespawnRef.current = 0;
-            bossWasAliveRef.current = true;
-            if (bossMeshRef.current) {
-              bossMeshRef.current.visible = true;
-              bossMeshRef.current.position.set(8, 1.0, -6);
-            }
-            break;
-          case "reset":
-            progressRef.current = createProgress();
-            playerCombatantRef.current = createCombatant(100, 100);
-            enemyCombatantRef.current = createCombatant(60);
-            enemyRespawnRef.current = 0;
-            targetCombatantRef.current = createCombatant(100);
-            break;
-        }
-      }
+      for (const cmd of q) applyCommand(cmd);
       q.length = 0;
     }
     const keys = keysRef.current;
