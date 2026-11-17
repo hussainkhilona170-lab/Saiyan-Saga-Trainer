@@ -21,6 +21,17 @@ export type CharacterDef = {
 
 export const CHARACTERS: CharacterDef[] = [
   {
+    id: "vanguard",
+    name: "Vanguard",
+    title: "Martial artist",
+    gi: "#2c3450",
+    under: "#9e2b33",
+    hair: "#14141f",
+    skin: "#c98c65",
+    scale: 1,
+    model: "/assets/characters/vanguard.glb",
+  },
+  {
     id: "rose",
     name: "Rosé Saiyan",
     title: "Original fighter",

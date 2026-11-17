@@ -66,7 +66,7 @@ export default function GenesisScene() {
   const stateRef = useRef<CharacterState>(createCharacterState());
   const keysRef = useKeyboard();
   const teleportRef = useRef<{ x: number; y: number; z: number } | null>(null);
-  const [characterID, setCharacterID] = useState("rose");
+  const [characterID, setCharacterID] = useState("vanguard");
   const [stats, setStats] = useState<HudStats>({
     fps: 0,
     ms: 0,

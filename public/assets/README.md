@@ -1,14 +1,44 @@
 # Genesis Asset Library
 
-All assets in this folder are **CC0 (Public Domain)** — free for personal and commercial use, no attribution required.
+All assets in this folder are either **CC0 (Public Domain)** or **original work
+generated for this project** — free for personal and commercial use, no
+attribution required.
 
-## Source
+## Original characters (`public/assets/characters/`)
 
-Downloaded from [Cinevva](https://app.cinevva.com/game-assets/free-3d-character-models) which hosts CC0 GLB files from:
-- **Quaternius** (quaternius.com) — rigged humanoid characters with animations
-- **Kenney** (kenney.nl) — low-poly characters and props
+Built from procedural geometry by the scripts in `assets/source/`, so the meshes
+are original work (no third-party likeness or scanned assets).
 
-## Characters (`assets/characters/`)
+| File | Source script | Tris | Rig | Animations |
+|------|---------------|------|-----|------------|
+| vanguard.glb | `assets/source/vanguard.py` | 10,924 | Skinned (20 joints) | 0 (procedural) |
+| rose_saiyan.glb | `assets/source/rose_saiyan.py` | 9,710 | Skinned (20 joints) | 0 (procedural) |
+
+`vanguard.glb` is built by `vanguard.py` + `vanguard_lib.py`:
+
+```
+blender --background --python assets/source/vanguard.py -- \
+  public/assets/characters/vanguard.glb [preview_dir]
+```
+
+The rig carries **no baked clips on purpose**. `FighterRose.tsx` drives the 20
+joints from the pure pose state machine in `src/genesis/sim/animation.ts`, so
+walk / run / jump / land limb motion comes from gameplay state rather than
+pre-authored animation.
+
+Joint names are stable and are what the renderer looks up:
+
+```
+root, hips, spine, chest, neck, head,
+shoulder.L/R, upperArm.L/R, lowerArm.L/R, hand.L/R,
+thigh.L/R, shin.L/R, foot.L/R
+```
+
+## Third-party characters (`public/assets/characters/`)
+
+Downloaded from [Cinevva](https://app.cinevva.com/game-assets/free-3d-character-models),
+which hosts CC0 GLB files from **Quaternius** (quaternius.com) and **Kenney**
+(kenney.nl).
 
 | File | Source | Tris | Rig | Animations |
 |------|--------|------|-----|------------|
@@ -28,19 +58,23 @@ Downloaded from [Cinevva](https://app.cinevva.com/game-assets/free-3d-character-
 
 ## Usage in Genesis
 
-These models can be loaded in the R3F scene using `useGLTF` from `@react-three/drei`:
+Models are served straight from `public/` at `/assets/characters/<file>.glb` and
+loaded with `fetch` + `GLTFLoader.parse` in `FighterRose.tsx` (`drei` is not a
+dependency of this project):
 
-```tsx
-import { useGLTF } from "@react-three/drei";
-const { scene, animations } = useGLTF("/assets/characters/Soldier_Male.glb");
+```ts
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+
+const buf = await (await fetch("/assets/characters/vanguard.glb")).arrayBuffer();
+new GLTFLoader().parse(buf, "", (gltf) => { /* gltf.scene */ });
 ```
-
-The `AnimationMixer` can be used to play the embedded animation clips.
 
 ## Notes
 
-- All models are CC0 — no attribution required, but crediting the creators is appreciated.
 - Models are stored as GLB (binary glTF) for optimal web loading.
-- The procedural character in `src/genesis/render/Fighter.tsx` remains the default until GLTF integration is wired up.
+- The procedural character in `src/genesis/render/Fighter.tsx` remains as a
+  fallback when a model fails to load.
 - Quaternius models use a humanoid rig compatible with animation retargeting.
 - Kenney models use various rig types (skinned skeleton or node-based).
+- Rigged GLBs from the asset library keep their baked clips; the original
+  characters above are driven procedurally instead.

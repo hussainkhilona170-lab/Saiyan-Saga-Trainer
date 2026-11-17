@@ -131,11 +131,22 @@ src/genesis/hud/        GENESIS 3D: HUD reusing Card + design tokens (AGENTS.md 
 - Set as the default character; cycle with the Character button
 
 ### Asset library (`assets/`, 2026-11-16)
-- **13 CC0 character models** downloaded from Cinevva (Quaternius + Kenney), stored in `assets/characters/`
+- **13 CC0 character models** downloaded from Cinevva (Quaternius + Kenney), served from `public/assets/characters/`
 - All CC0 (public domain) — free for commercial use, no attribution required
 - Models are rigged GLBs with embedded animations (17-32 clips each)
-- `assets/README.md` documents sources, tri counts, rig types, and usage
-- Ready for GLTF integration via `useGLTF` from `@react-three/drei`
+- `public/assets/README.md` documents sources, tri counts, rig types, and usage
+- Loaded with `fetch` + `GLTFLoader.parse` (drei is not a dependency)
+
+### Vanguard — higher-fidelity original character (`0.17`)
+- **Rebuilt procedural character pipeline**: `assets/source/vanguard_lib.py` (lofted elliptical cross-sections, rotation-minimizing tube frames, analytic two-bone skin weights, studio render helpers) + `assets/source/vanguard.py` (body spec)
+- `public/assets/characters/vanguard.glb` — 10,924 tris, 20-bone humanoid rig, 13 material slots, no baked clips
+- **Fixed a real deformation bug**: `Vector.rotation_difference(Z, -Z)` is degenerate for straight-down limbs, so every earlier downward tube got a randomly flipped cross-section (broken knees/boots). Replaced with a rotation-minimizing frame that walks the tangent along the path.
+- Silhouette built from tapered muscle profiles instead of stacked spheres; separate cloth shells (open-front gi with a real V opening, trousers tucked into cuffed boots, obi with knot + tails, forearm wraps)
+- **Open-front gi**: the jacket is lofted as an arc with a V-shaped angular gap (`v_gap`), so the chest skin shows through the actual opening — no floating patch geometry
+- Face: tapered jaw, small eyes with iris/pupil/highlight, brows, wedge nose, mouth lines, inset ears; hair is a sheared skull cap plus tapered locks anchored 45% inside the skull so only the tips emerge
+- Skin weights are analytic (nearest two bone segments, inverse-distance^3.6) instead of rigid per-part binding, so joints bend smoothly
+- Set as the default character; cycle with the Character button
+- Before/after previews rendered headlessly with Cycles (`preview_dir` arg) — no desktop window is touched
 
 > **PAUSED during Genesis (active direction, see §10):** the 2D feature list below is
 > frozen while the 3D action RPG is developed. Revisit after Milestone B. The 2D app

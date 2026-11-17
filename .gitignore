@@ -33,3 +33,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Blender/procedural build artefacts
+__pycache__/
+*.blend1
