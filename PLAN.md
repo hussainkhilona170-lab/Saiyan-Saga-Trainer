@@ -1,6 +1,6 @@
 # Dragon Ball RPG — Development Plan
 
-**Version:** PRE ALPHA 0.23
+**Version:** PRE ALPHA 0.24
 **Last updated:** 2026-11-17
 **Branch:** main (Lovable-connected — do not rewrite published history)
 
@@ -147,6 +147,10 @@ src/genesis/hud/        GENESIS 3D: HUD reusing Card + design tokens (AGENTS.md 
 - Skin weights are analytic (nearest two bone segments, inverse-distance^3.6) instead of rigid per-part binding, so joints bend smoothly
 - Set as the default character; cycle with the Character button
 - Before/after previews rendered headlessly with Cycles (`preview_dir` arg) — no desktop window is touched
+
+### Enemy AI (`0.24`)
+- **Purple enemy capsule** at (-4, 0, 0): chases the player within 2 m, attacks for 8 HP on a 1.2 s cooldown; respawns after 4 s when defeated.
+- **Player HP** tracked and shown in the HUD; death triggers a 3 s respawn at the origin with full resources.
 
 ### RPG progression — XP & levels (`0.23`)
 - **Pure progression module** `src/genesis/sim/progression.ts`: `Progress`, `createProgress`, `awardXp` (multi-level in one award), `xpToNextLevel`, `maxKiForLevel`/`maxHpForLevel`.
@@ -306,6 +310,7 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 - PRE ALPHA 0.21 (melee combat foundation: attack action, combat module, target dummy)
 - PRE ALPHA 0.22 (ki blasts: projectile, ki resource, regen, HUD)
 - PRE ALPHA 0.23 (RPG progression: XP & levels, HUD)
+- PRE ALPHA 0.24 (enemy AI: chase, attack, respawn, player HP)
 
 ## 9. Test counts
 

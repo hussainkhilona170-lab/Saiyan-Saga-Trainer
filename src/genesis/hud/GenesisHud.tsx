@@ -13,6 +13,8 @@ export type HudStats = {
   level?: number;
   xp?: number;
   xpToNext?: number;
+  hp?: number;
+  maxHp?: number;
 };
 
 export function GenesisHud({
@@ -44,6 +46,11 @@ export function GenesisHud({
             </div>
             {stats.targetHp !== undefined && (
               <div className="text-xs text-chart-1">Target HP: {stats.targetHp}</div>
+            )}
+            {stats.hp !== undefined && (
+              <div className="text-xs text-chart-2">
+                HP: {Math.round(stats.hp)}/{stats.maxHp ?? 100}
+              </div>
             )}
             {stats.ki !== undefined && (
               <div className="text-xs text-chart-2">

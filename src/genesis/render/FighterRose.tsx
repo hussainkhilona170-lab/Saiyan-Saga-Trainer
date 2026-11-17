@@ -145,6 +145,11 @@ export function FighterRose({
   const targetFlashRef = useRef(0);
   const playerCombatantRef = useRef<Combatant>(createCombatant(100, 100));
   const progressRef = useRef<Progress>(createProgress());
+  const enemyMeshRef = useRef<THREE.Mesh | null>(null);
+  const enemyCombatantRef = useRef<Combatant>(createCombatant(60));
+  const enemyAttackCooldownRef = useRef(0);
+  const enemyRespawnRef = useRef(0);
+  const playerRespawnRef = useRef(0);
   const projectilesRef = useRef<Array<{ mesh: THREE.Mesh; vx: number; vz: number; life: number }>>(
     [],
   );
@@ -172,6 +177,23 @@ export function FighterRose({
       target.geometry.dispose();
       (target.material as THREE.Material).dispose();
       targetMeshRef.current = null;
+    };
+  }, [scene]);
+
+  useEffect(() => {
+    const enemy = new THREE.Mesh(
+      new THREE.CapsuleGeometry(0.3, 0.9, 6, 12),
+      new THREE.MeshStandardMaterial({ color: "#7a3aa0", roughness: 0.7 }),
+    );
+    enemy.position.set(-4, 0.75, 0);
+    enemy.castShadow = true;
+    scene.add(enemy);
+    enemyMeshRef.current = enemy;
+    return () => {
+      scene.remove(enemy);
+      enemy.geometry.dispose();
+      (enemy.material as THREE.Material).dispose();
+      enemyMeshRef.current = null;
     };
   }, [scene]);
 
@@ -499,6 +521,58 @@ export function FighterRose({
       maxHp: maxHpForLevel(progressRef.current.level),
     };
 
+    // Enemy AI.
+    const enemyMesh = enemyMeshRef.current;
+    if (enemyMesh) {
+      if (!enemyCombatantRef.current.alive) {
+        enemyRespawnRef.current += delta;
+        enemyMesh.visible = false;
+        if (enemyRespawnRef.current >= 4) {
+          enemyCombatantRef.current = createCombatant(60);
+          enemyRespawnRef.current = 0;
+          enemyMesh.visible = true;
+          enemyMesh.position.set(-4, 0.75, 0);
+        }
+      } else {
+        enemyRespawnRef.current = 0;
+        enemyMesh.visible = true;
+        const ex = enemyMesh.position.x;
+        const ez = enemyMesh.position.z;
+        const dx = resolved.x - ex;
+        const dz = resolved.z - ez;
+        const dist = Math.hypot(dx, dz);
+        enemyAttackCooldownRef.current = Math.max(0, enemyAttackCooldownRef.current - delta);
+        if (dist > 2.0) {
+          const speed = 2.5;
+          const nx = dx / (dist || 1);
+          const nz = dz / (dist || 1);
+          enemyMesh.position.x += nx * speed * delta;
+          enemyMesh.position.z += nz * speed * delta;
+        } else if (enemyAttackCooldownRef.current <= 0 && playerCombatantRef.current.alive) {
+          enemyAttackCooldownRef.current = 1.2;
+          playerCombatantRef.current = applyDamage(playerCombatantRef.current, 8);
+        }
+        // Face the player.
+        enemyMesh.rotation.y = Math.atan2(dx, dz);
+      }
+    }
+
+    // Player death / respawn.
+    if (!playerCombatantRef.current.alive) {
+      playerRespawnRef.current += delta;
+      if (playerRespawnRef.current >= 3) {
+        playerCombatantRef.current = createCombatant(
+          maxHpForLevel(progressRef.current.level),
+          maxKiForLevel(progressRef.current.level),
+        );
+        playerRespawnRef.current = 0;
+        // Reset position via teleportRef.
+        if (teleportRef) teleportRef.current = { x: 0, y: 0, z: 0 };
+      }
+    } else {
+      playerRespawnRef.current = 0;
+    }
+
     // Pose from the pure animation system.
     const a = anim.current;
     a.phase = advancePhase(a.phase, action, speed, delta);
@@ -587,6 +661,8 @@ export function FighterRose({
         targetHp: targetCombatantRef.current.hp,
         ki: playerCombatantRef.current.ki,
         maxKi: playerCombatantRef.current.maxKi,
+        hp: playerCombatantRef.current.hp,
+        maxHp: playerCombatantRef.current.maxHp,
         level: progressRef.current.level,
         xp: progressRef.current.xp,
         xpToNext: xpToNextLevel(progressRef.current.level),
