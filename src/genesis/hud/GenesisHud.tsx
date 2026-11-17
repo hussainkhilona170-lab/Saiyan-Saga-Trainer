@@ -8,6 +8,7 @@ export type HudStats = {
   speed: number;
   character?: string;
   targetHp?: number;
+  bossHp?: number;
   ki?: number;
   maxKi?: number;
   level?: number;
@@ -46,6 +47,11 @@ export function GenesisHud({
             </div>
             {stats.targetHp !== undefined && (
               <div className="text-xs text-chart-1">Target HP: {stats.targetHp}</div>
+            )}
+            {stats.bossHp !== undefined && stats.bossHp > 0 && (
+              <div className="text-xs text-destructive">
+                Boss HP: {Math.round(stats.bossHp)}/300
+              </div>
             )}
             {stats.hp !== undefined && (
               <div className="text-xs text-chart-2">

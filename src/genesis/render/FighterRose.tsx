@@ -154,6 +154,10 @@ export function FighterRose({
   const enemyAttackCooldownRef = useRef(0);
   const enemyRespawnRef = useRef(0);
   const playerRespawnRef = useRef(0);
+  const bossMeshRef = useRef<THREE.Mesh | null>(null);
+  const bossCombatantRef = useRef<Combatant>(createCombatant(300));
+  const bossRespawnRef = useRef(30);
+  const bossAttackCooldownRef = useRef(0);
   const projectilesRef = useRef<Array<{ mesh: THREE.Mesh; vx: number; vz: number; life: number }>>(
     [],
   );
@@ -198,6 +202,29 @@ export function FighterRose({
       enemy.geometry.dispose();
       (enemy.material as THREE.Material).dispose();
       enemyMeshRef.current = null;
+    };
+  }, [scene]);
+
+  useEffect(() => {
+    const boss = new THREE.Mesh(
+      new THREE.CapsuleGeometry(0.5, 1.4, 6, 12),
+      new THREE.MeshStandardMaterial({
+        color: "#c0392b",
+        roughness: 0.6,
+        emissive: "#7f1d1d",
+        emissiveIntensity: 0.3,
+      }),
+    );
+    boss.position.set(8, 1.0, -6);
+    boss.castShadow = true;
+    boss.visible = false;
+    scene.add(boss);
+    bossMeshRef.current = boss;
+    return () => {
+      scene.remove(boss);
+      boss.geometry.dispose();
+      (boss.material as THREE.Material).dispose();
+      bossMeshRef.current = null;
     };
   }, [scene]);
 
@@ -385,6 +412,14 @@ export function FighterRose({
           case "killEnemies":
             enemyCombatantRef.current = { ...enemyCombatantRef.current, hp: 0, alive: false };
             break;
+          case "spawnBoss":
+            bossCombatantRef.current = createCombatant(300);
+            bossRespawnRef.current = 0;
+            if (bossMeshRef.current) {
+              bossMeshRef.current.visible = true;
+              bossMeshRef.current.position.set(8, 1.0, -6);
+            }
+            break;
           case "reset":
             progressRef.current = createProgress();
             playerCombatantRef.current = createCombatant(100, 100);
@@ -485,33 +520,30 @@ export function FighterRose({
 
     // Target dummy: melee hit detection + respawn.
     const targetMesh = targetMeshRef.current;
-    if (attackEdge && targetMesh && targetCombatantRef.current.alive) {
+    const bossMesh = bossMeshRef.current;
+    if (attackEdge) {
       const attacker = { x: resolved.x, z: resolved.z, facing: next.facing };
-      const tpos = targetMesh.position;
-      if (meleeHits(attacker, { x: tpos.x, z: tpos.z })) {
-        const wasAlive = targetCombatantRef.current.alive;
-        targetCombatantRef.current = applyDamage(targetCombatantRef.current, MELEE_DAMAGE);
-        targetFlashRef.current = 0.2;
-        const { progress, levelsGained } = awardXp(progressRef.current, XP_PER_MELEE_HIT);
-        if (!targetCombatantRef.current.alive && wasAlive) {
-          const r = awardXp(progress, XP_PER_KILL);
+      if (targetMesh && targetCombatantRef.current.alive) {
+        const tpos = targetMesh.position;
+        if (meleeHits(attacker, { x: tpos.x, z: tpos.z })) {
+          const wasAlive = targetCombatantRef.current.alive;
+          targetCombatantRef.current = applyDamage(targetCombatantRef.current, MELEE_DAMAGE);
+          targetFlashRef.current = 0.2;
+          const xpAmt =
+            !targetCombatantRef.current.alive && wasAlive ? XP_PER_KILL : XP_PER_MELEE_HIT;
+          const r = awardXp(progressRef.current, xpAmt);
           progressRef.current = r.progress;
-          if (r.levelsGained > 0) {
-            playerCombatantRef.current = {
-              ...playerCombatantRef.current,
-              maxKi: maxKiForLevel(progressRef.current.level),
-              maxHp: maxHpForLevel(progressRef.current.level),
-            };
-          }
-        } else {
-          progressRef.current = progress;
-          if (levelsGained > 0) {
-            playerCombatantRef.current = {
-              ...playerCombatantRef.current,
-              maxKi: maxKiForLevel(progressRef.current.level),
-              maxHp: maxHpForLevel(progressRef.current.level),
-            };
-          }
+        }
+      }
+      if (bossMesh && bossCombatantRef.current.alive) {
+        const bpos = bossMesh.position;
+        if (meleeHits(attacker, { x: bpos.x, z: bpos.z })) {
+          const wasAlive = bossCombatantRef.current.alive;
+          bossCombatantRef.current = applyDamage(bossCombatantRef.current, MELEE_DAMAGE * 2);
+          targetFlashRef.current = 0.2;
+          const xpAmt = !bossCombatantRef.current.alive && wasAlive ? 200 : XP_PER_MELEE_HIT * 2;
+          const r = awardXp(progressRef.current, xpAmt);
+          progressRef.current = r.progress;
         }
       }
     }
@@ -581,6 +613,24 @@ export function FighterRose({
           remove = true;
         }
       }
+      if (!remove && bossMesh && bossMesh.visible && bossCombatantRef.current.alive) {
+        const d = Math.hypot(
+          p.mesh.position.x - bossMesh.position.x,
+          p.mesh.position.z - bossMesh.position.z,
+        );
+        if (d < 0.8) {
+          const wasAlive = bossCombatantRef.current.alive;
+          bossCombatantRef.current = applyDamage(bossCombatantRef.current, KI_BLAST_DAMAGE * 2);
+          targetFlashRef.current = 0.2;
+          const r1 = awardXp(progressRef.current, XP_PER_KI_HIT * 2);
+          progressRef.current = r1.progress;
+          if (!bossCombatantRef.current.alive && wasAlive) {
+            const r2 = awardXp(progressRef.current, 200);
+            progressRef.current = r2.progress;
+          }
+          remove = true;
+        }
+      }
       if (remove) {
         scene.remove(p.mesh);
         (p.mesh.geometry as THREE.BufferGeometry).dispose();
@@ -629,6 +679,40 @@ export function FighterRose({
         }
         // Face the player.
         enemyMesh.rotation.y = Math.atan2(dx, dz);
+      }
+    }
+
+    // Boss AI.
+    if (bossMesh) {
+      if (!bossCombatantRef.current.alive) {
+        bossRespawnRef.current += delta;
+        bossMesh.visible = false;
+        if (bossRespawnRef.current >= 30) {
+          bossCombatantRef.current = createCombatant(300);
+          bossRespawnRef.current = 0;
+          bossMesh.visible = true;
+          bossMesh.position.set(8, 1.0, -6);
+        }
+      } else {
+        bossRespawnRef.current = 0;
+        bossMesh.visible = true;
+        const bx = bossMesh.position.x;
+        const bz = bossMesh.position.z;
+        const dx = resolved.x - bx;
+        const dz = resolved.z - bz;
+        const dist = Math.hypot(dx, dz);
+        bossAttackCooldownRef.current = Math.max(0, bossAttackCooldownRef.current - delta);
+        if (dist > 2.5) {
+          const speed = 3.0;
+          const nx = dx / (dist || 1);
+          const nz = dz / (dist || 1);
+          bossMesh.position.x += nx * speed * delta;
+          bossMesh.position.z += nz * speed * delta;
+        } else if (bossAttackCooldownRef.current <= 0 && playerCombatantRef.current.alive) {
+          bossAttackCooldownRef.current = 1.5;
+          playerCombatantRef.current = applyDamage(playerCombatantRef.current, 20);
+        }
+        bossMesh.rotation.y = Math.atan2(dx, dz);
       }
     }
 
@@ -734,6 +818,7 @@ export function FighterRose({
         speed,
         character: character.name,
         targetHp: targetCombatantRef.current.hp,
+        bossHp: bossCombatantRef.current.hp,
         ki: playerCombatantRef.current.ki,
         maxKi: playerCombatantRef.current.maxKi,
         hp: playerCombatantRef.current.hp,

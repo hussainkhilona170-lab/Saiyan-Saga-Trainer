@@ -1,6 +1,6 @@
 # Dragon Ball RPG — Development Plan
 
-**Version:** PRE ALPHA 0.27
+**Version:** PRE ALPHA 0.28
 **Last updated:** 2026-11-17
 **Branch:** main (Lovable-connected — do not rewrite published history)
 
@@ -147,6 +147,11 @@ src/genesis/hud/        GENESIS 3D: HUD reusing Card + design tokens (AGENTS.md 
 - Skin weights are analytic (nearest two bone segments, inverse-distance^3.6) instead of rigid per-part binding, so joints bend smoothly
 - Set as the default character; cycle with the Character button
 - Before/after previews rendered headlessly with Cycles (`preview_dir` arg) — no desktop window is touched
+
+### Boss fight (`0.28`)
+- **Red boss capsule** (300 HP) spawns at (8, 0, -6): chases at 3 m/s, attacks for 20 HP on a 1.5 s cooldown; respawns after 30 s.
+- Melee/ki hits damage the boss and award 200 XP on defeat (plus per-hit XP); boss HP shown in the HUD.
+- God Engine gains a `spawnBoss` command (button in GenesisSection).
 
 ### God Engine Genesis expansion (`0.27`)
 - **Extended genesis bus**: `heal`, `giveXp`, `killEnemies` commands; GenesisScene queues them and FighterRose applies them (full HP/Ki, XP award with level-up, enemy wipe).
@@ -326,6 +331,7 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 - PRE ALPHA 0.25 (save/load: versioned envelope, persist on interval + unmount)
 - PRE ALPHA 0.26 (Genesis entry point in Trainer: nav link + Train-tab card)
 - PRE ALPHA 0.27 (God Engine Genesis expansion: heal, giveXp, killEnemies)
+- PRE ALPHA 0.28 (boss fight: 300 HP boss, chase/attack, respawn, XP)
 
 ## 9. Test counts
 
