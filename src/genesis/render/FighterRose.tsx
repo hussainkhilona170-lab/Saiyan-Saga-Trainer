@@ -43,6 +43,12 @@ import {
 } from "../sim/progression";
 import { parseSave, SAVE_KEY, SAVE_VERSION, serializeSave, type GenesisSave } from "../sim/save";
 
+const QUESTS = [
+  { name: "Defeat 5 enemies", target: 5, type: "kills" as const },
+  { name: "Defeat the boss", target: 1, type: "boss" as const },
+  { name: "Reach level 5", target: 5, type: "level" as const },
+];
+
 const CAM_BACK = 3.6;
 const CAM_UP = 1.9;
 const LOOK_AT_Y = 1.0;
@@ -154,10 +160,14 @@ export function FighterRose({
   const enemyAttackCooldownRef = useRef(0);
   const enemyRespawnRef = useRef(0);
   const playerRespawnRef = useRef(0);
+  const enemyWasAliveRef = useRef(true);
+  const bossWasAliveRef = useRef(false);
   const bossMeshRef = useRef<THREE.Mesh | null>(null);
   const bossCombatantRef = useRef<Combatant>(createCombatant(300));
   const bossRespawnRef = useRef(30);
   const bossAttackCooldownRef = useRef(0);
+  const questIndexRef = useRef(0);
+  const questProgressRef = useRef(0);
   const projectilesRef = useRef<Array<{ mesh: THREE.Mesh; vx: number; vz: number; life: number }>>(
     [],
   );
@@ -415,6 +425,7 @@ export function FighterRose({
           case "spawnBoss":
             bossCombatantRef.current = createCombatant(300);
             bossRespawnRef.current = 0;
+            bossWasAliveRef.current = true;
             if (bossMeshRef.current) {
               bossMeshRef.current.visible = true;
               bossMeshRef.current.position.set(8, 1.0, -6);
@@ -657,6 +668,7 @@ export function FighterRose({
           enemyRespawnRef.current = 0;
           enemyMesh.visible = true;
           enemyMesh.position.set(-4, 0.75, 0);
+          enemyWasAliveRef.current = true;
         }
       } else {
         enemyRespawnRef.current = 0;
@@ -682,6 +694,15 @@ export function FighterRose({
       }
     }
 
+    if (enemyWasAliveRef.current && !enemyCombatantRef.current.alive) {
+      questProgressRef.current += 1;
+      enemyWasAliveRef.current = false;
+    }
+    if (bossWasAliveRef.current && !bossCombatantRef.current.alive) {
+      questProgressRef.current += 1;
+      bossWasAliveRef.current = false;
+    }
+
     // Boss AI.
     if (bossMesh) {
       if (!bossCombatantRef.current.alive) {
@@ -692,6 +713,7 @@ export function FighterRose({
           bossRespawnRef.current = 0;
           bossMesh.visible = true;
           bossMesh.position.set(8, 1.0, -6);
+          bossWasAliveRef.current = true;
         }
       } else {
         bossRespawnRef.current = 0;
@@ -808,6 +830,24 @@ export function FighterRose({
     camera.lookAt(lookAt.x, lookAt.y, lookAt.z);
 
     const acc = frames.current;
+    // Quest progression check.
+    const quest = QUESTS[questIndexRef.current];
+    if (quest) {
+      let done = false;
+      if (quest.type === "kills" && questProgressRef.current >= quest.target) done = true;
+      if (quest.type === "boss" && questProgressRef.current >= quest.target) done = true;
+      if (quest.type === "level" && progressRef.current.level >= quest.target) done = true;
+      if (done) {
+        const r = awardXp(progressRef.current, 100);
+        progressRef.current = r.progress;
+        questIndexRef.current = Math.min(questIndexRef.current + 1, QUESTS.length);
+        questProgressRef.current = 0;
+      }
+    }
+    const questText =
+      questIndexRef.current >= QUESTS.length
+        ? "All quests complete!"
+        : `${QUESTS[questIndexRef.current]!.name} (${questProgressRef.current}/${QUESTS[questIndexRef.current]!.target})`;
     acc.count += 1;
     acc.time += delta;
     if (acc.time >= 0.5) {
@@ -826,6 +866,7 @@ export function FighterRose({
         level: progressRef.current.level,
         xp: progressRef.current.xp,
         xpToNext: xpToNextLevel(progressRef.current.level),
+        quest: questText,
       });
       acc.count = 0;
       acc.time = 0;

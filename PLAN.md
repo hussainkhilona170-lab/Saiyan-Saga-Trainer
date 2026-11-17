@@ -1,6 +1,6 @@
 # Dragon Ball RPG — Development Plan
 
-**Version:** PRE ALPHA 0.28
+**Version:** PRE ALPHA 0.29
 **Last updated:** 2026-11-17
 **Branch:** main (Lovable-connected — do not rewrite published history)
 
@@ -147,6 +147,10 @@ src/genesis/hud/        GENESIS 3D: HUD reusing Card + design tokens (AGENTS.md 
 - Skin weights are analytic (nearest two bone segments, inverse-distance^3.6) instead of rigid per-part binding, so joints bend smoothly
 - Set as the default character; cycle with the Character button
 - Before/after previews rendered headlessly with Cycles (`preview_dir` arg) — no desktop window is touched
+
+### Quest system (`0.29`)
+- **Three sequential quests** tracked in the HUD: "Defeat 5 enemies", "Defeat the boss", "Reach level 5"; each completion awards 100 XP and advances to the next.
+- Quest progress increments on enemy/boss kills and level-ups; displays `Quest: <name> (x/y)`.
 
 ### Boss fight (`0.28`)
 - **Red boss capsule** (300 HP) spawns at (8, 0, -6): chases at 3 m/s, attacks for 20 HP on a 1.5 s cooldown; respawns after 30 s.
@@ -332,6 +336,7 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 - PRE ALPHA 0.26 (Genesis entry point in Trainer: nav link + Train-tab card)
 - PRE ALPHA 0.27 (God Engine Genesis expansion: heal, giveXp, killEnemies)
 - PRE ALPHA 0.28 (boss fight: 300 HP boss, chase/attack, respawn, XP)
+- PRE ALPHA 0.29 (quest system: 3 sequential quests, HUD progress, XP rewards)
 
 ## 9. Test counts
 
