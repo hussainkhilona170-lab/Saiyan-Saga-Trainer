@@ -1,6 +1,6 @@
 # Dragon Ball RPG — Development Plan
 
-**Version:** PRE ALPHA 0.24
+**Version:** PRE ALPHA 0.25
 **Last updated:** 2026-11-17
 **Branch:** main (Lovable-connected — do not rewrite published history)
 
@@ -147,6 +147,11 @@ src/genesis/hud/        GENESIS 3D: HUD reusing Card + design tokens (AGENTS.md 
 - Skin weights are analytic (nearest two bone segments, inverse-distance^3.6) instead of rigid per-part binding, so joints bend smoothly
 - Set as the default character; cycle with the Character button
 - Before/after previews rendered headlessly with Cycles (`preview_dir` arg) — no desktop window is touched
+
+### Save / load (`0.25`)
+- **Versioned save envelope** for Genesis: `src/genesis/sim/save.ts` with `serializeSave`/`parseSave` (version check, clamping, malformed-input rejection).
+- FighterRose loads on mount (level, xp, position, hp, ki) and persists every 5 s plus on unmount.
+- **Tests**: 4 save cases → **238 tests / 16 files**.
 
 ### Enemy AI (`0.24`)
 - **Purple enemy capsule** at (-4, 0, 0): chases the player within 2 m, attacks for 8 HP on a 1.2 s cooldown; respawns after 4 s when defeated.
@@ -311,6 +316,7 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 - PRE ALPHA 0.22 (ki blasts: projectile, ki resource, regen, HUD)
 - PRE ALPHA 0.23 (RPG progression: XP & levels, HUD)
 - PRE ALPHA 0.24 (enemy AI: chase, attack, respawn, player HP)
+- PRE ALPHA 0.25 (save/load: versioned envelope, persist on interval + unmount)
 
 ## 9. Test counts
 
@@ -323,7 +329,8 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 - Genesis combat tests: 14 (hit detection, damage, ki, ki blast)
 - Genesis attack tests: 4 (wind-up, motion lock, cooldown, recovery)
 - Genesis progression tests: 9 (xp, level-up, overflow, multi-level, scaling)
-- Total: 234 (15 files)
+- Genesis save tests: 4 (round-trip, version, malformed, clamping)
+- Total: 238 (16 files)
 - All passing as of last commit
 
 ## 10. GENESIS — 3D Action RPG (active direction)

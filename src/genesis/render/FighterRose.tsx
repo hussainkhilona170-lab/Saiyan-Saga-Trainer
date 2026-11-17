@@ -40,6 +40,7 @@ import {
   xpToNextLevel,
   type Progress,
 } from "../sim/progression";
+import { parseSave, SAVE_KEY, SAVE_VERSION, serializeSave, type GenesisSave } from "../sim/save";
 
 const CAM_BACK = 3.6;
 const CAM_UP = 1.9;
@@ -314,6 +315,46 @@ export function FighterRose({
       }
     };
   }, [modelUrl, tPose, modelYaw]);
+
+  useEffect(() => {
+    // Load saved progress.
+    try {
+      const save = parseSave(window.localStorage.getItem(SAVE_KEY));
+      if (save) {
+        progressRef.current = { level: save.level, xp: save.xp };
+        const c = createCombatant(maxHpForLevel(save.level), maxKiForLevel(save.level));
+        playerCombatantRef.current = { ...c, hp: save.hp, ki: save.ki };
+        if (teleportRef) teleportRef.current = { x: save.x, y: save.y, z: save.z };
+      }
+    } catch {
+      // Ignore storage errors.
+    }
+
+    const persist = () => {
+      try {
+        const st = stateRef.current;
+        const save: GenesisSave = {
+          version: SAVE_VERSION,
+          level: progressRef.current.level,
+          xp: progressRef.current.xp,
+          x: st.x,
+          y: st.y,
+          z: st.z,
+          hp: playerCombatantRef.current.hp,
+          ki: playerCombatantRef.current.ki,
+        };
+        window.localStorage.setItem(SAVE_KEY, serializeSave(save));
+      } catch {
+        // Ignore storage errors.
+      }
+    };
+
+    const id = window.setInterval(persist, 5000);
+    return () => {
+      clearInterval(id);
+      persist();
+    };
+  }, []);
 
   useFrame((_, delta) => {
     const tp = teleportRef?.current;
