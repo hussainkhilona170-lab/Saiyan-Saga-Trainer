@@ -15,6 +15,7 @@ import type { CharacterDef } from "../characters";
 import type { HudStats } from "../hud/GenesisHud";
 import type { RawKeys } from "./useKeyboard";
 import { moveIntent, resolveCameraPosition } from "./cameraRelative";
+import { resolveBones } from "./boneNames";
 import { OBSTACLES } from "../world";
 
 const CAM_BACK = 3.6;
@@ -91,36 +92,57 @@ export function FighterRose({
               if ((o as THREE.SkinnedMesh).isSkinnedMesh) skinned = o as THREE.SkinnedMesh;
             });
             const skeleton = skinned ? (skinned as THREE.SkinnedMesh).skeleton : null;
-            const find = (n: string): THREE.Bone | null => {
-              if (skeleton) {
-                const b = skeleton.bones.find((x) => x.name === n);
-                if (b) return b;
-              }
-              let found: THREE.Bone | null = null;
-              scene.traverse((o) => {
-                if (o.name === n && (o as THREE.Bone).isBone) found = o as THREE.Bone;
-              });
-              return found;
-            };
-            const bones: Bones | null = (() => {
-              const b = {
-                root: find("root"),
-                hips: find("hips"),
-                spine: find("spine"),
-                chest: find("chest"),
-                neck: find("neck"),
-                head: find("head"),
-                upperArmL: find("upperArm.L"),
-                lowerArmL: find("lowerArm.L"),
-                upperArmR: find("upperArm.R"),
-                lowerArmR: find("lowerArm.R"),
-                thighL: find("thigh.L"),
-                shinL: find("shin.L"),
-                thighR: find("thigh.R"),
-                shinR: find("shin.R"),
-              };
-              return Object.values(b).every((x) => x !== null) ? (b as Bones) : null;
-            })();
+            // three.js sanitises node names on load (dots are stripped), so match
+            // on the normalised name instead of the authored one.
+            const available: string[] = skeleton
+              ? skeleton.bones.map((b) => b.name)
+              : (() => {
+                  const names: string[] = [];
+                  scene.traverse((o) => {
+                    if ((o as THREE.Bone).isBone) names.push(o.name);
+                  });
+                  return names;
+                })();
+            const resolved = resolveBones(available, {
+              root: "root",
+              hips: "hips",
+              spine: "spine",
+              chest: "chest",
+              neck: "neck",
+              head: "head",
+              upperArmL: "upperArm.L",
+              lowerArmL: "lowerArm.L",
+              upperArmR: "upperArm.R",
+              lowerArmR: "lowerArm.R",
+              thighL: "thigh.L",
+              shinL: "shin.L",
+              thighR: "thigh.R",
+              shinR: "shin.R",
+            });
+            const bones: Bones | null = resolved
+              ? (Object.fromEntries(
+                  Object.entries(resolved).map(([key, name]) => [
+                    key,
+                    skeleton
+                      ? (skeleton.bones.find((b) => b.name === name) ?? null)
+                      : (() => {
+                          let hit: THREE.Bone | null = null;
+                          scene.traverse((o) => {
+                            if (o.name === name && (o as THREE.Bone).isBone) hit = o as THREE.Bone;
+                          });
+                          return hit;
+                        })(),
+                  ]),
+                ) as Bones)
+              : null;
+            if (!bones) {
+              console.warn(
+                "FighterRose: rig bones not found in",
+                modelUrl,
+                "- available:",
+                available.slice(0, 24),
+              );
+            }
             bonesRef.current = bones;
             const rest: Record<string, THREE.Euler> = {};
             if (bones) {

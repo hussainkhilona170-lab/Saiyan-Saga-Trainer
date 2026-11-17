@@ -148,6 +148,12 @@ src/genesis/hud/        GENESIS 3D: HUD reusing Card + design tokens (AGENTS.md 
 - Set as the default character; cycle with the Character button
 - Before/after previews rendered headlessly with Cycles (`preview_dir` arg) — no desktop window is touched
 
+### Rig bone-name resolution fix (`0.18`)
+- **Root cause of the "model loads but never animates" bug**: GLB exports keep dotted bone names (`upperArm.L`), but three.js runs every node name through `PropertyBinding.sanitizeNodeName` on load, which strips `.` `:` `/` `[` `]` and converts whitespace to underscores. `FighterRose.tsx` looked bones up by the authored name, so every lookup returned `null`, the bone map became `null`, and no pose was ever applied.
+- **Fix**: new pure helper `src/genesis/render/boneNames.ts` — `normalizeBoneName` mirrors three's sanitisation, `resolveBoneName` prefers an exact match then a normalised match, `resolveBones` resolves a whole rig or reports failure. `FighterRose` now collects the names the skeleton actually exposes, resolves through the helper, and warns with the available names when a rig is missing.
+- Verified at runtime by loading `vanguard.glb` through the real `GLTFLoader`: exported `upperArm.L` comes back as `upperArmL` and every required bone resolves.
+- `src/test/genesis-bones.test.ts` (5 tests) covers sanitisation parity, exact-match preference, dotted-bone resolution, missing-bone null, and all-or-nothing rig resolution → **199 tests / 13 files**
+
 > **PAUSED during Genesis (active direction, see §10):** the 2D feature list below is
 > frozen while the 3D action RPG is developed. Revisit after Milestone B. The 2D app
 > stays stable and regression-tested (155 tests) but takes no new features.
