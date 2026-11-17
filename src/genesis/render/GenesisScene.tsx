@@ -80,6 +80,9 @@ export default function GenesisScene() {
     // before the first frame reports real stats.
     character: characterByID(DEFAULT_CHARACTER_ID).name,
   });
+  useEffect(() => {
+    setStats((prev) => ({ ...prev, character: characterByID(characterID).name }));
+  }, [characterID]);
   const character = characterByID(characterID);
 
   // God Engine → Genesis command channel (cross-tab).
