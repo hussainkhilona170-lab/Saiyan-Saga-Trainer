@@ -11,6 +11,7 @@ export type RawKeys = {
   fly: boolean;
   descend: boolean;
   attack: boolean;
+  ki: boolean;
 };
 
 function blankKeys(): RawKeys {
@@ -24,6 +25,7 @@ function blankKeys(): RawKeys {
     fly: false,
     descend: false,
     attack: false,
+    ki: false,
   };
 }
 
@@ -63,6 +65,9 @@ export function useKeyboard(): RefObject<RawKeys> {
           break;
         case "KeyJ":
           keys.current.attack = down;
+          break;
+        case "KeyK":
+          keys.current.ki = down;
           break;
         case "Space":
           if (down) e.preventDefault(); // keep the page from scrolling / re-clicking focused buttons

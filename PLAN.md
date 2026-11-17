@@ -1,6 +1,6 @@
 # Dragon Ball RPG — Development Plan
 
-**Version:** PRE ALPHA 0.21
+**Version:** PRE ALPHA 0.22
 **Last updated:** 2026-11-17
 **Branch:** main (Lovable-connected — do not rewrite published history)
 
@@ -148,6 +148,11 @@ src/genesis/hud/        GENESIS 3D: HUD reusing Card + design tokens (AGENTS.md 
 - Set as the default character; cycle with the Character button
 - Before/after previews rendered headlessly with Cycles (`preview_dir` arg) — no desktop window is touched
 
+### Ki blasts (`0.22`)
+- **Key K fires a ki blast** (costs 15 Ki, 18 damage, 12 m range) when the player has enough Ki; a glowing sphere travels in the facing direction at 16 m/s and damages the target dummy on impact.
+- **Ki resource**: player combatant starts at 100/100 and regens 8/s; displayed in the HUD alongside target HP.
+- HUD hint updated.
+
 ### Melee combat foundation (`0.21`)
 - **Attack action** in the character sim: `J` triggers a wind-up/recovery (`ATTACK_DURATION 0.32 s`, `ATTACK_COOLDOWN 0.45 s`) that locks horizontal motion and plays an `attack` pose; `CharacterState` gains `attackTimer`/`attackCooldown`.
 - **Pure combat module** `src/genesis/sim/combat.ts`: `Combatant`, `createCombatant`, `meleeHits` (range + frontal cone), `applyDamage`, `spendKi`/`regenKi`, `kiBlastHits`, `facingVector`, `planarDistance`.
@@ -293,6 +298,7 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 - PRE ALPHA 0.19 (imported rig support: aliases, A-pose, auto-scale/grounding, yaw)
 - PRE ALPHA 0.20 (flight: powered flight, ascend/descend, hover, altitude clamp)
 - PRE ALPHA 0.21 (melee combat foundation: attack action, combat module, target dummy)
+- PRE ALPHA 0.22 (ki blasts: projectile, ki resource, regen, HUD)
 
 ## 9. Test counts
 

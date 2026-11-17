@@ -8,6 +8,8 @@ export type HudStats = {
   speed: number;
   character?: string;
   targetHp?: number;
+  ki?: number;
+  maxKi?: number;
 };
 
 export function GenesisHud({
@@ -39,6 +41,11 @@ export function GenesisHud({
             </div>
             {stats.targetHp !== undefined && (
               <div className="text-xs text-chart-1">Target HP: {stats.targetHp}</div>
+            )}
+            {stats.ki !== undefined && (
+              <div className="text-xs text-chart-2">
+                Ki: {Math.round(stats.ki)}/{stats.maxKi ?? 100}
+              </div>
             )}
           </div>
         </div>

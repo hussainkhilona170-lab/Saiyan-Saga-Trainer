@@ -22,6 +22,11 @@ import {
   createCombatant,
   meleeHits,
   MELEE_DAMAGE,
+  spendKi,
+  regenKi,
+  KI_BLAST_COST,
+  KI_BLAST_DAMAGE,
+  KI_BLAST_RANGE,
   type Combatant,
 } from "../sim/combat";
 
@@ -127,6 +132,11 @@ export function FighterRose({
   const targetCombatantRef = useRef<Combatant>(createCombatant(100));
   const targetRespawnRef = useRef(0);
   const targetFlashRef = useRef(0);
+  const playerCombatantRef = useRef<Combatant>(createCombatant(100, 100));
+  const projectilesRef = useRef<Array<{ mesh: THREE.Mesh; vx: number; vz: number; life: number }>>(
+    [],
+  );
+  const prevKiRef = useRef(false);
   // Rest rotations captured at load so we can offset from the bind pose.
   const restRef = useRef<Record<string, THREE.Quaternion> | null>(null);
   const tmpEuler = useRef(new THREE.Euler()).current;
@@ -279,10 +289,13 @@ export function FighterRose({
     }
     const keys = keysRef.current;
     const move = moveIntent(keys, camera);
+    playerCombatantRef.current = regenKi(playerCombatantRef.current, 8 * delta);
     const flyEdge = keys.fly && !prevFlyRef.current;
     prevFlyRef.current = keys.fly;
     const attackEdge = keys.attack && !prevAttackRef.current;
     prevAttackRef.current = keys.attack;
+    const kiEdge = keys.ki && !prevKiRef.current;
+    prevKiRef.current = keys.ki;
     const input: CharacterInput = {
       moveX: move.moveX,
       moveZ: move.moveZ,
@@ -395,6 +408,49 @@ export function FighterRose({
       targetMesh.scale.setScalar(1);
     }
 
+    // Ki blast.
+    if (kiEdge) {
+      const spent = spendKi(playerCombatantRef.current, KI_BLAST_COST);
+      if (spent) {
+        playerCombatantRef.current = spent;
+        const mesh = new THREE.Mesh(
+          new THREE.SphereGeometry(0.18, 12, 12),
+          new THREE.MeshBasicMaterial({ color: "#7fd6ff" }),
+        );
+        mesh.position.set(resolved.x, resolved.y + 1.0, resolved.z);
+        scene.add(mesh);
+        const dir = { x: Math.sin(next.facing), z: Math.cos(next.facing) };
+        projectilesRef.current.push({ mesh, vx: dir.x * 16, vz: dir.z * 16, life: 2 });
+      }
+    }
+    // Update projectiles.
+    const projs = projectilesRef.current;
+    for (let i = projs.length - 1; i >= 0; i--) {
+      const p = projs[i]!;
+      p.mesh.position.x += p.vx * delta;
+      p.mesh.position.z += p.vz * delta;
+      p.life -= delta;
+      let remove = p.life <= 0;
+      const targetMesh = targetMeshRef.current;
+      if (!remove && targetMesh && targetMesh.visible && targetCombatantRef.current.alive) {
+        const d = Math.hypot(
+          p.mesh.position.x - targetMesh.position.x,
+          p.mesh.position.z - targetMesh.position.z,
+        );
+        if (d < 0.6) {
+          targetCombatantRef.current = applyDamage(targetCombatantRef.current, KI_BLAST_DAMAGE);
+          targetFlashRef.current = 0.2;
+          remove = true;
+        }
+      }
+      if (remove) {
+        scene.remove(p.mesh);
+        (p.mesh.geometry as THREE.BufferGeometry).dispose();
+        (p.mesh.material as THREE.Material).dispose();
+        projs.splice(i, 1);
+      }
+    }
+
     // Pose from the pure animation system.
     const a = anim.current;
     a.phase = advancePhase(a.phase, action, speed, delta);
@@ -481,6 +537,8 @@ export function FighterRose({
         speed,
         character: character.name,
         targetHp: targetCombatantRef.current.hp,
+        ki: playerCombatantRef.current.ki,
+        maxKi: playerCombatantRef.current.maxKi,
       });
       acc.count = 0;
       acc.time = 0;
