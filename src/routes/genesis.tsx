@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
+import { GenesisGodEngine } from "@/genesis/GenesisGodEngine";
 
 export const Route = createFileRoute("/genesis")({
   head: () => ({
@@ -30,6 +31,7 @@ function GenesisPage() {
       }
     >
       <GenesisScene />
+      <GenesisGodEngine />
     </Suspense>
   );
 }

@@ -1,6 +1,6 @@
 # Dragon Ball RPG — Development Plan
 
-**Version:** PRE ALPHA 0.33
+**Version:** PRE ALPHA 0.34
 **Last updated:** 2026-11-17
 **Branch:** main (Lovable-connected — do not rewrite published history)
 
@@ -154,6 +154,9 @@ src/genesis/hud/        GENESIS 3D: HUD reusing Card + design tokens (AGENTS.md 
 ### God Engine Genesis fix (`0.30`)
 - **HUD character name** now updates immediately when a `setCharacter` command arrives (no longer waits for the next render frame's `onStats`), so the God Engine's character swap is visible even when the scene is throttled.
 - Removed stray debug logging.
+
+### God Engine in Genesis (`0.34`)
+- **In-page God Engine overlay** on `/genesis`: a `⚙ God Engine` button (bottom of HUD) and Ctrl+Shift+A toggle a modal exposing the GenesisSection controls (character, teleport, heal/XP/enemies) plus a link to the full Trainer God Engine. No tab-switching required.
 
 ### Polish — hit sparks (`0.33`)
 - **Hit sparks**: small spheres burst on melee/ki hits (target & boss) with gravity and fade, adding combat feedback.
@@ -350,6 +353,7 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 - PRE ALPHA 0.30 (God Engine Genesis fix: immediate HUD character update)
 - PRE ALPHA 0.31 (God Engine responsiveness: immediate command application via handler ref)
 - PRE ALPHA 0.33 (polish: hit sparks on melee/ki hits)
+- PRE ALPHA 0.34 (God Engine in Genesis: in-page overlay, Ctrl+Shift+A)
 
 ## 9. Test counts
 
