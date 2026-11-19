@@ -1,6 +1,6 @@
 # Dragon Ball RPG — Development Plan
 
-**Version:** PRE ALPHA 0.35
+**Version:** PRE ALPHA 0.36
 **Last updated:** 2026-11-19
 **Branch:** main (Lovable-connected — do not rewrite published history)
 
@@ -35,6 +35,8 @@ src/game/ui.tsx         All tabs + AdminPanel + BattleTab glue
 src/game/router.tsx     TanStack route tree generation (routeTree.gen.ts is generated — do not hand-edit)
 src/game/FormArt.tsx    Form portrait rendering (sprite images + SVG fallback)
 src/genesis/sim/        GENESIS 3D: pure gameplay simulation (no three/React/DOM) — headless-testable
+src/genesis/sim/enemies.ts        Enemy archetypes + one chase/attack AI step
+src/genesis/sim/enemyRoster.ts    Per-enemy HP, cooldown, respawn timers and kill transitions
 src/genesis/render/     GENESIS 3D: R3F scene + keyboard collection; renders sim state only
 src/genesis/hud/        GENESIS 3D: HUD reusing Card + design tokens (AGENTS.md UI rules apply)
 ```
@@ -158,6 +160,15 @@ src/genesis/hud/        GENESIS 3D: HUD reusing Card + design tokens (AGENTS.md 
 ### God Engine in Genesis (`0.34`)
 - **In-page God Engine overlay** on `/genesis`: a `⚙ God Engine` button (bottom of HUD) and Ctrl+Shift+A toggle a modal exposing the GenesisSection controls (character, teleport, heal/XP/enemies) plus a link to the full Trainer God Engine. No tab-switching required.
 
+### Enemy roster live in Genesis (`0.36`, 2026-11-19)
+- **Roster state machine** — new pure `src/genesis/sim/enemyRoster.ts`: one live instance per archetype with its own position, HP, attack cooldown and respawn timer. `stepEnemyRoster` chases/attacks through the existing `stepEnemy` rules and returns attack events; `damageEnemy` reports `killed` only on the alive → dead transition; `killAllEnemies` backs the God Engine command.
+- **Per-type scene meshes** — `FighterRose` now builds one capsule per `ENEMY_TYPES` entry (own radius, height, colour, home point) instead of the single hard-coded 60 HP enemy; hit flashes are tracked per enemy and meshes hide while respawning.
+- **Combat wiring** — melee arcs and ki blasts hit every living enemy independently; hits award `XP_PER_MELEE_HIT` / `XP_PER_KI_HIT`, defeating blows award the archetype's `xp` (grunt 50, scout 35, brute 110). Enemy defeats increment the quest kill counter exactly once.
+- **Respawn** — each archetype returns at its home point with full HP after its own timer (grunt 4 s, scout 3 s, brute 6 s); defeated enemies keep their own clock while the others keep fighting.
+- **HUD** — new `Enemies: alive/total` line using the existing `text-xs text-chart-1` pattern; the God Engine `killEnemies` / `reset` commands now drive the whole roster.
+- **Tests** — 7 new cases in `genesis-enemy-roster.test.ts` (spawn, archetype identity, independent cooldowns, per-enemy respawn, kill transitions, invalid-damage guards, kill-all) → **262 tests / 20 files**.
+- **Verified** — `tsc --noEmit` clean, ESLint clean on the new modules, production build OK. Live `/genesis`: three distinct enemy capsules at their home points, a melee kill advanced "Defeat 5 enemies" (1/5) and awarded +50 XP, `killEnemies` showed `Enemies: 0/3` then `3/3` after the respawn timers, 100 FPS, 0 console errors.
+
 ### Imported rig axes, quest counter fix, enemy roster groundwork (`0.35`, 2026-11-19)
 - **Character-space pose axes (fixes the scoped open bug)** — new pure `src/genesis/render/rigAxes.ts` maps authored pose angles from character space into a bone's local frame: `offset = W0⁻¹ · R · W0`, where `W0` is the bone's rest orientation relative to the character root. `FighterRose` captures `W0` per bone after the T-pose→A-pose correction and model yaw, keeps the group's facing yaw out of it, and composes the offset on the rest local quaternion each frame. Generated rigs keep the previous bone-local path.
 - **`CharacterDef.rigAxes`** — per-rig flag; the imported Saiyan Prince enables it. Walk/run no longer fold the torso forward at the waist; the forward lean is the intended sprint lean.
@@ -264,7 +275,7 @@ src/genesis/hud/        GENESIS 3D: HUD reusing Card + design tokens (AGENTS.md 
 
 ## 6. Open items / bugs
 
-- **Enemy roster rendering** — `src/genesis/sim/enemies.ts` is tested but not yet wired into `FighterRose`; the scene still spawns one 60 HP enemy. Next: per-type meshes, per-enemy cooldown/respawn, kill counting and XP.
+- **Enemy presentation** — the roster is wired (per-type capsules, cooldowns, respawn, kill XP/quests) but all three archetypes are still primitive capsules. Next: distinct enemy models/animation and attack telegraphs, then patrol/leash behaviour.
 - **`vegeta.glb` provenance** — bone names reference Dragon Ball FighterZ/iClone; confirm licensing matches the project's "no copyrighted likenesses" rule before any public release.
 - Form portraits: sprites in place; true photo-realistic anime art still needs AI image credits (optional)
 - `gold.png` and `ssj1-red.png` extras are unused — available for reassignment
@@ -368,6 +379,7 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 - PRE ALPHA 0.33 (polish: hit sparks on melee/ki hits)
 - PRE ALPHA 0.34 (God Engine in Genesis: in-page overlay, Ctrl+Shift+A)
 - PRE ALPHA 0.35 (rigAxes character-space pose + quest counter fix + enemy roster sim groundwork)
+- PRE ALPHA 0.36 (enemy roster wired into Genesis: per-type meshes, cooldowns, respawn, kill XP/quests)
 
 ## 9. Test counts
 
@@ -384,7 +396,8 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 - Genesis rig-axis tests: 5 (Euler order, arbitrary rest orientation, yawed mapping, identity, guards)
 - Genesis quest tests: 4 (enemy/boss separation, activation baselines, level)
 - Genesis enemy tests: 8 (roster sanity, chase/stop, cooldown, home drift, dead target, dt clamp, guards)
-- Total: 255 (19 files)
+- Genesis enemy-roster tests: 7 (spawn, independent cooldowns, respawn, kill transitions, guards, kill-all)
+- Total: 262 (20 files)
 - All passing as of 2026-11-19
 
 ## 10. GENESIS — 3D Action RPG (active direction)

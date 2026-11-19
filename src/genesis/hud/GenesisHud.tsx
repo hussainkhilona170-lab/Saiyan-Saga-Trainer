@@ -9,6 +9,8 @@ export type HudStats = {
   character?: string;
   targetHp?: number;
   bossHp?: number;
+  enemiesAlive?: number;
+  enemiesTotal?: number;
   quest?: string;
   ki?: number;
   maxKi?: number;
@@ -53,6 +55,11 @@ export function GenesisHud({
             {stats.bossHp !== undefined && stats.bossHp > 0 && (
               <div className="text-xs text-destructive">
                 Boss HP: {Math.round(stats.bossHp)}/300
+              </div>
+            )}
+            {stats.enemiesAlive !== undefined && (
+              <div className="text-xs text-chart-1">
+                Enemies: {stats.enemiesAlive}/{stats.enemiesTotal ?? stats.enemiesAlive}
               </div>
             )}
             {stats.hp !== undefined && (

@@ -42,6 +42,16 @@ import {
   xpToNextLevel,
   type Progress,
 } from "../sim/progression";
+import { ENEMY_TYPES, enemySpawnY } from "../sim/enemies";
+import {
+  countAliveEnemies,
+  createEnemyRoster,
+  damageEnemy,
+  enemyDefByID,
+  killAllEnemies,
+  stepEnemyRoster,
+  type EnemyRoster,
+} from "../sim/enemyRoster";
 import { parseSave, SAVE_KEY, SAVE_VERSION, serializeSave, type GenesisSave } from "../sim/save";
 import {
   GENESIS_QUESTS,
@@ -162,12 +172,10 @@ export function FighterRose({
     Array<{ mesh: THREE.Mesh; life: number; vx: number; vy: number; vz: number }>
   >([]);
   const progressRef = useRef<Progress>(createProgress());
-  const enemyMeshRef = useRef<THREE.Mesh | null>(null);
-  const enemyCombatantRef = useRef<Combatant>(createCombatant(60));
-  const enemyAttackCooldownRef = useRef(0);
-  const enemyRespawnRef = useRef(0);
+  const enemyMeshesRef = useRef<THREE.Mesh[]>([]);
+  const enemiesRef = useRef<EnemyRoster>(createEnemyRoster());
+  const enemyFlashRef = useRef<number[]>([]);
   const playerRespawnRef = useRef(0);
-  const enemyWasAliveRef = useRef(true);
   const bossWasAliveRef = useRef(false);
   const bossMeshRef = useRef<THREE.Mesh | null>(null);
   const bossCombatantRef = useRef<Combatant>(createCombatant(300));
@@ -213,19 +221,33 @@ export function FighterRose({
   }, [scene]);
 
   useEffect(() => {
-    const enemy = new THREE.Mesh(
-      new THREE.CapsuleGeometry(0.3, 0.9, 6, 12),
-      new THREE.MeshStandardMaterial({ color: "#7a3aa0", roughness: 0.7 }),
-    );
-    enemy.position.set(-4, 0.75, 0);
-    enemy.castShadow = true;
-    scene.add(enemy);
-    enemyMeshRef.current = enemy;
+    // One mesh per archetype, sized from its roster definition.
+    const meshes: THREE.Mesh[] = [];
+    for (const def of ENEMY_TYPES) {
+      const mesh = new THREE.Mesh(
+        new THREE.CapsuleGeometry(def.radius, def.height, 6, 12),
+        new THREE.MeshStandardMaterial({
+          color: def.color,
+          roughness: 0.7,
+          emissive: def.color,
+          emissiveIntensity: 0.12,
+        }),
+      );
+      mesh.position.set(def.home.x, enemySpawnY(def), def.home.z);
+      mesh.castShadow = true;
+      scene.add(mesh);
+      meshes.push(mesh);
+    }
+    enemyMeshesRef.current = meshes;
+    enemyFlashRef.current = ENEMY_TYPES.map(() => 0);
     return () => {
-      scene.remove(enemy);
-      enemy.geometry.dispose();
-      (enemy.material as THREE.Material).dispose();
-      enemyMeshRef.current = null;
+      for (const mesh of meshes) {
+        scene.remove(mesh);
+        mesh.geometry.dispose();
+        (mesh.material as THREE.Material).dispose();
+      }
+      enemyMeshesRef.current = [];
+      enemyFlashRef.current = [];
     };
   }, [scene]);
 
@@ -449,9 +471,12 @@ export function FighterRose({
           progressRef.current = r.progress;
         }
         break;
-      case "killEnemies":
-        enemyCombatantRef.current = { ...enemyCombatantRef.current, hp: 0, alive: false };
+      case "killEnemies": {
+        const result = killAllEnemies(enemiesRef.current);
+        enemiesRef.current = result.roster;
+        killCountRef.current.enemy += result.killed;
         break;
+      }
       case "spawnBoss":
         bossCombatantRef.current = createCombatant(300);
         bossRespawnRef.current = 0;
@@ -464,10 +489,8 @@ export function FighterRose({
       case "reset":
         progressRef.current = createProgress();
         playerCombatantRef.current = createCombatant(100, 100);
-        enemyCombatantRef.current = createCombatant(60);
-        enemyRespawnRef.current = 0;
-        enemyWasAliveRef.current = true;
         targetCombatantRef.current = createCombatant(100);
+        enemiesRef.current = createEnemyRoster();
         bossCombatantRef.current = createCombatant(300);
         bossRespawnRef.current = 30;
         bossWasAliveRef.current = false;
@@ -622,6 +645,18 @@ export function FighterRose({
           progressRef.current = r.progress;
         }
       }
+      for (const enemy of enemiesRef.current) {
+        if (!enemy.alive) continue;
+        const def = enemyDefByID(enemy.typeId);
+        if (!def || !meleeHits(attacker, enemy)) continue;
+        const result = damageEnemy(enemiesRef.current, enemy.typeId, MELEE_DAMAGE);
+        enemiesRef.current = result.roster;
+        enemyFlashRef.current[ENEMY_TYPES.indexOf(def)] = 0.2;
+        spawnSparks(new THREE.Vector3(enemy.x, enemySpawnY(def), enemy.z), "#ffaa33");
+        if (result.killed) killCountRef.current.enemy += 1;
+        const r = awardXp(progressRef.current, result.killed ? def.xp : XP_PER_MELEE_HIT);
+        progressRef.current = r.progress;
+      }
       if (bossMesh && bossCombatantRef.current.alive) {
         const bpos = bossMesh.position;
         if (meleeHits(attacker, { x: bpos.x, z: bpos.z })) {
@@ -721,6 +756,24 @@ export function FighterRose({
           remove = true;
         }
       }
+      if (!remove) {
+        for (const enemy of enemiesRef.current) {
+          if (!enemy.alive) continue;
+          const def = enemyDefByID(enemy.typeId);
+          if (!def) continue;
+          const d = Math.hypot(p.mesh.position.x - enemy.x, p.mesh.position.z - enemy.z);
+          if (d >= def.radius + 0.3) continue;
+          const result = damageEnemy(enemiesRef.current, enemy.typeId, KI_BLAST_DAMAGE);
+          enemiesRef.current = result.roster;
+          enemyFlashRef.current[ENEMY_TYPES.indexOf(def)] = 0.2;
+          spawnSparks(new THREE.Vector3(enemy.x, enemySpawnY(def), enemy.z), "#7fd6ff");
+          if (result.killed) killCountRef.current.enemy += 1;
+          const r = awardXp(progressRef.current, result.killed ? def.xp : XP_PER_KI_HIT);
+          progressRef.current = r.progress;
+          remove = true;
+          break;
+        }
+      }
       if (remove) {
         scene.remove(p.mesh);
         (p.mesh.geometry as THREE.BufferGeometry).dispose();
@@ -736,47 +789,38 @@ export function FighterRose({
       maxHp: maxHpForLevel(progressRef.current.level),
     };
 
-    // Enemy AI.
-    const enemyMesh = enemyMeshRef.current;
-    if (enemyMesh) {
-      if (!enemyCombatantRef.current.alive) {
-        enemyRespawnRef.current += delta;
-        enemyMesh.visible = false;
-        if (enemyRespawnRef.current >= 4) {
-          enemyCombatantRef.current = createCombatant(60);
-          enemyRespawnRef.current = 0;
-          enemyMesh.visible = true;
-          enemyMesh.position.set(-4, 0.75, 0);
-          enemyWasAliveRef.current = true;
-        }
+    // Enemy roster AI: every archetype keeps its own position, attack cooldown
+    // and respawn timer. Rules live in sim/enemyRoster.ts; this only mirrors
+    // the returned state onto the meshes.
+    const enemyStep = stepEnemyRoster(
+      enemiesRef.current,
+      { x: resolved.x, z: resolved.z, alive: playerCombatantRef.current.alive },
+      delta,
+    );
+    enemiesRef.current = enemyStep.roster;
+    for (const attack of enemyStep.attacks) {
+      if (!playerCombatantRef.current.alive) break;
+      playerCombatantRef.current = applyDamage(playerCombatantRef.current, attack.damage);
+    }
+    const enemyMeshes = enemyMeshesRef.current;
+    for (let i = 0; i < enemiesRef.current.length; i++) {
+      const enemy = enemiesRef.current[i];
+      const mesh = enemyMeshes[i];
+      if (!enemy || !mesh) continue;
+      mesh.visible = enemy.alive;
+      const def = enemyDefByID(enemy.typeId);
+      if (!enemy.alive || !def) continue;
+      mesh.position.set(enemy.x, enemySpawnY(def), enemy.z);
+      mesh.rotation.y = Math.atan2(resolved.x - enemy.x, resolved.z - enemy.z);
+      const flash = enemyFlashRef.current[i] ?? 0;
+      if (flash > 0) {
+        enemyFlashRef.current[i] = Math.max(0, flash - delta);
+        mesh.scale.setScalar(1 + 0.3 * (flash / 0.2));
       } else {
-        enemyRespawnRef.current = 0;
-        enemyMesh.visible = true;
-        const ex = enemyMesh.position.x;
-        const ez = enemyMesh.position.z;
-        const dx = resolved.x - ex;
-        const dz = resolved.z - ez;
-        const dist = Math.hypot(dx, dz);
-        enemyAttackCooldownRef.current = Math.max(0, enemyAttackCooldownRef.current - delta);
-        if (dist > 2.0) {
-          const speed = 2.5;
-          const nx = dx / (dist || 1);
-          const nz = dz / (dist || 1);
-          enemyMesh.position.x += nx * speed * delta;
-          enemyMesh.position.z += nz * speed * delta;
-        } else if (enemyAttackCooldownRef.current <= 0 && playerCombatantRef.current.alive) {
-          enemyAttackCooldownRef.current = 1.2;
-          playerCombatantRef.current = applyDamage(playerCombatantRef.current, 8);
-        }
-        // Face the player.
-        enemyMesh.rotation.y = Math.atan2(dx, dz);
+        mesh.scale.setScalar(1);
       }
     }
 
-    if (enemyWasAliveRef.current && !enemyCombatantRef.current.alive) {
-      killCountRef.current.enemy += 1;
-      enemyWasAliveRef.current = false;
-    }
     if (bossWasAliveRef.current && !bossCombatantRef.current.alive) {
       killCountRef.current.boss += 1;
       bossWasAliveRef.current = false;
@@ -977,6 +1021,8 @@ export function FighterRose({
         character: character.name,
         targetHp: targetCombatantRef.current.hp,
         bossHp: bossCombatantRef.current.hp,
+        enemiesAlive: countAliveEnemies(enemiesRef.current),
+        enemiesTotal: enemiesRef.current.length,
         ki: playerCombatantRef.current.ki,
         maxKi: playerCombatantRef.current.maxKi,
         hp: playerCombatantRef.current.hp,
