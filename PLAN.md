@@ -1,6 +1,6 @@
 # Dragon Ball RPG — Development Plan
 
-**Version:** PRE ALPHA 0.36
+**Version:** PRE ALPHA 0.37
 **Last updated:** 2026-11-19
 **Branch:** main (Lovable-connected — do not rewrite published history)
 
@@ -37,6 +37,7 @@ src/game/FormArt.tsx    Form portrait rendering (sprite images + SVG fallback)
 src/genesis/sim/        GENESIS 3D: pure gameplay simulation (no three/React/DOM) — headless-testable
 src/genesis/sim/enemies.ts        Enemy archetypes + one chase/attack AI step
 src/genesis/sim/enemyRoster.ts    Per-enemy HP, cooldown, respawn timers and kill transitions
+src/genesis/render/enemyBody.ts   Procedural enemy silhouettes (grunt / scout / brute) + telegraph core
 src/genesis/render/     GENESIS 3D: R3F scene + keyboard collection; renders sim state only
 src/genesis/hud/        GENESIS 3D: HUD reusing Card + design tokens (AGENTS.md UI rules apply)
 ```
@@ -160,6 +161,14 @@ src/genesis/hud/        GENESIS 3D: HUD reusing Card + design tokens (AGENTS.md 
 ### God Engine in Genesis (`0.34`)
 - **In-page God Engine overlay** on `/genesis`: a `⚙ God Engine` button (bottom of HUD) and Ctrl+Shift+A toggle a modal exposing the GenesisSection controls (character, teleport, heal/XP/enemies) plus a link to the full Trainer God Engine. No tab-switching required.
 
+### Enemy presentation — distinct bodies + telegraphs (`0.37`, 2026-11-19)
+- **Procedural archetype bodies** — new `src/genesis/render/enemyBody.ts` builds each silhouette from primitives: the grunt is a compact purple humanoid with a headband, the scout is slim with an emissive visor and swept antenna, the brute is broad with horns, heavy shoulders and a chest plate. Sizes derive from each `EnemyType` radius/height; original geometry only.
+- **Attack telegraph** — pure `telegraphStrength(cooldown, window)` in `enemyRoster.ts` returns 0–1 over the last 350 ms of an enemy's cooldown. While the player is inside aggro range the body leans in and its chest core brightens; a landed attack plays a short forward lunge, and hits flash the whole body.
+- **Idle motion** — per-enemy phase-shifted bob and player-facing rotation, so the three archetypes read as separate combatants rather than static capsules.
+- **Lifecycle** — bodies are created/disposed with the scene, hide while defeated, and reappear at home when the roster respawns.
+- **Tests** — 3 new telegraph cases (dark outside the window, full strength as the strike lands, non-finite/window guards) → **265 tests / 20 files**.
+- **Verified** — `tsc --noEmit` clean, ESLint clean on the new modules, production build OK. Live `/genesis`: all three silhouettes distinct, `killEnemies` hid them (`Enemies: 0/3`) and the respawn timers restored them (`3/3`), 80–100 FPS, 0 console errors.
+
 ### Enemy roster live in Genesis (`0.36`, 2026-11-19)
 - **Roster state machine** — new pure `src/genesis/sim/enemyRoster.ts`: one live instance per archetype with its own position, HP, attack cooldown and respawn timer. `stepEnemyRoster` chases/attacks through the existing `stepEnemy` rules and returns attack events; `damageEnemy` reports `killed` only on the alive → dead transition; `killAllEnemies` backs the God Engine command.
 - **Per-type scene meshes** — `FighterRose` now builds one capsule per `ENEMY_TYPES` entry (own radius, height, colour, home point) instead of the single hard-coded 60 HP enemy; hit flashes are tracked per enemy and meshes hide while respawning.
@@ -275,7 +284,7 @@ src/genesis/hud/        GENESIS 3D: HUD reusing Card + design tokens (AGENTS.md 
 
 ## 6. Open items / bugs
 
-- **Enemy presentation** — the roster is wired (per-type capsules, cooldowns, respawn, kill XP/quests) but all three archetypes are still primitive capsules. Next: distinct enemy models/animation and attack telegraphs, then patrol/leash behaviour.
+- **Enemy patrol & leash** — each archetype has a distinct body, attack telegraph, cooldown and respawn, but it still chases the player without limit. Next: patrol routes around home, a leash radius with a give-up/return state, and a restrained attack token so only the closest enemy swings at once.
 - **`vegeta.glb` provenance** — bone names reference Dragon Ball FighterZ/iClone; confirm licensing matches the project's "no copyrighted likenesses" rule before any public release.
 - Form portraits: sprites in place; true photo-realistic anime art still needs AI image credits (optional)
 - `gold.png` and `ssj1-red.png` extras are unused — available for reassignment
@@ -380,6 +389,7 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 - PRE ALPHA 0.34 (God Engine in Genesis: in-page overlay, Ctrl+Shift+A)
 - PRE ALPHA 0.35 (rigAxes character-space pose + quest counter fix + enemy roster sim groundwork)
 - PRE ALPHA 0.36 (enemy roster wired into Genesis: per-type meshes, cooldowns, respawn, kill XP/quests)
+- PRE ALPHA 0.37 (enemy presentation: procedural archetype bodies + attack telegraphs)
 
 ## 9. Test counts
 
@@ -397,7 +407,8 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 - Genesis quest tests: 4 (enemy/boss separation, activation baselines, level)
 - Genesis enemy tests: 8 (roster sanity, chase/stop, cooldown, home drift, dead target, dt clamp, guards)
 - Genesis enemy-roster tests: 7 (spawn, independent cooldowns, respawn, kill transitions, guards, kill-all)
-- Total: 262 (20 files)
+- Genesis telegraph tests: 3 (window, full strength, guards)
+- Total: 265 (20 files)
 - All passing as of 2026-11-19
 
 ## 10. GENESIS — 3D Action RPG (active direction)

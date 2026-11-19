@@ -1,12 +1,13 @@
 # Dragon Ball RPG — PROJECT STATUS
 
-**Last updated:** 2026-11-19 — PRE ALPHA 0.36 (enemy roster live in Genesis; see `PLAN.md`)
+**Last updated:** 2026-11-19 — PRE ALPHA 0.37 (enemy bodies + attack telegraphs; see `PLAN.md`)
 **Workspace:** `C:\Users\Administrator\Downloads\Saiyan-Saga-Trainer-main` (attached to `origin/main` at PRE ALPHA 0.34; Lovable-connected — see `AGENTS.md`: do not rewrite published history)
 
 > **Status note (2026-11-19):** the TL;DR below is historical and out of date. Current
 > state: Phases 0–10 are complete; Genesis Milestone B is in progress (movement, flight,
 > combat, progression, quests, boss, save/load, God Engine adapter; enemy roster wired into
-> the scene with per-type meshes, cooldowns and respawns); 262 tests pass.
+> the scene with per-type meshes, cooldowns and respawns, and distinct procedural bodies with
+> attack telegraphs); 265 tests pass.
 > `PLAN.md` is the living source of truth and `AUDIT.md` holds the latest audit.
 **Runtime note:** Node v24 is installed at `C:\Program Files\nodejs`. On Windows PowerShell, prefix calls with `Set-ExecutionPolicy -Scope Process Bypass -Force` and invoke `& "C:\Program Files\nodejs\npm.cmd" ...` (npm.ps1 is blocked by default policy).
 

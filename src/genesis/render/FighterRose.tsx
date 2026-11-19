@@ -50,8 +50,10 @@ import {
   enemyDefByID,
   killAllEnemies,
   stepEnemyRoster,
+  telegraphStrength,
   type EnemyRoster,
 } from "../sim/enemyRoster";
+import { createEnemyBody, disposeEnemyBody, type EnemyBody } from "./enemyBody";
 import { parseSave, SAVE_KEY, SAVE_VERSION, serializeSave, type GenesisSave } from "../sim/save";
 import {
   GENESIS_QUESTS,
@@ -172,9 +174,11 @@ export function FighterRose({
     Array<{ mesh: THREE.Mesh; life: number; vx: number; vy: number; vz: number }>
   >([]);
   const progressRef = useRef<Progress>(createProgress());
-  const enemyMeshesRef = useRef<THREE.Mesh[]>([]);
+  const enemyBodiesRef = useRef<EnemyBody[]>([]);
   const enemiesRef = useRef<EnemyRoster>(createEnemyRoster());
   const enemyFlashRef = useRef<number[]>([]);
+  const enemyLungeRef = useRef<number[]>([]);
+  const enemyAnimTimeRef = useRef(0);
   const playerRespawnRef = useRef(0);
   const bossWasAliveRef = useRef(false);
   const bossMeshRef = useRef<THREE.Mesh | null>(null);
@@ -221,33 +225,26 @@ export function FighterRose({
   }, [scene]);
 
   useEffect(() => {
-    // One mesh per archetype, sized from its roster definition.
-    const meshes: THREE.Mesh[] = [];
+    // One procedural body per archetype; roster rules only supply positions.
+    const bodies: EnemyBody[] = [];
     for (const def of ENEMY_TYPES) {
-      const mesh = new THREE.Mesh(
-        new THREE.CapsuleGeometry(def.radius, def.height, 6, 12),
-        new THREE.MeshStandardMaterial({
-          color: def.color,
-          roughness: 0.7,
-          emissive: def.color,
-          emissiveIntensity: 0.12,
-        }),
-      );
-      mesh.position.set(def.home.x, enemySpawnY(def), def.home.z);
-      mesh.castShadow = true;
-      scene.add(mesh);
-      meshes.push(mesh);
+      const body = createEnemyBody(def);
+      body.group.position.set(def.home.x, enemySpawnY(def), def.home.z);
+      scene.add(body.group);
+      bodies.push(body);
     }
-    enemyMeshesRef.current = meshes;
+    enemyBodiesRef.current = bodies;
     enemyFlashRef.current = ENEMY_TYPES.map(() => 0);
+    enemyLungeRef.current = ENEMY_TYPES.map(() => 0);
+    enemyAnimTimeRef.current = 0;
     return () => {
-      for (const mesh of meshes) {
-        scene.remove(mesh);
-        mesh.geometry.dispose();
-        (mesh.material as THREE.Material).dispose();
+      for (const body of bodies) {
+        scene.remove(body.group);
+        disposeEnemyBody(body);
       }
-      enemyMeshesRef.current = [];
+      enemyBodiesRef.current = [];
       enemyFlashRef.current = [];
+      enemyLungeRef.current = [];
     };
   }, [scene]);
 
@@ -799,26 +796,46 @@ export function FighterRose({
     );
     enemiesRef.current = enemyStep.roster;
     for (const attack of enemyStep.attacks) {
+      const index = ENEMY_TYPES.findIndex((def) => def.id === attack.typeId);
+      if (index >= 0) enemyLungeRef.current[index] = 0.22;
       if (!playerCombatantRef.current.alive) break;
       playerCombatantRef.current = applyDamage(playerCombatantRef.current, attack.damage);
     }
-    const enemyMeshes = enemyMeshesRef.current;
+    enemyAnimTimeRef.current += delta;
+    const enemyTime = enemyAnimTimeRef.current;
+    const enemyBodies = enemyBodiesRef.current;
     for (let i = 0; i < enemiesRef.current.length; i++) {
       const enemy = enemiesRef.current[i];
-      const mesh = enemyMeshes[i];
-      if (!enemy || !mesh) continue;
-      mesh.visible = enemy.alive;
+      const body = enemyBodies[i];
+      if (!enemy || !body) continue;
+      body.group.visible = enemy.alive;
       const def = enemyDefByID(enemy.typeId);
-      if (!enemy.alive || !def) continue;
-      mesh.position.set(enemy.x, enemySpawnY(def), enemy.z);
-      mesh.rotation.y = Math.atan2(resolved.x - enemy.x, resolved.z - enemy.z);
-      const flash = enemyFlashRef.current[i] ?? 0;
-      if (flash > 0) {
-        enemyFlashRef.current[i] = Math.max(0, flash - delta);
-        mesh.scale.setScalar(1 + 0.3 * (flash / 0.2));
-      } else {
-        mesh.scale.setScalar(1);
+      if (!enemy.alive || !def) {
+        enemyFlashRef.current[i] = 0;
+        enemyLungeRef.current[i] = 0;
+        continue;
       }
+      const angle = Math.atan2(resolved.x - enemy.x, resolved.z - enemy.z);
+      const dist = Math.hypot(resolved.x - enemy.x, resolved.z - enemy.z);
+      const flash = enemyFlashRef.current[i] ?? 0;
+      if (flash > 0) enemyFlashRef.current[i] = Math.max(0, flash - delta);
+      const lunge = Math.max(0, (enemyLungeRef.current[i] ?? 0) - delta);
+      enemyLungeRef.current[i] = lunge;
+      const bob = Math.sin(enemyTime * 2.2 + i * 1.7) * 0.03;
+      const push = (lunge / 0.22) * 0.2;
+      body.group.position.set(
+        enemy.x + Math.sin(angle) * push,
+        enemySpawnY(def) + bob,
+        enemy.z + Math.cos(angle) * push,
+      );
+      body.group.rotation.y = angle;
+      // Telegraph: lean in and pulse the chest core during the last moments of
+      // the cooldown, but only while the player is inside its aggro radius.
+      const telegraph = dist <= def.aggroRange ? telegraphStrength(enemy.cooldown) : 0;
+      body.group.rotation.x = telegraph * 0.14;
+      body.coreMaterial.emissiveIntensity =
+        0.35 + telegraph * 1.6 + (flash > 0 ? 2.2 * (flash / 0.2) : 0);
+      body.group.scale.setScalar(1 + 0.3 * (flash / 0.2));
     }
 
     if (bossWasAliveRef.current && !bossCombatantRef.current.alive) {

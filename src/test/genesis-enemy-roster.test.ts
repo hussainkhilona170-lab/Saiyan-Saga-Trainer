@@ -7,6 +7,7 @@ import {
   enemyDefByID,
   killAllEnemies,
   stepEnemyRoster,
+  telegraphStrength,
   type EnemyRoster,
 } from "../genesis/sim/enemyRoster";
 
@@ -146,5 +147,25 @@ describe("Genesis enemy roster state", () => {
       expect(enemy.respawnTimer).toBe(def.respawn);
     }
     expect(killAllEnemies(all.roster).killed).toBe(0);
+  });
+});
+
+describe("Genesis attack telegraph", () => {
+  it("stays dark until the cooldown enters the warning window", () => {
+    expect(telegraphStrength(grunt.attackInterval)).toBe(0);
+    expect(telegraphStrength(0.35)).toBe(0);
+    expect(telegraphStrength(0.2)).toBeGreaterThan(0);
+  });
+
+  it("rises to full strength as the strike lands", () => {
+    expect(telegraphStrength(0.175)).toBeCloseTo(0.5, 6);
+    expect(telegraphStrength(0)).toBe(1);
+    expect(telegraphStrength(-1)).toBe(1);
+  });
+
+  it("guards non-finite values and invalid windows", () => {
+    expect(telegraphStrength(Number.NaN)).toBe(0);
+    expect(telegraphStrength(0.1, 0)).toBe(0);
+    expect(telegraphStrength(0.1, Number.POSITIVE_INFINITY)).toBe(0);
   });
 });

@@ -53,6 +53,21 @@ export function countAliveEnemies(roster: EnemyRoster): number {
   return alive;
 }
 
+/** Seconds of warning before an enemy's next strike. */
+export const ATTACK_TELEGRAPH = 0.35;
+
+/**
+ * 0 → no warning, 1 → the strike lands now. Used by the renderer to pulse the
+ * chest core during the last fraction of the attack cooldown. Pure so the
+ * timing is testable and never drifts into the rules layer.
+ */
+export function telegraphStrength(cooldown: number, window = ATTACK_TELEGRAPH): number {
+  if (!Number.isFinite(cooldown) || !Number.isFinite(window) || window <= 0) return 0;
+  if (cooldown <= 0) return 1;
+  if (cooldown >= window) return 0;
+  return 1 - cooldown / window;
+}
+
 /**
  * Advance every enemy by one frame: chase/attack when alive, count down the
  * respawn timer when dead. Defeated enemies return at their home point with
