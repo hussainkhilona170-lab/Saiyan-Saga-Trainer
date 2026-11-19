@@ -59,26 +59,73 @@ describe("Genesis enemy roster state", () => {
     const gruntNow = next.find((e) => e.typeId === grunt.id)!;
     const scoutNow = next.find((e) => e.typeId === scout.id)!;
     expect(gruntNow.cooldown).toBe(grunt.attackInterval);
+    expect(gruntNow.mode).toBe("chase");
     expect(attacks).toEqual([
       { typeId: grunt.id, damage: grunt.damage, x: grunt.home.x, z: grunt.home.z },
     ]);
-    expect(scoutNow.x).toBeCloseTo(scout.home.x, 6);
+    // The others stay on their patrol and never swing.
+    expect(scoutNow.mode).toBe("patrol");
     expect(scoutNow.cooldown).toBe(0);
   });
 
-  it("keeps attack cooldowns independent per enemy", () => {
-    // Put every enemy next to the player so each can attack immediately.
+  it("grants the attack token to the closest enemy only", () => {
+    // Stack every enemy next to the player so all three want to swing.
     const roster = createEnemyRoster().map((enemy) => ({ ...enemy, x: 0, z: 0 }));
     const player = alivePlayer(0.5, 0);
-    const first = stepEnemyRoster(roster, player, 0.05);
-    expect(first.attacks.map((a) => a.typeId).sort()).toEqual(ENEMY_TYPES.map((e) => e.id).sort());
 
-    // Only the scout's clock expires; the other two must stay on cooldown.
-    const cooled = first.roster.map((enemy) =>
-      enemy.typeId === scout.id ? { ...enemy, cooldown: 0 } : enemy,
+    const first = stepEnemyRoster(roster, player, 0.05);
+    expect(first.attacks).toHaveLength(1);
+    const granted = first.attacks[0]!.typeId;
+
+    // The two that were held back keep a zero cooldown, so one of them swings
+    // once the token is free again.
+    for (const enemy of first.roster) {
+      if (enemy.typeId === granted) continue;
+      expect(enemy.cooldown).toBe(0);
+    }
+
+    const second = stepEnemyRoster(first.roster, player, 0.05);
+    expect(second.attacks).toHaveLength(1);
+    expect(second.attacks[0]!.typeId).not.toBe(granted);
+  });
+
+  it("patrols around home while the player is away", () => {
+    const farAway = alivePlayer(60, 60);
+    const start = createEnemyRoster();
+    const { roster } = advance(start, farAway, 2);
+    for (const enemy of roster) {
+      const def = enemyDefByID(enemy.typeId)!;
+      const fromHome = Math.hypot(enemy.x - def.home.x, enemy.z - def.home.z);
+      expect(enemy.mode).toBe("patrol");
+      expect(fromHome).toBeGreaterThan(0.05);
+      expect(fromHome).toBeLessThanOrEqual(def.patrolRadius + 0.3);
+    }
+  });
+
+  it("leashes: gives up the chase and walks home even with the player nearby", () => {
+    const gruntLeashed = createEnemyRoster().map((enemy) =>
+      enemy.typeId === grunt.id
+        ? {
+            ...enemy,
+            x: grunt.home.x + grunt.leashRange + 0.2,
+            z: grunt.home.z,
+            mode: "chase" as const,
+          }
+        : enemy,
     );
-    const second = stepEnemyRoster(cooled, player, 0.05);
-    expect(second.attacks.map((a) => a.typeId)).toEqual([scout.id]);
+    // The player stands right next to the grunt but is outside the leash.
+    const player = alivePlayer(grunt.home.x + grunt.leashRange - 4, grunt.home.z);
+    const first = stepEnemyRoster(gruntLeashed, player, 0.05);
+    const leashed = first.roster.find((e) => e.typeId === grunt.id)!;
+    expect(leashed.mode).toBe("return");
+    expect(leashed.x).toBeLessThan(grunt.home.x + grunt.leashRange + 0.2);
+    expect(first.attacks).toHaveLength(0);
+
+    // Sticky: still returning next frame even though the player is close.
+    const second = stepEnemyRoster(first.roster, player, 0.05);
+    const still = second.roster.find((e) => e.typeId === grunt.id)!;
+    expect(still.mode).toBe("return");
+    expect(still.x).toBeLessThan(leashed.x);
   });
 
   it("respawns a defeated enemy on its own timer, at home with full HP", () => {
@@ -101,10 +148,25 @@ describe("Genesis enemy roster state", () => {
     expect(respawned).toMatchObject({
       alive: true,
       hp: grunt.hp,
+      respawnTimer: 0,
+    });
+    // It comes back at home, then resumes its idle patrol there.
+    const fromHome = Math.hypot(respawned.x - grunt.home.x, respawned.z - grunt.home.z);
+    expect(fromHome).toBeLessThanOrEqual(grunt.patrolRadius + 0.3);
+  });
+
+  it("returns a defeated enemy exactly at home on the respawn frame", () => {
+    const dead = damageEnemy(createEnemyRoster(), grunt.id, grunt.hp).roster.map((enemy) =>
+      enemy.typeId === grunt.id ? { ...enemy, respawnTimer: 0 } : enemy,
+    );
+    const { roster } = stepEnemyRoster(dead, alivePlayer(60, 60), 0.05);
+    expect(roster.find((e) => e.typeId === grunt.id)).toMatchObject({
+      alive: true,
+      hp: grunt.hp,
       x: grunt.home.x,
       z: grunt.home.z,
-      respawnTimer: 0,
-      cooldown: 0,
+      mode: "patrol",
+      patrolPhase: 0,
     });
   });
 

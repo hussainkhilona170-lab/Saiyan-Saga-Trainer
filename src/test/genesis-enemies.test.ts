@@ -4,6 +4,7 @@ import {
   ENEMY_TYPES,
   enemySpawnY,
   stepEnemy,
+  type EnemyAiState,
   type EnemyType,
 } from "../genesis/sim/enemies";
 
@@ -71,7 +72,8 @@ describe("Genesis enemy AI", () => {
   });
 
   it("drifts home when the player is outside aggro range", () => {
-    const p = { x: grunt.home.x + 2, z: grunt.home.z };
+    // Start beyond the patrol loop, so the enemy is returning, not patrolling.
+    const p = { x: grunt.home.x + 4, z: grunt.home.z };
     const next = stepEnemy(grunt, p, 0, playerAlive(grunt.home.x + 30, grunt.home.z), ENEMY_MAX_DT);
     expect(next.x).toBeLessThan(p.x);
     expect(next.x).toBeCloseTo(p.x - grunt.speed * ENEMY_MAX_DT, 6);
@@ -87,13 +89,64 @@ describe("Genesis enemy AI", () => {
   });
 
   it("clamps a huge dt and rejects non-finite input", () => {
-    // Start 5 m from home with the player far away, so the brute walks home.
-    const p = { x: brute.home.x + 5, z: brute.home.z };
+    // Start 2 m from home with the player far away, so the brute walks home.
+    const p = { x: brute.home.x + 2, z: brute.home.z };
     const next = stepEnemy(brute, p, 0, playerAlive(p.x + 20, p.z), 10);
     expect(next.x - p.x).toBeCloseTo(-brute.speed * ENEMY_MAX_DT, 6);
 
     const guarded = stepEnemy(brute, { x: Number.NaN, z: Number.NaN }, 0, playerAlive(0, 0), 0.016);
     expect(Number.isFinite(guarded.x)).toBe(true);
     expect(Number.isFinite(guarded.z)).toBe(true);
+    expect(Number.isFinite(guarded.patrolPhase)).toBe(true);
+  });
+
+  it("patrols a loop around home when idle", () => {
+    let pos = atHome(grunt);
+    let state: EnemyAiState = { mode: "patrol", patrolPhase: 0 };
+    let maxFromHome = 0;
+    for (let i = 0; i < 200; i++) {
+      const tick = stepEnemy(grunt, pos, 0, playerAlive(60, 60), ENEMY_MAX_DT, state);
+      pos = { x: tick.x, z: tick.z };
+      state = { mode: tick.mode, patrolPhase: tick.patrolPhase };
+      maxFromHome = Math.max(maxFromHome, Math.hypot(tick.x - grunt.home.x, tick.z - grunt.home.z));
+    }
+    expect(state.mode).toBe("patrol");
+    expect(maxFromHome).toBeGreaterThan(grunt.patrolRadius * 0.5);
+    expect(maxFromHome).toBeLessThanOrEqual(grunt.patrolRadius + 0.3);
+  });
+
+  it("breaks off a chase once it drags the enemy beyond its leash", () => {
+    const pos = { x: grunt.home.x + grunt.leashRange + 0.1, z: grunt.home.z };
+    // The player is right next to the enemy but far past the leash radius.
+    const tick = stepEnemy(grunt, pos, 0, playerAlive(pos.x + 2, pos.z), ENEMY_MAX_DT);
+    expect(tick.mode).toBe("return");
+    expect(tick.attack).toBe(false);
+    expect(tick.x).toBeLessThan(pos.x);
+  });
+
+  it("keeps returning until it reaches home", () => {
+    // Returning is sticky: a player standing on top of the enemy cannot
+    // re-aggro it mid-return.
+    const pos = { x: grunt.home.x + 3, z: grunt.home.z };
+    const tick = stepEnemy(grunt, pos, 0, playerAlive(pos.x, pos.z), ENEMY_MAX_DT, {
+      mode: "return",
+      patrolPhase: 0,
+    });
+    expect(tick.mode).toBe("return");
+    expect(tick.attack).toBe(false);
+    expect(tick.x).toBeLessThan(pos.x);
+  });
+
+  it("stands still when the player is dead", () => {
+    let pos = atHome(grunt);
+    for (let i = 0; i < 60; i++) {
+      const tick = stepEnemy(grunt, pos, 0, { x: 0, z: 0, alive: false }, ENEMY_MAX_DT, {
+        mode: "patrol",
+        patrolPhase: 0,
+      });
+      pos = { x: tick.x, z: tick.z };
+    }
+    expect(pos.x).toBeCloseTo(grunt.home.x, 6);
+    expect(pos.z).toBeCloseTo(grunt.home.z, 6);
   });
 });

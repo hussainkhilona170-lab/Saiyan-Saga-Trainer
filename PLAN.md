@@ -1,6 +1,6 @@
 # Dragon Ball RPG — Development Plan
 
-**Version:** PRE ALPHA 0.37
+**Version:** PRE ALPHA 0.38
 **Last updated:** 2026-11-19
 **Branch:** main (Lovable-connected — do not rewrite published history)
 
@@ -161,6 +161,14 @@ src/genesis/hud/        GENESIS 3D: HUD reusing Card + design tokens (AGENTS.md 
 ### God Engine in Genesis (`0.34`)
 - **In-page God Engine overlay** on `/genesis`: a `⚙ God Engine` button (bottom of HUD) and Ctrl+Shift+A toggle a modal exposing the GenesisSection controls (character, teleport, heal/XP/enemies) plus a link to the full Trainer God Engine. No tab-switching required.
 
+### Enemy patrol, leash & attack token (`0.38`, 2026-11-19)
+- **Patrol loop** — `EnemyType` gains `patrolRadius`; idle enemies walk a slow circle around their home point instead of standing still, so the clearing reads as inhabited. Patrol speed is 35% of combat speed and every archetype keeps its own loop size (grunt 2.2 m, scout 3.4 m, brute 1.6 m).
+- **Leash with a give-up/return state** — `EnemyMode` (`chase` / `return` / `patrol`) plus `leashRange` (grunt 11 m, scout 13 m, brute 12 m). A chase that leaves the leash breaks off; `return` is sticky until the enemy is home, so a player cannot re-aggro it across the arena. Reaching home resumes patrol (or re-engages if the player is standing there).
+- **Restrained attack token** — `stepEnemyRoster` now lets only the living enemy closest to the player land a strike per frame; the others keep their cooldown at the pre-frame value and swing as soon as they win the token. Three enemies can no longer delete the player in one tick.
+- **Dead player pauses the arena** — enemies hold position while the player is down instead of wandering off.
+- **Tests** — 5 new enemy cases (patrol loop stays inside its radius, leash break-off, sticky return, dead-player hold, patrol-phase guard) and 3 roster cases (attack token, patrol at home, leash through the roster; respawn moved to an exact-home frame test) → **272 tests / 20 files**.
+- **Verified** — `tsc --noEmit` clean, ESLint 0 errors, production build OK.
+
 ### Enemy presentation — distinct bodies + telegraphs (`0.37`, 2026-11-19)
 - **Procedural archetype bodies** — new `src/genesis/render/enemyBody.ts` builds each silhouette from primitives: the grunt is a compact purple humanoid with a headband, the scout is slim with an emissive visor and swept antenna, the brute is broad with horns, heavy shoulders and a chest plate. Sizes derive from each `EnemyType` radius/height; original geometry only.
 - **Attack telegraph** — pure `telegraphStrength(cooldown, window)` in `enemyRoster.ts` returns 0–1 over the last 350 ms of an enemy's cooldown. While the player is inside aggro range the body leans in and its chest core brightens; a landed attack plays a short forward lunge, and hits flash the whole body.
@@ -284,7 +292,7 @@ src/genesis/hud/        GENESIS 3D: HUD reusing Card + design tokens (AGENTS.md 
 
 ## 6. Open items / bugs
 
-- **Enemy patrol & leash** — each archetype has a distinct body, attack telegraph, cooldown and respawn, but it still chases the player without limit. Next: patrol routes around home, a leash radius with a give-up/return state, and a restrained attack token so only the closest enemy swings at once.
+- **Enemy variety next steps** — patrol, leash and the attack token are in (`0.38`); next is a second region spawn set and elite variants.
 - **`vegeta.glb` provenance** — bone names reference Dragon Ball FighterZ/iClone; confirm licensing matches the project's "no copyrighted likenesses" rule before any public release.
 - Form portraits: sprites in place; true photo-realistic anime art still needs AI image credits (optional)
 - `gold.png` and `ssj1-red.png` extras are unused — available for reassignment
@@ -390,6 +398,7 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 - PRE ALPHA 0.35 (rigAxes character-space pose + quest counter fix + enemy roster sim groundwork)
 - PRE ALPHA 0.36 (enemy roster wired into Genesis: per-type meshes, cooldowns, respawn, kill XP/quests)
 - PRE ALPHA 0.37 (enemy presentation: procedural archetype bodies + attack telegraphs)
+- PRE ALPHA 0.38 (enemy patrol, leash & attack token)
 
 ## 9. Test counts
 
@@ -405,10 +414,10 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 - Genesis save tests: 4 (round-trip, version, malformed, clamping)
 - Genesis rig-axis tests: 5 (Euler order, arbitrary rest orientation, yawed mapping, identity, guards)
 - Genesis quest tests: 4 (enemy/boss separation, activation baselines, level)
-- Genesis enemy tests: 8 (roster sanity, chase/stop, cooldown, home drift, dead target, dt clamp, guards)
-- Genesis enemy-roster tests: 7 (spawn, independent cooldowns, respawn, kill transitions, guards, kill-all)
+- Genesis enemy tests: 13 (roster sanity, chase/stop, cooldown, home drift, dead target, dt clamp, guards, patrol, leash, sticky return)
+- Genesis enemy-roster tests: 10 (spawn, attack token, patrol, leash, independent cooldowns, respawn, kill transitions, guards, kill-all)
 - Genesis telegraph tests: 3 (window, full strength, guards)
-- Total: 265 (20 files)
+- Total: 272 (20 files)
 - All passing as of 2026-11-19
 
 ## 10. GENESIS — 3D Action RPG (active direction)
