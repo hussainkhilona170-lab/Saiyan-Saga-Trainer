@@ -1,6 +1,6 @@
 # Dragon Ball RPG — Development Plan
 
-**Version:** PRE ALPHA 0.38
+**Version:** PRE ALPHA 0.39
 **Last updated:** 2026-11-19
 **Branch:** main (Lovable-connected — do not rewrite published history)
 
@@ -35,6 +35,7 @@ src/game/ui.tsx         All tabs + AdminPanel + BattleTab glue
 src/game/router.tsx     TanStack route tree generation (routeTree.gen.ts is generated — do not hand-edit)
 src/game/FormArt.tsx    Form portrait rendering (sprite images + SVG fallback)
 src/genesis/sim/        GENESIS 3D: pure gameplay simulation (no three/React/DOM) — headless-testable
+src/genesis/sim/npcs.ts           NPC roster, interact range, dialogue cycling and facing
 src/genesis/sim/enemies.ts        Enemy archetypes + one chase/attack AI step
 src/genesis/sim/enemyRoster.ts    Per-enemy HP, cooldown, respawn timers and kill transitions
 src/genesis/render/enemyBody.ts   Procedural enemy silhouettes (grunt / scout / brute) + telegraph core
@@ -160,6 +161,16 @@ src/genesis/hud/        GENESIS 3D: HUD reusing Card + design tokens (AGENTS.md 
 
 ### God Engine in Genesis (`0.34`)
 - **In-page God Engine overlay** on `/genesis`: a `⚙ God Engine` button (bottom of HUD) and Ctrl+Shift+A toggle a modal exposing the GenesisSection controls (character, teleport, heal/XP/enemies) plus a link to the full Trainer God Engine. No tab-switching required.
+
+### NPCs — Master Oren & the dialogue card (`0.39`, 2026-11-19)
+- **Pure NPC rules** — new `src/genesis/sim/npcs.ts`: `NpcDef`, `GENESIS_NPCS`, `nearestNpc` (closest within range, deterministic ties), `nextLineIndex` / `dialogueLine` (wrapping, guarded), `npcFacingYaw` (turns to the player only inside range). `NPC_INTERACT_RANGE = 2.6`.
+- **Master Oren, Elder of the Hollow Ridge** — one mentor at `(5, 7)` near spawn, four original lines that explain the enemy clearing, the brute's slow turn and the boss beyond the pillars. No licensed names or likenesses.
+- **Procedural body** — new `src/genesis/render/npcBody.ts`: cone robe, tapered torso, sash, mantle, hood with a hanging tail, sleeves, eyes, a staff with an emissive octahedron head, and a soft accent ring at the feet that pulses while the player is in talk range.
+- **Interaction** — `E` (added to `useKeyboard`) advances the dialogue; the line stays on screen for 5 s. First press shows the first line (no off-by-one).
+- **HUD** — new bottom-centre `Card`: `Press E to talk` when close, then the speaker name in `chart-2` with the current line and `E — next line`. Reuses `Card` + tokens only.
+- **Patrol presentation (finishing 0.38's renderer mirroring)** — idle enemies now face along their patrol loop instead of staring across the arena, and the attack telegraph is gated on `mode === "chase"` rather than raw distance.
+- **Tests** — new `genesis-npcs.test.ts`: 8 cases (roster integrity, proximity, out-of-range, non-finite guards, closest-of-many, wraparound cycling, empty/invalid indices, facing) → **280 tests / 21 files**.
+- **Verified** — `tsc --noEmit` clean, ESLint 0 errors, production build OK. Live `/genesis` (headless Chromium): NPC body renders, walking into range shows `Master Oren` prompt, `E` shows `"So you are the one making all that noise…"`, 0 console errors.
 
 ### Enemy patrol, leash & attack token (`0.38`, 2026-11-19)
 - **Patrol loop** — `EnemyType` gains `patrolRadius`; idle enemies walk a slow circle around their home point instead of standing still, so the clearing reads as inhabited. Patrol speed is 35% of combat speed and every archetype keeps its own loop size (grunt 2.2 m, scout 3.4 m, brute 1.6 m).
@@ -292,7 +303,7 @@ src/genesis/hud/        GENESIS 3D: HUD reusing Card + design tokens (AGENTS.md 
 
 ## 6. Open items / bugs
 
-- **Enemy variety next steps** — patrol, leash and the attack token are in (`0.38`); next is a second region spawn set and elite variants.
+- **Enemy variety next steps** — patrol, leash and the attack token are in (`0.38`); NPCs and dialogue are in (`0.39`); next is a second region spawn set and elite variants.
 - **`vegeta.glb` provenance** — bone names reference Dragon Ball FighterZ/iClone; confirm licensing matches the project's "no copyrighted likenesses" rule before any public release.
 - Form portraits: sprites in place; true photo-realistic anime art still needs AI image credits (optional)
 - `gold.png` and `ssj1-red.png` extras are unused — available for reassignment
@@ -399,6 +410,7 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 - PRE ALPHA 0.36 (enemy roster wired into Genesis: per-type meshes, cooldowns, respawn, kill XP/quests)
 - PRE ALPHA 0.37 (enemy presentation: procedural archetype bodies + attack telegraphs)
 - PRE ALPHA 0.38 (enemy patrol, leash & attack token)
+- PRE ALPHA 0.39 (NPCs: Master Oren, E dialogue, HUD dialogue card)
 
 ## 9. Test counts
 
@@ -417,7 +429,8 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 - Genesis enemy tests: 13 (roster sanity, chase/stop, cooldown, home drift, dead target, dt clamp, guards, patrol, leash, sticky return)
 - Genesis enemy-roster tests: 10 (spawn, attack token, patrol, leash, independent cooldowns, respawn, kill transitions, guards, kill-all)
 - Genesis telegraph tests: 3 (window, full strength, guards)
-- Total: 272 (20 files)
+- Genesis NPC tests: 8 (roster, proximity, range, guards, closest, cycling, dialogue lines, facing)
+- Total: 280 (21 files)
 - All passing as of 2026-11-19
 
 ## 10. GENESIS — 3D Action RPG (active direction)

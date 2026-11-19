@@ -66,13 +66,7 @@ describe("rigAxes — character-space pose offsets", () => {
   });
 
   it("is a no-op for axis-aligned rigs (rest = identity)", () => {
-    const offset = characterSpaceOffsetInto(
-      newQuat(),
-      { ...IDENTITY_QUAT },
-      0.25,
-      -0.15,
-      0.05,
-    );
+    const offset = characterSpaceOffsetInto(newQuat(), { ...IDENTITY_QUAT }, 0.25, -0.15, 0.05);
     expectQuatClose(offset, setFromEulerXYZInto(newQuat(), 0.25, -0.15, 0.05));
   });
 

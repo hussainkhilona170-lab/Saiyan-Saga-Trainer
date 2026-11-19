@@ -54,14 +54,10 @@ import {
   type EnemyRoster,
 } from "../sim/enemyRoster";
 import { createEnemyBody, disposeEnemyBody, type EnemyBody } from "./enemyBody";
+import { createNpcBody, disposeNpcBody, type NpcBody } from "./npcBody";
+import { GENESIS_NPCS, dialogueLine, nearestNpc, nextLineIndex, npcFacingYaw } from "../sim/npcs";
 import { parseSave, SAVE_KEY, SAVE_VERSION, serializeSave, type GenesisSave } from "../sim/save";
-import {
-  GENESIS_QUESTS,
-  questComplete,
-  questProgress,
-  type KillCounts,
-} from "../sim/quests";
-
+import { GENESIS_QUESTS, questComplete, questProgress, type KillCounts } from "../sim/quests";
 
 const CAM_BACK = 3.6;
 const CAM_UP = 1.9;
@@ -179,6 +175,11 @@ export function FighterRose({
   const enemyFlashRef = useRef<number[]>([]);
   const enemyLungeRef = useRef<number[]>([]);
   const enemyAnimTimeRef = useRef(0);
+  const npcBodiesRef = useRef<NpcBody[]>([]);
+  // -1 = nothing said yet, so the first E press shows the first line.
+  const npcLineRef = useRef(-1);
+  const npcTalkTimerRef = useRef(0);
+  const prevInteractRef = useRef(false);
   const playerRespawnRef = useRef(0);
   const bossWasAliveRef = useRef(false);
   const bossMeshRef = useRef<THREE.Mesh | null>(null);
@@ -245,6 +246,28 @@ export function FighterRose({
       enemyBodiesRef.current = [];
       enemyFlashRef.current = [];
       enemyLungeRef.current = [];
+    };
+  }, [scene]);
+
+  useEffect(() => {
+    // One procedural body per NPC; the sim module only supplies placement.
+    const bodies: NpcBody[] = [];
+    for (const def of GENESIS_NPCS) {
+      const body = createNpcBody(def);
+      body.group.position.set(def.x, 0, def.z);
+      body.group.rotation.y = def.yaw;
+      scene.add(body.group);
+      bodies.push(body);
+    }
+    npcBodiesRef.current = bodies;
+    npcLineRef.current = -1;
+    npcTalkTimerRef.current = 0;
+    return () => {
+      for (const body of bodies) {
+        scene.remove(body.group);
+        disposeNpcBody(body);
+      }
+      npcBodiesRef.current = [];
     };
   }, [scene]);
 
@@ -396,8 +419,7 @@ export function FighterRose({
                 };
               }
             }
-            rigWorldRef.current =
-              rigAxes && Object.keys(worldAxes).length > 0 ? worldAxes : null;
+            rigWorldRef.current = rigAxes && Object.keys(worldAxes).length > 0 ? worldAxes : null;
             setLoaded(true);
           },
           (err) => console.error("Rose GLTF parse error:", err),
@@ -816,7 +838,15 @@ export function FighterRose({
         continue;
       }
       const angle = Math.atan2(resolved.x - enemy.x, resolved.z - enemy.z);
-      const dist = Math.hypot(resolved.x - enemy.x, resolved.z - enemy.z);
+      // Idle enemies look along their patrol loop instead of staring at the
+      // player from across the arena.
+      const facing =
+        enemy.mode === "chase"
+          ? angle
+          : Math.atan2(
+              def.home.x + Math.sin(enemy.patrolPhase) * def.patrolRadius - enemy.x,
+              def.home.z + Math.cos(enemy.patrolPhase) * def.patrolRadius - enemy.z,
+            );
       const flash = enemyFlashRef.current[i] ?? 0;
       if (flash > 0) enemyFlashRef.current[i] = Math.max(0, flash - delta);
       const lunge = Math.max(0, (enemyLungeRef.current[i] ?? 0) - delta);
@@ -828,14 +858,33 @@ export function FighterRose({
         enemySpawnY(def) + bob,
         enemy.z + Math.cos(angle) * push,
       );
-      body.group.rotation.y = angle;
+      body.group.rotation.y = facing;
       // Telegraph: lean in and pulse the chest core during the last moments of
-      // the cooldown, but only while the player is inside its aggro radius.
-      const telegraph = dist <= def.aggroRange ? telegraphStrength(enemy.cooldown) : 0;
+      // the cooldown, but only while the enemy is actually chasing.
+      const telegraph = enemy.mode === "chase" ? telegraphStrength(enemy.cooldown) : 0;
       body.group.rotation.x = telegraph * 0.14;
       body.coreMaterial.emissiveIntensity =
         0.35 + telegraph * 1.6 + (flash > 0 ? 2.2 * (flash / 0.2) : 0);
       body.group.scale.setScalar(1 + 0.3 * (flash / 0.2));
+    }
+
+    // NPC proximity and dialogue. Range/cycling rules are pure (sim/npcs.ts).
+    const near = nearestNpc({ x: resolved.x, z: resolved.z });
+    const interactEdge = keys.interact && !prevInteractRef.current;
+    prevInteractRef.current = keys.interact;
+    if (interactEdge && near) {
+      npcLineRef.current = nextLineIndex(npcLineRef.current, near.npc.lines.length);
+      npcTalkTimerRef.current = 5;
+    }
+    npcTalkTimerRef.current = Math.max(0, npcTalkTimerRef.current - delta);
+    const npcTime = enemyTime;
+    for (let i = 0; i < npcBodiesRef.current.length; i++) {
+      const body = npcBodiesRef.current[i];
+      const def = GENESIS_NPCS[i];
+      if (!body || !def) continue;
+      const close = near?.npc.id === def.id;
+      body.group.rotation.y = npcFacingYaw(def, close ? resolved : null);
+      body.ringMaterial.emissiveIntensity = close ? 0.7 + Math.sin(npcTime * 3) * 0.3 : 0.2;
     }
 
     if (bossWasAliveRef.current && !bossCombatantRef.current.alive) {
@@ -1005,12 +1054,7 @@ export function FighterRose({
     const quest = GENESIS_QUESTS[questIndexRef.current];
     if (
       quest &&
-      questComplete(
-        quest,
-        progressRef.current.level,
-        killCountRef.current,
-        questBaseRef.current,
-      )
+      questComplete(quest, progressRef.current.level, killCountRef.current, questBaseRef.current)
     ) {
       if (quest.type === "boss") questBaseRef.current.boss = killCountRef.current.boss;
       else if (quest.type === "kills") questBaseRef.current.enemy = killCountRef.current.enemy;
@@ -1048,6 +1092,10 @@ export function FighterRose({
         xp: progressRef.current.xp,
         xpToNext: xpToNextLevel(progressRef.current.level),
         quest: questText,
+        ...(near ? { npcName: near.npc.name } : {}),
+        ...(npcTalkTimerRef.current > 0 && near
+          ? { npcDialogue: dialogueLine(near.npc, npcLineRef.current) }
+          : {}),
       });
       acc.count = 0;
       acc.time = 0;
