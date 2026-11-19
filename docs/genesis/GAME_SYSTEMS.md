@@ -11,6 +11,16 @@
 - Ki blast: 12 m range, 18 damage, costs 15 Ki, 16 m/s projectile.
 - Attack wind-up 0.32 s locks horizontal motion.
 
+## Transformation
+- `Ascended` (T): 1.6× damage, 1.25× move/fly speed, costs 20 Ki to enter.
+- While active, passive Ki regen is suspended and the form drains 6 Ki/s; at 0 Ki it collapses automatically.
+- The aura ring turns gold and flares while transformed.
+
+## Enemies
+- Three archetypes with their own home, patrol loop and leash (grunt 11 m, scout 13 m, brute 12 m).
+- Idle enemies patrol a slow circle; a chase that leaves the leash breaks off and returns home (sticky give-up).
+- Only the living enemy closest to the player may land a strike per frame (attack token).
+
 ## Progression
 - XP: melee hit 5, ki hit 8, kill 50, quest 100.
 - Level-up: +10 max Ki, +15 max HP per level. Threshold 100 × level.

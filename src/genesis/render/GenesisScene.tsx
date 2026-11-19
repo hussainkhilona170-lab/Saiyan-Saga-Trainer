@@ -89,8 +89,10 @@ export default function GenesisScene() {
   // God Engine → Genesis command channel (cross-tab).
   useEffect(() => {
     return subscribeGenesisCommands((cmd: GenesisCommand) => {
-      commandQueueRef.current.push(cmd);
-      commandHandlerRef.current?.(cmd);
+      // Apply immediately so throttle-surviving panels work; only buffer while
+      // the fighter has not mounted yet, so nothing is applied twice.
+      if (commandHandlerRef.current) commandHandlerRef.current(cmd);
+      else commandQueueRef.current.push(cmd);
       switch (cmd.type) {
         case "setCharacter":
           setCharacterID(cmd.id);

@@ -1,6 +1,6 @@
 # Dragon Ball RPG — Development Plan
 
-**Version:** PRE ALPHA 0.39
+**Version:** PRE ALPHA 0.40
 **Last updated:** 2026-11-19
 **Branch:** main (Lovable-connected — do not rewrite published history)
 
@@ -161,6 +161,16 @@ src/genesis/hud/        GENESIS 3D: HUD reusing Card + design tokens (AGENTS.md 
 
 ### God Engine in Genesis (`0.34`)
 - **In-page God Engine overlay** on `/genesis`: a `⚙ God Engine` button (bottom of HUD) and Ctrl+Shift+A toggle a modal exposing the GenesisSection controls (character, teleport, heal/XP/enemies) plus a link to the full Trainer God Engine. No tab-switching required.
+
+### First transformation — Ascended (`0.40`, 2026-11-19)
+- **Pure form rules** — new `src/genesis/sim/forms.ts`: `GenesisForm` (aura, damage/speed multipliers, Ki cost, drain, min level), `canEnterForm` (returns the leftover Ki or a typed refusal: level / ki / already / unknown), `drainFormKi` (dt-clamped, collapses at zero), `formDamage`, `formSpeed`.
+- **Ascended** — 1.6× melee/ki damage, 1.25× walk/run/fly speed, 20 Ki to enter, 6 Ki/s drain, level 1. Passive Ki regen is suspended while transformed, so the form lasts ~13 s from full Ki.
+- **Sim support** — `CharacterInput.speedMult` (clamped 0.25–3, guarded against NaN/negatives) scales ground and flight target speed; existing behaviour is unchanged when omitted.
+- **Renderer** — `T` toggles the form (also a `transform` bus command + God Engine "Transform" button). The aura ring switches to the form colour and flares; damage sites all route through `formDamage`.
+- **HUD** — new `Form: Ascended` line in the existing right-hand stack; controls line now lists `K ki` and `T transform`.
+- **Bug fixed (from 0.31)** — God Engine commands were applied **twice** (immediate handler *and* the frame queue), which double-toggled transformations and double-awarded XP. The scene now applies a command immediately when the fighter is mounted and only buffers it while it is still loading.
+- **Tests** — new `genesis-forms.test.ts`: 7 cases (roster sanity, entry + cost, all four refusals, drain/collapse/dt clamp, damage/speed scaling, ground speed multiplier, nonsense multiplier) → **287 tests / 22 files**.
+- **Verified** — `tsc --noEmit` clean, ESLint 0 errors, production build OK. Live `/genesis` (headless Chromium): `transform` command → `Form: Ascended`, Ki 100 → 74 with the drain, golden aura ring rendered, `Heal` restored HP, 0 console errors.
 
 ### NPCs — Master Oren & the dialogue card (`0.39`, 2026-11-19)
 - **Pure NPC rules** — new `src/genesis/sim/npcs.ts`: `NpcDef`, `GENESIS_NPCS`, `nearestNpc` (closest within range, deterministic ties), `nextLineIndex` / `dialogueLine` (wrapping, guarded), `npcFacingYaw` (turns to the player only inside range). `NPC_INTERACT_RANGE = 2.6`.
@@ -411,6 +421,7 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 - PRE ALPHA 0.37 (enemy presentation: procedural archetype bodies + attack telegraphs)
 - PRE ALPHA 0.38 (enemy patrol, leash & attack token)
 - PRE ALPHA 0.39 (NPCs: Master Oren, E dialogue, HUD dialogue card)
+- PRE ALPHA 0.40 (first transformation: Ascended form, aura, damage/speed buff, double-apply fix)
 
 ## 9. Test counts
 
@@ -430,7 +441,8 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 - Genesis enemy-roster tests: 10 (spawn, attack token, patrol, leash, independent cooldowns, respawn, kill transitions, guards, kill-all)
 - Genesis telegraph tests: 3 (window, full strength, guards)
 - Genesis NPC tests: 8 (roster, proximity, range, guards, closest, cycling, dialogue lines, facing)
-- Total: 280 (21 files)
+- Genesis form tests: 7 (roster, entry cost, refusals, drain, scaling, speed multiplier, guards)
+- Total: 287 (22 files)
 - All passing as of 2026-11-19
 
 ## 10. GENESIS — 3D Action RPG (active direction)

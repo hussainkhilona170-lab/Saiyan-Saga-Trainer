@@ -56,6 +56,7 @@ import {
 import { createEnemyBody, disposeEnemyBody, type EnemyBody } from "./enemyBody";
 import { createNpcBody, disposeNpcBody, type NpcBody } from "./npcBody";
 import { GENESIS_NPCS, dialogueLine, nearestNpc, nextLineIndex, npcFacingYaw } from "../sim/npcs";
+import { GENESIS_FORMS, canEnterForm, drainFormKi, formByID, formDamage } from "../sim/forms";
 import { parseSave, SAVE_KEY, SAVE_VERSION, serializeSave, type GenesisSave } from "../sim/save";
 import { GENESIS_QUESTS, questComplete, questProgress, type KillCounts } from "../sim/quests";
 
@@ -180,6 +181,8 @@ export function FighterRose({
   const npcLineRef = useRef(-1);
   const npcTalkTimerRef = useRef(0);
   const prevInteractRef = useRef(false);
+  const formIDRef = useRef<string | null>(null);
+  const prevTransformRef = useRef(false);
   const playerRespawnRef = useRef(0);
   const bossWasAliveRef = useRef(false);
   const bossMeshRef = useRef<THREE.Mesh | null>(null);
@@ -476,8 +479,28 @@ export function FighterRose({
     };
   }, []);
 
+  /** Toggle the first transformation (T key or God Engine command). */
+  const toggleForm = () => {
+    if (formIDRef.current) {
+      formIDRef.current = null;
+      return;
+    }
+    const attempt = canEnterForm(
+      GENESIS_FORMS[0],
+      progressRef.current.level,
+      playerCombatantRef.current.ki,
+    );
+    if (attempt.ok) {
+      formIDRef.current = attempt.form.id;
+      playerCombatantRef.current = { ...playerCombatantRef.current, ki: attempt.ki };
+    }
+  };
+
   const applyCommand = (cmd: GenesisCommand) => {
     switch (cmd.type) {
+      case "transform":
+        toggleForm();
+        break;
       case "heal":
         playerCombatantRef.current = createCombatant(
           maxHpForLevel(progressRef.current.level),
@@ -561,7 +584,23 @@ export function FighterRose({
     }
     const keys = keysRef.current;
     const move = moveIntent(keys, camera);
-    playerCombatantRef.current = regenKi(playerCombatantRef.current, 8 * delta);
+
+    // Transformation (T): pay the Ki cost, hold the form while Ki lasts, and
+    // skip passive regeneration until it collapses.
+    const transformEdge = keys.transform && !prevTransformRef.current;
+    prevTransformRef.current = keys.transform;
+    if (transformEdge) toggleForm();
+    const activeForm = formByID(formIDRef.current);
+    if (activeForm) {
+      const drain = drainFormKi(activeForm, playerCombatantRef.current.ki, delta);
+      playerCombatantRef.current = { ...playerCombatantRef.current, ki: drain.ki };
+      if (!drain.active) formIDRef.current = null;
+    } else {
+      playerCombatantRef.current = regenKi(playerCombatantRef.current, 8 * delta);
+    }
+    // Re-read after the drain so a collapse takes effect the same frame.
+    const attackForm = formByID(formIDRef.current);
+
     const flyEdge = keys.fly && !prevFlyRef.current;
     prevFlyRef.current = keys.fly;
     const attackEdge = keys.attack && !prevAttackRef.current;
@@ -577,6 +616,7 @@ export function FighterRose({
       ascend: stateRef.current.flying && keys.jump,
       descend: keys.descend,
       attack: attackEdge,
+      speedMult: attackForm ? attackForm.speedMult : 1,
     };
     const next = updateCharacter(stateRef.current, input, delta);
     const speed = Math.hypot(next.vx, next.vz);
@@ -655,7 +695,10 @@ export function FighterRose({
         const tpos = targetMesh.position;
         if (meleeHits(attacker, { x: tpos.x, z: tpos.z })) {
           const wasAlive = targetCombatantRef.current.alive;
-          targetCombatantRef.current = applyDamage(targetCombatantRef.current, MELEE_DAMAGE);
+          targetCombatantRef.current = applyDamage(
+            targetCombatantRef.current,
+            formDamage(MELEE_DAMAGE, attackForm),
+          );
           targetFlashRef.current = 0.2;
           spawnSparks(targetMesh.position, "#ffaa33");
           const xpAmt =
@@ -668,7 +711,11 @@ export function FighterRose({
         if (!enemy.alive) continue;
         const def = enemyDefByID(enemy.typeId);
         if (!def || !meleeHits(attacker, enemy)) continue;
-        const result = damageEnemy(enemiesRef.current, enemy.typeId, MELEE_DAMAGE);
+        const result = damageEnemy(
+          enemiesRef.current,
+          enemy.typeId,
+          formDamage(MELEE_DAMAGE, attackForm),
+        );
         enemiesRef.current = result.roster;
         enemyFlashRef.current[ENEMY_TYPES.indexOf(def)] = 0.2;
         spawnSparks(new THREE.Vector3(enemy.x, enemySpawnY(def), enemy.z), "#ffaa33");
@@ -680,7 +727,10 @@ export function FighterRose({
         const bpos = bossMesh.position;
         if (meleeHits(attacker, { x: bpos.x, z: bpos.z })) {
           const wasAlive = bossCombatantRef.current.alive;
-          bossCombatantRef.current = applyDamage(bossCombatantRef.current, MELEE_DAMAGE * 2);
+          bossCombatantRef.current = applyDamage(
+            bossCombatantRef.current,
+            formDamage(MELEE_DAMAGE * 2, attackForm),
+          );
           targetFlashRef.current = 0.2;
           spawnSparks(bossMesh.position, "#ff5533");
           const xpAmt = !bossCombatantRef.current.alive && wasAlive ? 200 : XP_PER_MELEE_HIT * 2;
@@ -744,7 +794,10 @@ export function FighterRose({
         );
         if (d < 0.6) {
           const wasAlive = targetCombatantRef.current.alive;
-          targetCombatantRef.current = applyDamage(targetCombatantRef.current, KI_BLAST_DAMAGE);
+          targetCombatantRef.current = applyDamage(
+            targetCombatantRef.current,
+            formDamage(KI_BLAST_DAMAGE, attackForm),
+          );
           targetFlashRef.current = 0.2;
           spawnSparks(targetMesh.position, "#7fd6ff");
           const r1 = awardXp(progressRef.current, XP_PER_KI_HIT);
@@ -763,7 +816,10 @@ export function FighterRose({
         );
         if (d < 0.8) {
           const wasAlive = bossCombatantRef.current.alive;
-          bossCombatantRef.current = applyDamage(bossCombatantRef.current, KI_BLAST_DAMAGE * 2);
+          bossCombatantRef.current = applyDamage(
+            bossCombatantRef.current,
+            formDamage(KI_BLAST_DAMAGE * 2, attackForm),
+          );
           targetFlashRef.current = 0.2;
           spawnSparks(bossMesh.position, "#7fd6ff");
           const r1 = awardXp(progressRef.current, XP_PER_KI_HIT * 2);
@@ -782,7 +838,11 @@ export function FighterRose({
           if (!def) continue;
           const d = Math.hypot(p.mesh.position.x - enemy.x, p.mesh.position.z - enemy.z);
           if (d >= def.radius + 0.3) continue;
-          const result = damageEnemy(enemiesRef.current, enemy.typeId, KI_BLAST_DAMAGE);
+          const result = damageEnemy(
+            enemiesRef.current,
+            enemy.typeId,
+            formDamage(KI_BLAST_DAMAGE, attackForm),
+          );
           enemiesRef.current = result.roster;
           enemyFlashRef.current[ENEMY_TYPES.indexOf(def)] = 0.2;
           spawnSparks(new THREE.Vector3(enemy.x, enemySpawnY(def), enemy.z), "#7fd6ff");
@@ -994,12 +1054,14 @@ export function FighterRose({
     const bob = pose.hipsY;
     if (groupRef.current) groupRef.current.position.y = resolved.y + bob;
 
-    // Aura pulses with speed.
+    // Aura pulses with speed; a transformation recolours it and adds a flare.
     if (auraRef.current) {
+      const form = formByID(formIDRef.current);
       const t = Math.min(1, speed / 8);
       const mat = auraRef.current.material as THREE.MeshBasicMaterial;
-      mat.opacity = 0.18 + 0.4 * t;
-      const s = 1 + 0.15 * t;
+      mat.color.set(form ? form.aura : "#e0508c");
+      mat.opacity = 0.18 + 0.4 * t + (form ? 0.22 : 0);
+      const s = (1 + 0.15 * t) * (form ? 1.18 : 1);
       auraRef.current.scale.set(s, 1, s);
       auraRef.current.rotation.z += delta * (0.8 + 3 * t);
     }
@@ -1096,6 +1158,7 @@ export function FighterRose({
         ...(npcTalkTimerRef.current > 0 && near
           ? { npcDialogue: dialogueLine(near.npc, npcLineRef.current) }
           : {}),
+        ...(formByID(formIDRef.current) ? { form: formByID(formIDRef.current)!.name } : {}),
       });
       acc.count = 0;
       acc.time = 0;

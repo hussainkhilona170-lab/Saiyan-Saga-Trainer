@@ -23,6 +23,8 @@ export type CharacterInput = {
   descend?: boolean;
   /** Edge-triggered: true on the frame the attack key went down. */
   attack?: boolean;
+  /** Multiplier on walk/run/fly speed (transformations). Defaults to 1. */
+  speedMult?: number;
 };
 
 export type CharacterState = {
@@ -91,6 +93,13 @@ function magnitude(x: number, z: number): number {
   return Math.sqrt(x * x + z * z);
 }
 
+/** Speed multiplier from a transformation; guards garbage and absurd values. */
+function speedScale(input: CharacterInput): number {
+  const raw = input.speedMult;
+  if (!Number.isFinite(raw) || raw === undefined || raw <= 0) return 1;
+  return Math.min(Math.max(raw, 0.25), 3);
+}
+
 /** Advance the character by dt seconds. Pure: returns a new state, never mutates. */
 export function updateCharacter(
   prev: CharacterState,
@@ -135,7 +144,7 @@ export function updateCharacter(
     return updateFlight(s, input, dt, moveMag);
   }
 
-  const targetSpeed = input.sprint ? RUN_SPEED : WALK_SPEED;
+  const targetSpeed = (input.sprint ? RUN_SPEED : WALK_SPEED) * speedScale(input);
   // Normalize the input direction to at most unit length, then scale by the
   // target speed: full tilt = full speed, half tilt = proportional (analog-ready).
   const dirScale = moveMag > 1 ? 1 / moveMag : 1;
@@ -210,7 +219,7 @@ function updateFlight(
   dt: number,
   moveMag: number,
 ): CharacterState {
-  const targetSpeed = input.sprint ? FLY_SPRINT_SPEED : FLY_SPEED;
+  const targetSpeed = (input.sprint ? FLY_SPRINT_SPEED : FLY_SPEED) * speedScale(input);
   const dirScale = moveMag > 1 ? 1 / moveMag : 1;
   const wantVx = input.moveX * dirScale * targetSpeed;
   const wantVz = input.moveZ * dirScale * targetSpeed;

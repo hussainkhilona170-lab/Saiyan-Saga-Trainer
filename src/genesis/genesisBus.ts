@@ -15,7 +15,8 @@ export type GenesisCommand =
   | { type: "heal" }
   | { type: "giveXp"; amount: number }
   | { type: "killEnemies" }
-  | { type: "spawnBoss" };
+  | { type: "spawnBoss" }
+  | { type: "transform" };
 
 const CHANNEL_NAME = "genesis-bus";
 const LOCAL_EVENT = "genesis-command";

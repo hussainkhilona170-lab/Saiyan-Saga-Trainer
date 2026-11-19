@@ -49,6 +49,7 @@ export function GenesisSection() {
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <Btn onClick={() => sendGenesisCommand({ type: "heal" })}>Heal</Btn>
           <Btn onClick={() => sendGenesisCommand({ type: "killEnemies" })}>Kill enemies</Btn>
+          <Btn onClick={() => sendGenesisCommand({ type: "transform" })}>Transform</Btn>
           <input
             type="number"
             value={xp}

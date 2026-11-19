@@ -23,6 +23,8 @@ export type HudStats = {
   npcName?: string;
   /** Current spoken line, shown while the dialogue timer runs. */
   npcDialogue?: string;
+  /** Active transformation name, if any. */
+  form?: string;
 };
 
 export function GenesisHud({
@@ -41,7 +43,8 @@ export function GenesisHud({
               <span className="text-2xl">🌌</span>{" "}
               <span className="font-display text-xl">Genesis — Movement Prototype</span>
               <div className="text-sm text-muted-foreground">
-                WASD move · Shift sprint · Space jump · F fly · Ctrl descend · J attack · E talk
+                WASD move · Shift sprint · Space jump · F fly · Ctrl descend · J attack · K ki · E
+                talk · T transform
                 {stats.character ? ` · ${stats.character}` : ""}
               </div>
             </div>
@@ -82,6 +85,7 @@ export function GenesisHud({
                   Lv {stats.level} · XP {Math.round(stats.xp ?? 0)}/{stats.xpToNext ?? 100}
                 </div>
               )}
+              {stats.form && <div className="text-xs text-chart-2">Form: {stats.form}</div>}
             </div>
           </div>
           <div className="mt-2 flex items-center gap-2">
