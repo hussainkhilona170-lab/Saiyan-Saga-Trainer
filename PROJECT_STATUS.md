@@ -1,7 +1,13 @@
 # Dragon Ball RPG — PROJECT STATUS
 
-**Last updated:** 2026-11-14 — post-phase-10 audit + user feedback round 2 (Turbo Clicker, automatic gravity)
-**Workspace:** `C:\Users\Administrator\Documents\GitHub\Saiyan-Saga-Trainer` (git repo, Lovable-connected — see `AGENTS.md`: do not rewrite published history)
+**Last updated:** 2026-11-19 — PRE ALPHA 0.35 audit (see `AUDIT.md`)
+**Workspace:** `C:\Users\Administrator\Downloads\Saiyan-Saga-Trainer-main` (attached to `origin/main` at PRE ALPHA 0.34; Lovable-connected — see `AGENTS.md`: do not rewrite published history)
+
+> **Status note (2026-11-19):** the TL;DR below is historical and out of date. Current
+> state: Phases 0–10 are complete; Genesis Milestone B is in progress (movement, flight,
+> combat, progression, quests, boss, save/load, God Engine adapter; enemy roster sim
+> groundwork); 255 tests pass.
+> `PLAN.md` is the living source of truth and `AUDIT.md` holds the latest audit.
 **Runtime note:** Node v24 is installed at `C:\Program Files\nodejs`. On Windows PowerShell, prefix calls with `Set-ExecutionPolicy -Scope Process Bypass -Force` and invoke `& "C:\Program Files\nodejs\npm.cmd" ...` (npm.ps1 is blocked by default policy).
 
 ---

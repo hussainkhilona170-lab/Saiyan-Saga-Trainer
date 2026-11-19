@@ -1,7 +1,7 @@
 # Dragon Ball RPG — Development Plan
 
-**Version:** PRE ALPHA 0.34
-**Last updated:** 2026-11-17
+**Version:** PRE ALPHA 0.35
+**Last updated:** 2026-11-19
 **Branch:** main (Lovable-connected — do not rewrite published history)
 
 > This is the living plan document. It must be updated on every commit: completed
@@ -158,6 +158,15 @@ src/genesis/hud/        GENESIS 3D: HUD reusing Card + design tokens (AGENTS.md 
 ### God Engine in Genesis (`0.34`)
 - **In-page God Engine overlay** on `/genesis`: a `⚙ God Engine` button (bottom of HUD) and Ctrl+Shift+A toggle a modal exposing the GenesisSection controls (character, teleport, heal/XP/enemies) plus a link to the full Trainer God Engine. No tab-switching required.
 
+### Imported rig axes, quest counter fix, enemy roster groundwork (`0.35`, 2026-11-19)
+- **Character-space pose axes (fixes the scoped open bug)** — new pure `src/genesis/render/rigAxes.ts` maps authored pose angles from character space into a bone's local frame: `offset = W0⁻¹ · R · W0`, where `W0` is the bone's rest orientation relative to the character root. `FighterRose` captures `W0` per bone after the T-pose→A-pose correction and model yaw, keeps the group's facing yaw out of it, and composes the offset on the rest local quaternion each frame. Generated rigs keep the previous bone-local path.
+- **`CharacterDef.rigAxes`** — per-rig flag; the imported Saiyan Prince enables it. Walk/run no longer fold the torso forward at the waist; the forward lean is the intended sprint lean.
+- **Quest counter fix** — enemy and boss defeats now use separate counters with a per-quest baseline, so an ordinary enemy kill can no longer complete "Defeat the boss". Rules moved to pure `src/genesis/sim/quests.ts`.
+- **Enemy roster groundwork** — pure `src/genesis/sim/enemies.ts` defines three data-driven types (grunt 60 HP / 2.5 m/s / 8 dmg, scout 35 HP / 3.6 m/s / 5 dmg, brute 140 HP / 1.8 m/s / 16 dmg) with chase, attack-cooldown, home-drift and dt-clamping rules and distinct spawn points. Rendering still spawns the single 60 HP capsule; wiring the roster into `FighterRose` is the next step.
+- **Tests** — 5 rig-axis cases (Euler order, arbitrary rest orientation, yawed-axis mapping, identity rest, non-finite guards), 4 quest cases (enemy/boss separation, activation baselines, level quest) and 8 enemy cases (roster sanity, chase/stop ranges, cooldown, home drift, dead target, dt clamp, guards).
+- **Verified** — 255 tests / 19 files pass, `tsc --noEmit` clean, ESLint 0 errors on `src/genesis` + `src/test`, production build OK. Live: Trainer tab renders, `/genesis` runs (100 FPS desktop, ~11 FPS headless SwiftShader), Saiyan Prince sprint screenshot shows an upright torso, 0 console errors.
+- **Environment note** — this machine (fresh extracted copy) had no Node/npm, so a gitignored portable runtime was installed at `.tools/node`; the repo was then attached to `origin/main` (PRE ALPHA 0.34) and this round is committed as 0.35.
+
 ### Polish — hit sparks (`0.33`)
 - **Hit sparks**: small spheres burst on melee/ki hits (target & boss) with gravity and fade, adding combat feedback.
 
@@ -255,7 +264,7 @@ src/genesis/hud/        GENESIS 3D: HUD reusing Card + design tokens (AGENTS.md 
 
 ## 6. Open items / bugs
 
-- **Imported rig run pose (Saiyan Prince):** torso folds forward at walk/run because gait rotations use bone-local axes; imported iClone skeletons need character-space axes. Fix scoped, prototype validated.
+- **Enemy roster rendering** — `src/genesis/sim/enemies.ts` is tested but not yet wired into `FighterRose`; the scene still spawns one 60 HP enemy. Next: per-type meshes, per-enemy cooldown/respawn, kill counting and XP.
 - **`vegeta.glb` provenance** — bone names reference Dragon Ball FighterZ/iClone; confirm licensing matches the project's "no copyrighted likenesses" rule before any public release.
 - Form portraits: sprites in place; true photo-realistic anime art still needs AI image credits (optional)
 - `gold.png` and `ssj1-red.png` extras are unused — available for reassignment
@@ -303,6 +312,10 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 & "C:\Program Files\nodejs\npx.cmd" tsc --noEmit                           # type check
 & "C:\Program Files\nodejs\npm.cmd" run build                              # production build
 ```
+- If Node is not installed (fresh extracted copy), the gitignored portable runtime works:
+  `.tools/node/node.exe node_modules/vitest/vitest.mjs run`,
+  `.tools/node/node.exe node_modules/typescript/bin/tsc --noEmit`,
+  `.tools/node/node.exe node_modules/vite/bin/vite.js dev --port 3100 --strictPort`.
 - `vite preview` cannot serve this nitro build — use `npm run dev`.
 - Node v24 at `C:\Program Files\nodejs`.
 
@@ -354,6 +367,7 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 - PRE ALPHA 0.31 (God Engine responsiveness: immediate command application via handler ref)
 - PRE ALPHA 0.33 (polish: hit sparks on melee/ki hits)
 - PRE ALPHA 0.34 (God Engine in Genesis: in-page overlay, Ctrl+Shift+A)
+- PRE ALPHA 0.35 (rigAxes character-space pose + quest counter fix + enemy roster sim groundwork)
 
 ## 9. Test counts
 
@@ -367,8 +381,11 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 - Genesis attack tests: 4 (wind-up, motion lock, cooldown, recovery)
 - Genesis progression tests: 9 (xp, level-up, overflow, multi-level, scaling)
 - Genesis save tests: 4 (round-trip, version, malformed, clamping)
-- Total: 238 (16 files)
-- All passing as of last commit
+- Genesis rig-axis tests: 5 (Euler order, arbitrary rest orientation, yawed mapping, identity, guards)
+- Genesis quest tests: 4 (enemy/boss separation, activation baselines, level)
+- Genesis enemy tests: 8 (roster sanity, chase/stop, cooldown, home drift, dead target, dt clamp, guards)
+- Total: 255 (19 files)
+- All passing as of 2026-11-19
 
 ## 10. GENESIS — 3D Action RPG (active direction)
 

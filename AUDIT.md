@@ -122,3 +122,45 @@ A fresh full audit after the 2026-11-07 user-feedback round (`e22b983`). Same ru
 - **No save *import* UI exists** — Settings & Recovery has export (versioned JSON) and backup restore, but no file-pick import path (the 2026-11-07 audit §7.3 overstated this; the console/parser can still apply states, and scenarios import/export exists separately).
 - Tournament/endless grades still pool under variant ids (by design, unchanged).
 - Prettier backlog unchanged: pre-existing formatting-only diffs, not touched.
+
+---
+
+# Audit — 2026-11-19 (PRE ALPHA 0.35)
+
+**Scope:** audit the extracted worktree against `PLAN.md`, then execute the scoped open item.
+**Result:** 255 tests / 19 files pass · `tsc --noEmit` clean · ESLint 0 errors on `src/genesis` + `src/test` · production build OK · live 2D Trainer and `/genesis` both render with 0 console errors.
+
+## Environment findings
+
+- **No toolchain in the extracted copy** — no global Node/npm, no `node_modules`. Installed a gitignored portable Node 24.11.1 at `.tools/node` and ran `npm ci` (548 packages).
+- **No git metadata initially** — the extracted folder was not a repository. It was attached to `origin/main` (PRE ALPHA 0.34) without touching the working tree, so this round commits on top of the published history.
+- **In-app browser surface auto-hides** — the tab throttles to 0 FPS when hidden, so final animation verification ran through headless Chrome (SwiftShader, ~11 FPS). Desktop in-app run was 100 FPS / 10.0 ms.
+- **Doc drift** — `PROJECT_STATUS.md`'s TL;DR still describes Phases 4–10 as unimplemented, and `roadmap.md` leaves Phase 10 unchecked. `PLAN.md` is the current source of truth.
+
+## Bugs found & fixed
+
+1. **Boss quest completed from ordinary enemy kills** — all three Genesis quests shared one progress counter, so the "Defeat the boss" quest was satisfied by any enemy defeat. Enemy and boss counts are now separate, measured from a per-quest baseline taken when that quest activates. Rules extracted to pure `src/genesis/sim/quests.ts` with 4 tests.
+2. **Imported rig run pose (PLAN open item)** — gait rotations used bone-local axes; iClone/CC skeletons have arbitrary local axes, so the Saiyan Prince folded forward at walk/run. Added pure `src/genesis/render/rigAxes.ts` (`offset = W0⁻¹ · R · W0`), a `CharacterDef.rigAxes` flag (enabled on the Saiyan Prince), and per-bone rest-orientation capture in `FighterRose` after the A-pose correction and model yaw. 5 tests cover Euler order, arbitrary rest orientations, yawed-axis mapping, identity, and non-finite guards.
+
+3. **Enemy variety (groundwork)** — added pure `src/genesis/sim/enemies.ts` with grunt/scout/brute definitions and a tested `stepEnemy` (aggro chase, stop range, attack cooldown, home drift, dt clamp, non-finite guards). 8 tests. Not yet rendered: the scene still spawns the single 60 HP capsule.
+
+## Files changed
+
+- `src/genesis/render/rigAxes.ts` (new), `src/genesis/sim/quests.ts` (new), `src/genesis/sim/enemies.ts` (new)
+- `src/genesis/render/FighterRose.tsx`, `src/genesis/characters.ts`
+- `src/test/genesis-rig-axes.test.ts` (new), `src/test/genesis-quests.test.ts` (new), `src/test/genesis-enemies.test.ts` (new)
+- `src/routeTree.gen.ts` (regenerated: `/genesis` route registration)
+- `PLAN.md`, `AUDIT.md`, `PROJECT_STATUS.md`, `roadmap.md`
+
+## Visual verification
+
+- Trainer tab: renders, all tabs present, 0 console errors.
+- `/genesis`: Vanguard / Rosé / Saiyan Prince all load; Saiyan Prince side-view sprint shows an upright torso with the intended forward lean; HUD reports 100 FPS on desktop, 11 FPS headless; no console errors.
+- Quest HUD still shows `Defeat 5 enemies (0/5)` and advances only on the matching counter.
+
+## Honest gaps
+
+- The rig fix is verified idle + walk/run sprint; jump/fly/attack poses on the imported rig were not visually re-checked.
+- Headless FPS is software-rendered and not representative of real performance; the desktop 100 FPS figure is.
+- The 2D game was not regression-played beyond loading; its 155-test subset is included in the 255 passing tests.
+- Enemy roster behavior is covered headless only; the three types are not yet visible in-game, so no visual check of distinct meshes/stats exists.

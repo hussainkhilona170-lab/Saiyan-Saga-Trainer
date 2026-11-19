@@ -16,6 +16,7 @@ import type { HudStats } from "../hud/GenesisHud";
 import type { RawKeys } from "./useKeyboard";
 import { moveIntent, resolveCameraPosition } from "./cameraRelative";
 import { resolveBones } from "./boneNames";
+import { characterSpaceOffsetInto, IDENTITY_QUAT, type Quat } from "./rigAxes";
 import type { GenesisCommand } from "../genesisBus";
 import { OBSTACLES } from "../world";
 import {
@@ -42,12 +43,13 @@ import {
   type Progress,
 } from "../sim/progression";
 import { parseSave, SAVE_KEY, SAVE_VERSION, serializeSave, type GenesisSave } from "../sim/save";
+import {
+  GENESIS_QUESTS,
+  questComplete,
+  questProgress,
+  type KillCounts,
+} from "../sim/quests";
 
-const QUESTS = [
-  { name: "Defeat 5 enemies", target: 5, type: "kills" as const },
-  { name: "Defeat the boss", target: 1, type: "boss" as const },
-  { name: "Reach level 5", target: 5, type: "level" as const },
-];
 
 const CAM_BACK = 3.6;
 const CAM_UP = 1.9;
@@ -172,19 +174,26 @@ export function FighterRose({
   const bossRespawnRef = useRef(30);
   const bossAttackCooldownRef = useRef(0);
   const questIndexRef = useRef(0);
-  const questProgressRef = useRef(0);
+  // Enemy and boss defeats are counted separately: one shared counter let an
+  // ordinary kill complete the "Defeat the boss" quest.
+  const killCountRef = useRef<KillCounts>({ enemy: 0, boss: 0 });
+  const questBaseRef = useRef<KillCounts>({ enemy: 0, boss: 0 });
   const projectilesRef = useRef<Array<{ mesh: THREE.Mesh; vx: number; vz: number; life: number }>>(
     [],
   );
   const prevKiRef = useRef(false);
   // Rest rotations captured at load so we can offset from the bind pose.
   const restRef = useRef<Record<string, THREE.Quaternion> | null>(null);
+  // For imported rigs: each bone's rest orientation relative to the character
+  // root, used to apply pose angles in character space (see rigAxes.ts).
+  const rigWorldRef = useRef<Record<string, Quat> | null>(null);
+  const rigOffset = useRef<Quat>({ ...IDENTITY_QUAT }).current;
   const tmpEuler = useRef(new THREE.Euler()).current;
   const tmpQuat = useRef(new THREE.Quaternion()).current;
 
   // Load-order flags are primitives, so they can safely be effect dependencies
   // without re-fetching on every render.
-  const { tPose = false, modelYaw = 0 } = character;
+  const { tPose = false, modelYaw = 0, rigAxes = false } = character;
 
   useEffect(() => {
     const target = new THREE.Mesh(
@@ -246,6 +255,7 @@ export function FighterRose({
   useEffect(() => {
     const group = groupRef.current;
     if (!group) return;
+    rigWorldRef.current = null;
     let cancelled = false;
     fetch(modelUrl)
       .then((r) => {
@@ -345,6 +355,30 @@ export function FighterRose({
               for (const [k, v] of Object.entries(bones)) rest[k] = v.quaternion.clone();
             }
             restRef.current = rest;
+
+            // Capture each bone's rest orientation in character space (relative
+            // to the group, so the facing yaw is excluded and the model yaw is
+            // included). Imported rigs need this to rotate about character axes.
+            const worldAxes: Record<string, Quat> = {};
+            if (bonesComplete && bones && rigAxes) {
+              scene.updateMatrixWorld(true);
+              const groupQuat = new THREE.Quaternion();
+              if (groupRef.current) groupRef.current.getWorldQuaternion(groupQuat);
+              groupQuat.invert();
+              const boneQuat = new THREE.Quaternion();
+              for (const [key, bone] of Object.entries(bones)) {
+                bone.getWorldQuaternion(boneQuat);
+                boneQuat.premultiply(groupQuat);
+                worldAxes[key] = {
+                  x: boneQuat.x,
+                  y: boneQuat.y,
+                  z: boneQuat.z,
+                  w: boneQuat.w,
+                };
+              }
+            }
+            rigWorldRef.current =
+              rigAxes && Object.keys(worldAxes).length > 0 ? worldAxes : null;
             setLoaded(true);
           },
           (err) => console.error("Rose GLTF parse error:", err),
@@ -359,7 +393,7 @@ export function FighterRose({
         else break;
       }
     };
-  }, [modelUrl, tPose, modelYaw]);
+  }, [modelUrl, tPose, modelYaw, rigAxes]);
 
   useEffect(() => {
     // Load saved progress.
@@ -740,11 +774,11 @@ export function FighterRose({
     }
 
     if (enemyWasAliveRef.current && !enemyCombatantRef.current.alive) {
-      questProgressRef.current += 1;
+      killCountRef.current.enemy += 1;
       enemyWasAliveRef.current = false;
     }
     if (bossWasAliveRef.current && !bossCombatantRef.current.alive) {
-      questProgressRef.current += 1;
+      killCountRef.current.boss += 1;
       bossWasAliveRef.current = false;
     }
 
@@ -808,16 +842,27 @@ export function FighterRose({
 
     const bones = bonesRef.current;
     const rest = restRef.current;
+    const rigWorld = rigWorldRef.current;
     if (bones && rest) {
-      tmpEuler.set(0, 0, 0);
       const set = (key: keyof Bones, x: number, y = 0, z = 0) => {
         const b = bones[key];
         const r = rest[key];
         if (!b || !r) return;
+        if (rigWorld) {
+          // Imported rig: convert the character-space angles into the bone's
+          // local frame, then compose on top of the captured rest pose.
+          const w0 = rigWorld[key];
+          if (!w0) return;
+          characterSpaceOffsetInto(rigOffset, w0, x, y, z);
+          tmpQuat.set(rigOffset.x, rigOffset.y, rigOffset.z, rigOffset.w);
+        } else {
+          // Generated rig: bone axes already align with character axes.
+          tmpEuler.set(x, y, z);
+          tmpQuat.setFromEuler(tmpEuler);
+        }
         // Compose the offset on top of the captured rest pose, so any load-time
         // correction (e.g. lowering a T-pose's arms) is preserved.
-        tmpEuler.set(x, y, z);
-        b.quaternion.copy(r).multiply(tmpQuat.setFromEuler(tmpEuler));
+        b.quaternion.copy(r).multiply(tmpQuat);
       };
       // Legs swing opposite; knees only bend forward.
       set("thighL", -pose.hipL, 0, 0);
@@ -894,24 +939,33 @@ export function FighterRose({
     }
 
     const acc = frames.current;
-    // Quest progression check.
-    const quest = QUESTS[questIndexRef.current];
-    if (quest) {
-      let done = false;
-      if (quest.type === "kills" && questProgressRef.current >= quest.target) done = true;
-      if (quest.type === "boss" && questProgressRef.current >= quest.target) done = true;
-      if (quest.type === "level" && progressRef.current.level >= quest.target) done = true;
-      if (done) {
-        const r = awardXp(progressRef.current, 100);
-        progressRef.current = r.progress;
-        questIndexRef.current = Math.min(questIndexRef.current + 1, QUESTS.length);
-        questProgressRef.current = 0;
-      }
+    // Quest progression: each quest reads only the counter it targets, measured
+    // from the moment that quest became active.
+    const quest = GENESIS_QUESTS[questIndexRef.current];
+    if (
+      quest &&
+      questComplete(
+        quest,
+        progressRef.current.level,
+        killCountRef.current,
+        questBaseRef.current,
+      )
+    ) {
+      if (quest.type === "boss") questBaseRef.current.boss = killCountRef.current.boss;
+      else if (quest.type === "kills") questBaseRef.current.enemy = killCountRef.current.enemy;
+      const r = awardXp(progressRef.current, 100);
+      progressRef.current = r.progress;
+      questIndexRef.current = Math.min(questIndexRef.current + 1, GENESIS_QUESTS.length);
     }
-    const questText =
-      questIndexRef.current >= QUESTS.length
-        ? "All quests complete!"
-        : `${QUESTS[questIndexRef.current]!.name} (${questProgressRef.current}/${QUESTS[questIndexRef.current]!.target})`;
+    const activeQuest = GENESIS_QUESTS[questIndexRef.current];
+    const questText = activeQuest
+      ? `${activeQuest.name} (${questProgress(
+          activeQuest,
+          progressRef.current.level,
+          killCountRef.current,
+          questBaseRef.current,
+        )}/${activeQuest.target})`
+      : "All quests complete!";
     acc.count += 1;
     acc.time += delta;
     if (acc.time >= 0.5) {

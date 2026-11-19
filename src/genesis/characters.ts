@@ -28,6 +28,12 @@ export type CharacterDef = {
    * the cast. Some imports model their front on +Z and otherwise walk backwards.
    */
   modelYaw?: number;
+  /**
+   * The rig's bones carry arbitrary local axes (imported iClone/CC
+   * skeletons). Pose angles are then applied in character space instead of
+   * bone-local space, which stops the torso folding forward during walk/run.
+   */
+  rigAxes?: boolean;
 };
 
 export const CHARACTERS: CharacterDef[] = [
@@ -66,6 +72,7 @@ export const CHARACTERS: CharacterDef[] = [
     model: "/assets/characters/vegeta.glb",
     tPose: true,
     modelYaw: Math.PI,
+    rigAxes: true,
   },
   {
     id: "saiyan",
