@@ -1,15 +1,14 @@
 # Dragon Ball RPG — PROJECT STATUS
 
-**Last updated:** 2026-11-19 — PRE ALPHA 0.37 (enemy bodies + attack telegraphs; see `PLAN.md`)
-**Workspace:** `C:\Users\Administrator\Downloads\Saiyan-Saga-Trainer-main` (attached to `origin/main` at PRE ALPHA 0.34; Lovable-connected — see `AGENTS.md`: do not rewrite published history)
+**Last updated:** 2026-11-21 — PRE ALPHA 0.41 (second region, elites and pure boss AI; see `PLAN.md`)
+**Workspace:** `C:\Users\Administrator\Downloads\Saiyan-Saga-Trainer-main` (extracted copy initialized and attached to `origin/main` at `https://github.com/hussainkhilona170-lab/Saiyan-Saga-Trainer` — see `AGENTS.md`: do not rewrite published history)
 
-> **Status note (2026-11-19):** the TL;DR below is historical and out of date. Current
+> **Status note (2026-11-21):** the TL;DR below is historical and out of date. Current
 > state: Phases 0–10 are complete; Genesis Milestone B is in progress (movement, flight,
-> combat, progression, quests, boss, save/load, God Engine adapter; enemy roster wired into
-> the scene with per-type meshes, cooldowns and respawns, and distinct procedural bodies with
-> attack telegraphs); 265 tests pass.
-> `PLAN.md` is the living source of truth and `AUDIT.md` holds the latest audit.
-**Runtime note:** Node v24 is installed at `C:\Program Files\nodejs`. On Windows PowerShell, prefix calls with `Set-ExecutionPolicy -Scope Process Bypass -Force` and invoke `& "C:\Program Files\nodejs\npm.cmd" ...` (npm.ps1 is blocked by default policy).
+> combat, progression, quests, boss, save/load, God Engine adapter; two regions with 8 spawns,
+> elite variants, region-aware HUD, a dormant/leashed boss encounter) with **307 tests / 24 files**
+> passing. `PLAN.md` is the living source of truth and `AUDIT.md` holds the latest audit.
+**Runtime note:** use the gitignored portable Node at `.tools\node` in this extracted copy (`.tools\node\node.exe node_modules\vitest\vitest.mjs run`, `...\typescript\bin\tsc --noEmit`, `...\vite\bin\vite.js dev --port 3100 --strictPort`). A system Node v24 may be installed at `C:\Program Files\nodejs` on other machines.
 
 ---
 
@@ -88,7 +87,7 @@ Systems: transaction history, equipment/inventory (Senzu Beans, Turtle Shell, Po
 QA: 23 tests exist and pass; need coverage for persistence round-trips, migrations, command parser, snapshots, sandbox isolation, combat geometry, watch dog on extremes.
 
 ## Important dependencies
-React 19 · TanStack Start v1.168 / Router 1.170 · Vite 8.1.5 · TS 5.8 strict (`exactOptionalPropertyTypes`, `noUncheckedIndexedAccess`) · Tailwind v4 (@tailwindcss/vite) · vitest 4.1 · jsdom · @testing-library/react · zod · Web Audio (synthesized, no assets) · HTML5 Canvas. **No state library** — custom `GameContext` + `applyAction` reducer. Lovable-connected (see `AGENTS.md`: do not rewrite published git history; push-free local checkpoints only).
+React 19 · TanStack Start v1.168 / Router 1.170 · Vite 8.1.5 · TS 5.8 strict (`exactOptionalPropertyTypes`, `noUncheckedIndexedAccess`) · Tailwind v4 (@tailwindcss/vite) · vitest 4.1 · jsdom · @testing-library/react · zod · Web Audio (synthesized, no assets) · HTML5 Canvas. **No state library** — custom `GameContext` + `applyAction` reducer. Lovable-connected (see `AGENTS.md`: do not rewrite published git history; commit each version to the connected branch).
 
 ## Architecture (as found)
 ```

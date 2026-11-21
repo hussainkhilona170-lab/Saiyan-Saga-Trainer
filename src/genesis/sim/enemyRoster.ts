@@ -9,7 +9,7 @@
 import { ENEMY_MAX_DT, ENEMY_TYPES, stepEnemy, type EnemyMode, type EnemyType } from "./enemies";
 
 export type EnemyInstance = {
-  /** Matches `EnemyType.id`; one instance per archetype. */
+  /** Matches `EnemyType.id`; one instance per authored spawn. */
   typeId: string;
   x: number;
   z: number;
@@ -38,7 +38,7 @@ export function enemyDefByID(id: string): EnemyType | undefined {
   return ENEMY_TYPES.find((def) => def.id === id);
 }
 
-/** One live instance per archetype, spawned at its home point. */
+/** One live instance per authored spawn, spawned at its home point. */
 export function createEnemyRoster(): EnemyRoster {
   return ENEMY_TYPES.map((def) => ({
     typeId: def.id,
@@ -59,6 +59,22 @@ export function countAliveEnemies(roster: EnemyRoster): number {
   return alive;
 }
 
+/** Alive/total count for one region, used by the HUD. */
+export function countEnemiesInRegion(
+  roster: EnemyRoster,
+  regionId: string,
+): { alive: number; total: number } {
+  let alive = 0;
+  let total = 0;
+  for (const enemy of roster) {
+    const def = enemyDefByID(enemy.typeId);
+    if (!def || def.region !== regionId) continue;
+    total += 1;
+    if (enemy.alive) alive += 1;
+  }
+  return { alive, total };
+}
+
 /** Seconds of warning before an enemy's next strike. */
 export const ATTACK_TELEGRAPH = 0.35;
 
@@ -77,7 +93,7 @@ export function telegraphStrength(cooldown: number, window = ATTACK_TELEGRAPH): 
 /**
  * Advance every enemy by one frame: patrol/chase/attack when alive, count down
  * the respawn timer when dead. Defeated enemies return at their home point with
- * full HP once their own timer expires — each archetype keeps its own clock.
+ * full HP once their own timer expires — each spawn keeps its own clock.
  *
  * **Attack token** — only the living enemy closest to the player may land a
  * strike in a given frame. The others keep their cooldown at the pre-frame
@@ -180,8 +196,9 @@ export function stepEnemyRoster(
 }
 
 /**
- * Apply damage to one enemy. Returns `killed: true` only on the transition from
- * alive to dead, so callers award kill XP exactly once.
+ * Apply damage to one spawned enemy (by its unique spawn id). Returns
+ * `killed: true` only on the transition from alive to dead, so callers award
+ * kill XP exactly once.
  */
 export function damageEnemy(
   roster: EnemyRoster,

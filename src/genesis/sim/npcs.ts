@@ -39,8 +39,9 @@ export const GENESIS_NPCS: readonly NpcDef[] = [
     accent: "#e8d9a8",
     lines: [
       "So you are the one making all that noise. Good — the ridge has been quiet for too long.",
-      "Three of them guard the clearing: a grunt, a scout, and a brute. Pull one at a time.",
+      "Three of them guard this clearing: a grunt, a scout, and a brute. Pull one at a time.",
       "The brute hits hardest but turns slowest. Circle it and strike from behind.",
+      "East of here the Ashen Flats burn. Their kin are stronger, and two carry the gold mark of elites.",
       "Something larger waits past the far pillars. Do not wake it until you are ready.",
     ],
   },

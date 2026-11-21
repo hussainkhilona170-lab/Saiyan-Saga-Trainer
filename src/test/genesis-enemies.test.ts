@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  ENEMY_ARCHETYPES,
   ENEMY_MAX_DT,
   ENEMY_TYPES,
+  REGIONS,
+  archetypeByID,
   enemySpawnY,
   stepEnemy,
   type EnemyAiState,
@@ -19,9 +22,9 @@ function atHome(e: EnemyType) {
 
 describe("Genesis enemy roster", () => {
   it("ships three distinct archetypes with valid stats", () => {
-    expect(ENEMY_TYPES).toHaveLength(3);
-    expect(new Set(ENEMY_TYPES.map((e) => e.id)).size).toBe(3);
-    for (const e of ENEMY_TYPES) {
+    expect(ENEMY_ARCHETYPES).toHaveLength(3);
+    expect(new Set(ENEMY_ARCHETYPES.map((e) => e.archetype)).size).toBe(3);
+    for (const e of ENEMY_ARCHETYPES) {
       expect(e.hp).toBeGreaterThan(0);
       expect(e.speed).toBeGreaterThan(0);
       expect(e.damage).toBeGreaterThan(0);
@@ -29,15 +32,30 @@ describe("Genesis enemy roster", () => {
       expect(e.aggroRange).toBeGreaterThan(e.stopRange);
       expect(e.respawn).toBeGreaterThan(0);
       expect(e.xp).toBeGreaterThan(0);
-      expect(enemySpawnY(e)).toBeGreaterThan(0);
     }
   });
 
-  it("gives each archetype its own home and identity", () => {
-    expect(new Set(ENEMY_TYPES.map((e) => `${e.home.x},${e.home.z}`)).size).toBe(3);
-    expect(scout.speed).toBeGreaterThan(grunt.speed);
-    expect(brute.hp).toBeGreaterThan(grunt.hp);
-    expect(brute.damage).toBeGreaterThan(grunt.damage);
+  it("gives each archetype its own identity", () => {
+    const baseGrunt = archetypeByID("grunt")!;
+    const baseScout = archetypeByID("scout")!;
+    const baseBrute = archetypeByID("brute")!;
+    expect(baseScout.speed).toBeGreaterThan(baseGrunt.speed);
+    expect(baseBrute.hp).toBeGreaterThan(baseGrunt.hp);
+    expect(baseBrute.damage).toBeGreaterThan(baseGrunt.damage);
+  });
+
+  it("resolves every region spawn to a unique, valid enemy", () => {
+    const spawns = REGIONS.flatMap((region) => region.spawns);
+    expect(ENEMY_TYPES).toHaveLength(spawns.length);
+    expect(new Set(ENEMY_TYPES.map((e) => e.id)).size).toBe(ENEMY_TYPES.length);
+    expect(new Set(ENEMY_TYPES.map((e) => `${e.home.x},${e.home.z}`)).size).toBe(
+      ENEMY_TYPES.length,
+    );
+    for (const def of ENEMY_TYPES) {
+      expect(archetypeByID(def.archetype)).toBeTruthy();
+      expect(REGIONS.some((region) => region.id === def.region)).toBe(true);
+      expect(enemySpawnY(def)).toBeGreaterThan(0);
+    }
   });
 });
 

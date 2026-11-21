@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { GENESIS_QUESTS, questComplete, questProgress } from "../genesis/sim/quests";
+import {
+  GENESIS_QUESTS,
+  questBaseline,
+  questComplete,
+  questProgress,
+} from "../genesis/sim/quests";
 
 const enemies = GENESIS_QUESTS.find((q) => q.type === "kills")!;
 const boss = GENESIS_QUESTS.find((q) => q.type === "boss")!;
@@ -34,5 +39,26 @@ describe("Genesis quest rules", () => {
   it("reads the live level for the level quest", () => {
     expect(questComplete(level, 4, counts(), counts())).toBe(false);
     expect(questComplete(level, 5, counts(), counts())).toBe(true);
+  });
+
+  it("baselines a counter quest at the moment it activates", () => {
+    // A boss was already defeated while the first quest was running.
+    const bossBase = questBaseline(boss, counts(5, 1));
+    expect(bossBase).toEqual({ enemy: 0, boss: 1 });
+    expect(questProgress(boss, 1, counts(5, 1), bossBase)).toBe(0);
+    expect(questComplete(boss, 1, counts(5, 1), bossBase)).toBe(false);
+    expect(questComplete(boss, 1, counts(5, 2), bossBase)).toBe(true);
+
+    const killBase = questBaseline(enemies, counts(7, 1));
+    expect(killBase).toEqual({ enemy: 7, boss: 0 });
+    expect(questProgress(enemies, 1, counts(9, 1), killBase)).toBe(2);
+    expect(questBaseline(level, counts(7, 1))).toEqual({ enemy: 0, boss: 0 });
+  });
+
+  it("never reports negative progress from stale or malformed counters", () => {
+    expect(questProgress(enemies, 1, counts(1, 0), counts(4, 0))).toBe(0);
+    expect(questProgress(boss, 1, counts(0, 0), counts(0, 2))).toBe(0);
+    expect(questProgress(level, Number.NaN, counts(), counts())).toBe(0);
+    expect(questProgress(enemies, 1, counts(Number.NaN, 0), counts())).toBe(0);
   });
 });

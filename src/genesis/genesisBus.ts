@@ -10,8 +10,6 @@ export type GenesisCommand =
   | { type: "setCharacter"; id: string }
   | { type: "teleport"; x: number; y: number; z: number }
   | { type: "reset" }
-  | { type: "spawnPillar"; x: number; z: number; h: number }
-  | { type: "clearPillars" }
   | { type: "heal" }
   | { type: "giveXp"; amount: number }
   | { type: "killEnemies" }

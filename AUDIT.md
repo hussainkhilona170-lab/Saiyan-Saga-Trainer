@@ -164,3 +164,47 @@ A fresh full audit after the 2026-11-07 user-feedback round (`e22b983`). Same ru
 - Headless FPS is software-rendered and not representative of real performance; the desktop 100 FPS figure is.
 - The 2D game was not regression-played beyond loading; its 155-test subset is included in the 255 passing tests.
 - Enemy roster behavior is covered headless only; the three types are not yet visible in-game, so no visual check of distinct meshes/stats exists.
+
+---
+
+# Audit — 2026-11-21 (PRE ALPHA 0.41)
+
+**Scope:** audit the extracted project against `PLAN.md`, then execute the open item "a second region spawn set and elite variants".
+**Result:** 307 tests / 24 files pass · `tsc --noEmit` clean · ESLint 0 errors (15 pre-existing `react-refresh` / hook-dependency warnings) · production build OK · live `/genesis` 0 console errors.
+
+## Bugs found & fixed
+
+1. **Boss charged the player from scene load** — the 300 HP boss had no aggro gate, so it crossed the whole map immediately and would follow a player into the new region. Extracted pure `src/genesis/sim/boss.ts` with `idle → chase → return` states, a 7 m aggro radius, a 20 m leash, player-death reset and the original 2.5 m / 20 dmg / 1.5 s attack profile. God Engine `spawnBoss` still wakes it on demand.
+2. **Boss hit flash reused the target-dummy flash ref** — hitting the boss flashed both combatants. Boss now owns `bossFlashRef`.
+3. **Quest baseline was taken on completion, not activation** — a boss defeated under an earlier quest could instantly finish the boss quest. `questBaseline()` now snapshots only the counter the next quest reads, is called when the quest activates, and is re-seeded on God Engine reset.
+4. **Transformation survived death and reset** — `formIDRef` is now cleared on player respawn and by the `reset` command.
+5. **Dead command types and stale copy** — removed unused `spawnPillar` / `clearPillars` bus commands; corrected the HUD title and Master Oren's dialogue (he now mentions Ashen Flats and its two gold-marked elites).
+
+## Feature work
+
+- **Two regions** — Hollow Ridge keeps its grunt/scout/brute spawns; new Ashen Flats at `(36,-28)` adds cinder grunt/scout/brute plus Elite Stalker and Elite Warden. `EnemyType.id` stays unique per spawn while `archetype`, `region` and `elite` describe the variant.
+- **Elite variants** — 2.6× HP, 1.6× damage, 3× XP, 8 s respawn, larger body, wider aggro/leash, gold material and a pulsing foot ring.
+- **Region-aware HUD/rules** — `regionAt`, `regionByID`, `countEnemiesInRegion`; HUD shows active region and global/local enemy counts using existing design tokens. Scene landmarks were added in step with `world.ts` collision boxes.
+- **Tests** — new `genesis-regions.test.ts` (6) and `genesis-boss.test.ts` (9); existing enemy/roster/quest suites extended for duplicate archetypes, per-region counts and activation baselines.
+
+## Files changed
+
+- `src/genesis/sim/enemies.ts`, `src/genesis/sim/boss.ts` (new), `src/genesis/sim/enemyRoster.ts`, `src/genesis/sim/quests.ts`, `src/genesis/sim/npcs.ts`
+- `src/genesis/render/FighterRose.tsx`, `src/genesis/render/enemyBody.ts`, `src/genesis/render/GenesisScene.tsx`
+- `src/genesis/hud/GenesisHud.tsx`, `src/genesis/world.ts`, `src/genesis/genesisBus.ts`
+- `src/test/genesis-regions.test.ts` (new), `src/test/genesis-boss.test.ts` (new), `src/test/genesis-enemies.test.ts`, `src/test/genesis-enemy-roster.test.ts`, `src/test/genesis-quests.test.ts`
+- `PLAN.md`, `AUDIT.md`, `PROJECT_STATUS.md`
+
+## Visual verification
+
+- `/genesis` loads with the corrected `Genesis — Alpha Prototype` title and `Enemies: 8/8 · 3/3 here`.
+- God Engine teleport to `(36,-28)` switches the HUD to `Region: Ashen Flats · Elite territory` and `5/5 here`; no console errors before or after the command.
+- A 1200×813 WebGL canvas is present and the 2D Trainer route still renders its established card/nav layout.
+- Screenshot capture was unavailable because the Review-pane tab could not be kept visible in this harness; DOM text, canvas geometry and console logs were used instead.
+
+## Honest gaps
+
+- The extracted copy had no `.git` metadata; it was initialized and attached to the supplied GitHub remote at PRE ALPHA 0.40 and this round's 19 files were committed on top as `PRE ALPHA 0.41` without rewriting published history. The first push attempt returned 403 because the cached GitHub account lacks write access; the local commit is ready to publish once an authorized account is used.
+- The in-app browser throttled to ~1 FPS while hidden; the 100 FPS figure from earlier desktop sessions is not re-measured here. Elite/boss balance has not been human-playtested.
+- Boss and region rules are covered headlessly; the elite glow/ring was implemented in the renderer but only verified indirectly through the live scene + console, not by a pixel screenshot.
+- A hot reload of `FighterRose.tsx` triggered a dev-only R3F/TanStack source-annotation error (`data-tsd-source`); a clean dev-server restart rendered without console errors. No production-build or test impact.

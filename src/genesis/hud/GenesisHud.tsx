@@ -25,6 +25,11 @@ export type HudStats = {
   npcDialogue?: string;
   /** Active transformation name, if any. */
   form?: string;
+  /** Region the player is currently in. */
+  region?: string;
+  regionSubtitle?: string;
+  regionEnemiesAlive?: number;
+  regionEnemiesTotal?: number;
 };
 
 export function GenesisHud({
@@ -41,7 +46,7 @@ export function GenesisHud({
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <span className="text-2xl">🌌</span>{" "}
-              <span className="font-display text-xl">Genesis — Movement Prototype</span>
+              <span className="font-display text-xl">Genesis — Alpha Prototype</span>
               <div className="text-sm text-muted-foreground">
                 WASD move · Shift sprint · Space jump · F fly · Ctrl descend · J attack · K ki · E
                 talk · T transform
@@ -56,6 +61,12 @@ export function GenesisHud({
               <div className="font-display text-foreground">
                 {stats.action} · {stats.speed.toFixed(1)} m/s
               </div>
+              {stats.region && (
+                <div className="text-xs text-chart-2">
+                  Region: {stats.region}
+                  {stats.regionSubtitle ? ` · ${stats.regionSubtitle}` : ""}
+                </div>
+              )}
               {stats.quest && <div className="text-xs text-muted-foreground">{stats.quest}</div>}
               {stats.targetHp !== undefined && (
                 <div className="text-xs text-chart-1">Target HP: {stats.targetHp}</div>
@@ -68,6 +79,10 @@ export function GenesisHud({
               {stats.enemiesAlive !== undefined && (
                 <div className="text-xs text-chart-1">
                   Enemies: {stats.enemiesAlive}/{stats.enemiesTotal ?? stats.enemiesAlive}
+                  {stats.regionEnemiesAlive !== undefined &&
+                  stats.regionEnemiesTotal !== undefined
+                    ? ` · ${stats.regionEnemiesAlive}/${stats.regionEnemiesTotal} here`
+                    : ""}
                 </div>
               )}
               {stats.hp !== undefined && (

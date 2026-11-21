@@ -42,9 +42,10 @@ import {
   xpToNextLevel,
   type Progress,
 } from "../sim/progression";
-import { ENEMY_TYPES, enemySpawnY } from "../sim/enemies";
+import { ENEMY_TYPES, enemySpawnY, regionAt } from "../sim/enemies";
 import {
   countAliveEnemies,
+  countEnemiesInRegion,
   createEnemyRoster,
   damageEnemy,
   enemyDefByID,
@@ -56,9 +57,20 @@ import {
 import { createEnemyBody, disposeEnemyBody, type EnemyBody } from "./enemyBody";
 import { createNpcBody, disposeNpcBody, type NpcBody } from "./npcBody";
 import { GENESIS_NPCS, dialogueLine, nearestNpc, nextLineIndex, npcFacingYaw } from "../sim/npcs";
+import {
+  BOSS_ATTACK_DAMAGE,
+  BOSS_HOME,
+  BOSS_MAX_HP,
+  BOSS_RESPAWN,
+  BOSS_SPAWN_Y,
+  createBossState,
+  engageBoss,
+  stepBoss,
+  type BossAiState,
+} from "../sim/boss";
 import { GENESIS_FORMS, canEnterForm, drainFormKi, formByID, formDamage } from "../sim/forms";
 import { parseSave, SAVE_KEY, SAVE_VERSION, serializeSave, type GenesisSave } from "../sim/save";
-import { GENESIS_QUESTS, questComplete, questProgress, type KillCounts } from "../sim/quests";
+import { GENESIS_QUESTS, questBaseline, questComplete, questProgress, type KillCounts } from "../sim/quests";
 
 const CAM_BACK = 3.6;
 const CAM_UP = 1.9;
@@ -186,9 +198,10 @@ export function FighterRose({
   const playerRespawnRef = useRef(0);
   const bossWasAliveRef = useRef(false);
   const bossMeshRef = useRef<THREE.Mesh | null>(null);
-  const bossCombatantRef = useRef<Combatant>(createCombatant(300));
-  const bossRespawnRef = useRef(30);
-  const bossAttackCooldownRef = useRef(0);
+  const bossCombatantRef = useRef<Combatant>(createCombatant(BOSS_MAX_HP));
+  const bossAiRef = useRef<BossAiState>(createBossState());
+  const bossRespawnRef = useRef(BOSS_RESPAWN);
+  const bossFlashRef = useRef(0);
   const questIndexRef = useRef(0);
   // Enemy and boss defeats are counted separately: one shared counter let an
   // ordinary kill complete the "Defeat the boss" quest.
@@ -284,7 +297,7 @@ export function FighterRose({
         emissiveIntensity: 0.3,
       }),
     );
-    boss.position.set(8, 1.0, -6);
+    boss.position.set(BOSS_HOME.x, BOSS_SPAWN_Y, BOSS_HOME.z);
     boss.castShadow = true;
     boss.visible = false;
     scene.add(boss);
@@ -520,21 +533,29 @@ export function FighterRose({
         break;
       }
       case "spawnBoss":
-        bossCombatantRef.current = createCombatant(300);
+        bossCombatantRef.current = createCombatant(BOSS_MAX_HP);
         bossRespawnRef.current = 0;
+        bossFlashRef.current = 0;
         bossWasAliveRef.current = true;
+        bossAiRef.current = engageBoss(createBossState());
         if (bossMeshRef.current) {
           bossMeshRef.current.visible = true;
-          bossMeshRef.current.position.set(8, 1.0, -6);
+          bossMeshRef.current.position.set(BOSS_HOME.x, BOSS_SPAWN_Y, BOSS_HOME.z);
         }
         break;
       case "reset":
         progressRef.current = createProgress();
         playerCombatantRef.current = createCombatant(100, 100);
         targetCombatantRef.current = createCombatant(100);
+        formIDRef.current = null;
+        killCountRef.current = { enemy: 0, boss: 0 };
+        questIndexRef.current = 0;
+        questBaseRef.current = questBaseline(GENESIS_QUESTS[0]!, killCountRef.current);
         enemiesRef.current = createEnemyRoster();
-        bossCombatantRef.current = createCombatant(300);
-        bossRespawnRef.current = 30;
+        bossCombatantRef.current = createCombatant(BOSS_MAX_HP);
+        bossAiRef.current = createBossState();
+        bossRespawnRef.current = BOSS_RESPAWN;
+        bossFlashRef.current = 0;
         bossWasAliveRef.current = false;
         break;
       default:
@@ -731,7 +752,7 @@ export function FighterRose({
             bossCombatantRef.current,
             formDamage(MELEE_DAMAGE * 2, attackForm),
           );
-          targetFlashRef.current = 0.2;
+          bossFlashRef.current = 0.2;
           spawnSparks(bossMesh.position, "#ff5533");
           const xpAmt = !bossCombatantRef.current.alive && wasAlive ? 200 : XP_PER_MELEE_HIT * 2;
           const r = awardXp(progressRef.current, xpAmt);
@@ -820,7 +841,7 @@ export function FighterRose({
             bossCombatantRef.current,
             formDamage(KI_BLAST_DAMAGE * 2, attackForm),
           );
-          targetFlashRef.current = 0.2;
+          bossFlashRef.current = 0.2;
           spawnSparks(bossMesh.position, "#7fd6ff");
           const r1 = awardXp(progressRef.current, XP_PER_KI_HIT * 2);
           progressRef.current = r1.progress;
@@ -926,6 +947,10 @@ export function FighterRose({
       body.coreMaterial.emissiveIntensity =
         0.35 + telegraph * 1.6 + (flash > 0 ? 2.2 * (flash / 0.2) : 0);
       body.group.scale.setScalar(1 + 0.3 * (flash / 0.2));
+      if (body.eliteRingMaterial) {
+        body.eliteRingMaterial.emissiveIntensity =
+          0.45 + 0.25 * Math.sin(enemyTime * 2.4 + i);
+      }
     }
 
     // NPC proximity and dialogue. Range/cycling rules are pure (sim/npcs.ts).
@@ -952,40 +977,50 @@ export function FighterRose({
       bossWasAliveRef.current = false;
     }
 
-    // Boss AI.
+    // Boss AI. Dormant until the player enters its aggro radius; leashes home
+    // instead of following the player into the second region.
     if (bossMesh) {
       if (!bossCombatantRef.current.alive) {
         bossRespawnRef.current += delta;
         bossMesh.visible = false;
-        if (bossRespawnRef.current >= 30) {
-          bossCombatantRef.current = createCombatant(300);
+        if (bossRespawnRef.current >= BOSS_RESPAWN) {
+          bossCombatantRef.current = createCombatant(BOSS_MAX_HP);
+          bossAiRef.current = createBossState();
           bossRespawnRef.current = 0;
           bossMesh.visible = true;
-          bossMesh.position.set(8, 1.0, -6);
+          bossMesh.position.set(BOSS_HOME.x, BOSS_SPAWN_Y, BOSS_HOME.z);
           bossWasAliveRef.current = true;
         }
       } else {
         bossRespawnRef.current = 0;
         bossMesh.visible = true;
-        const bx = bossMesh.position.x;
-        const bz = bossMesh.position.z;
-        const dx = resolved.x - bx;
-        const dz = resolved.z - bz;
-        const dist = Math.hypot(dx, dz);
-        bossAttackCooldownRef.current = Math.max(0, bossAttackCooldownRef.current - delta);
-        if (dist > 2.5) {
-          const speed = 3.0;
-          const nx = dx / (dist || 1);
-          const nz = dz / (dist || 1);
-          bossMesh.position.x += nx * speed * delta;
-          bossMesh.position.z += nz * speed * delta;
-        } else if (bossAttackCooldownRef.current <= 0 && playerCombatantRef.current.alive) {
-          bossAttackCooldownRef.current = 1.5;
-          playerCombatantRef.current = applyDamage(playerCombatantRef.current, 20);
+        const tick = stepBoss(
+          bossAiRef.current,
+          { x: resolved.x, z: resolved.z, alive: playerCombatantRef.current.alive },
+          delta,
+        );
+        bossAiRef.current = {
+          x: tick.x,
+          z: tick.z,
+          cooldown: tick.cooldown,
+          mode: tick.mode,
+        };
+        bossMesh.position.set(tick.x, BOSS_SPAWN_Y, tick.z);
+        if (tick.mode === "chase") {
+          bossMesh.rotation.y = Math.atan2(resolved.x - tick.x, resolved.z - tick.z);
         }
-        bossMesh.rotation.y = Math.atan2(dx, dz);
+        if (tick.attack && playerCombatantRef.current.alive) {
+          playerCombatantRef.current = applyDamage(
+            playerCombatantRef.current,
+            BOSS_ATTACK_DAMAGE,
+          );
+        }
       }
     }
+
+    // Boss hit flash: briefly scale the boss; the target dummy keeps its own.
+    bossFlashRef.current = Math.max(0, bossFlashRef.current - delta);
+    if (bossMesh) bossMesh.scale.setScalar(1 + 0.25 * (bossFlashRef.current / 0.2));
 
     // Player death / respawn.
     if (!playerCombatantRef.current.alive) {
@@ -996,6 +1031,8 @@ export function FighterRose({
           maxKiForLevel(progressRef.current.level),
         );
         playerRespawnRef.current = 0;
+        // A transformation does not survive death.
+        formIDRef.current = null;
         // Reset position via teleportRef.
         if (teleportRef) teleportRef.current = { x: 0, y: 0, z: 0 };
       }
@@ -1118,21 +1155,28 @@ export function FighterRose({
       quest &&
       questComplete(quest, progressRef.current.level, killCountRef.current, questBaseRef.current)
     ) {
-      if (quest.type === "boss") questBaseRef.current.boss = killCountRef.current.boss;
-      else if (quest.type === "kills") questBaseRef.current.enemy = killCountRef.current.enemy;
       const r = awardXp(progressRef.current, 100);
       progressRef.current = r.progress;
       questIndexRef.current = Math.min(questIndexRef.current + 1, GENESIS_QUESTS.length);
+      // Snapshot the new quest's counter baseline, so kills from the previous
+      // quest never carry over into it.
+      const nextQuest = GENESIS_QUESTS[questIndexRef.current];
+      if (nextQuest) questBaseRef.current = questBaseline(nextQuest, killCountRef.current);
     }
     const activeQuest = GENESIS_QUESTS[questIndexRef.current];
     const questText = activeQuest
-      ? `${activeQuest.name} (${questProgress(
-          activeQuest,
-          progressRef.current.level,
-          killCountRef.current,
-          questBaseRef.current,
+      ? `${activeQuest.name} (${Math.min(
+          activeQuest.target,
+          questProgress(
+            activeQuest,
+            progressRef.current.level,
+            killCountRef.current,
+            questBaseRef.current,
+          ),
         )}/${activeQuest.target})`
       : "All quests complete!";
+    const region = regionAt(resolved);
+    const regionEnemies = countEnemiesInRegion(enemiesRef.current, region.id);
     acc.count += 1;
     acc.time += delta;
     if (acc.time >= 0.5) {
@@ -1146,6 +1190,10 @@ export function FighterRose({
         bossHp: bossCombatantRef.current.hp,
         enemiesAlive: countAliveEnemies(enemiesRef.current),
         enemiesTotal: enemiesRef.current.length,
+        region: region.name,
+        regionSubtitle: region.subtitle,
+        regionEnemiesAlive: regionEnemies.alive,
+        regionEnemiesTotal: regionEnemies.total,
         ki: playerCombatantRef.current.ki,
         maxKi: playerCombatantRef.current.maxKi,
         hp: playerCombatantRef.current.hp,

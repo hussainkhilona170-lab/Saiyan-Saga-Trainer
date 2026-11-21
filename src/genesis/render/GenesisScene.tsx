@@ -15,6 +15,7 @@ const SCENE = {
   accentBlue: "#4a9eda",
   accentGreen: "#35c98e",
   accentRed: "#e05252",
+  accentAsh: "#b0533a",
   ridge: "#1f2038",
 };
 
@@ -33,6 +34,9 @@ function Landmarks() {
     { x: 0, z: -24, h: 12, w: 3, color: SCENE.block },
     { x: -24, z: -4, h: 4, w: 1.8, color: SCENE.accentBlue },
     { x: 26, z: -8, h: 6, w: 2.2, color: SCENE.accentGreen },
+    // Ashen Flats — keep in sync with OBSTACLES in world.ts.
+    { x: 34, z: -34, h: 6, w: 2.2, color: SCENE.accentAsh },
+    { x: 44, z: -20, h: 4, w: 1.8, color: SCENE.accentRed },
   ];
   return (
     <>

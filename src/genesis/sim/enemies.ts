@@ -1,14 +1,28 @@
 /**
- * Genesis — enemy roster and chase/attack AI. Pure TypeScript: no three.js,
- * React or DOM, so the behaviours are headless-testable.
+ * Genesis — enemy archetypes, region spawn sets and chase/attack AI.
+ * Pure TypeScript: no three.js, React or DOM, so the behaviours are
+ * headless-testable.
  *
  * Three archetypes: a baseline grunt, a fast/weak scout, and a slow/tanky
- * brute. Each one guards a home point, chases the player inside its aggro
- * radius, stops at its own attack range, and drifts home when disengaged.
+ * brute. Each region owns a spawn set built from those archetypes, so the same
+ * silhouette can appear in more than one place. Elites are per-spawn variants
+ * with scaled stats, a gold identity and much better rewards. Each enemy guards
+ * a home point, chases the player inside its aggro radius, stops at its own
+ * attack range, and drifts home when disengaged.
  */
 
+/** Silhouette / behaviour family. */
+export type EnemyArchetype = "grunt" | "scout" | "brute";
+
 export type EnemyType = {
+  /** Unique spawn id (not the archetype id). */
   id: string;
+  /** Silhouette / behaviour family. */
+  archetype: EnemyArchetype;
+  /** Region id this spawn belongs to. */
+  region: string;
+  /** Scaled-up variant with a gold ring and better rewards. */
+  elite: boolean;
   name: string;
   hp: number;
   speed: number;
@@ -37,9 +51,15 @@ export type EnemyType = {
   home: { x: number; z: number };
 };
 
-export const ENEMY_TYPES: readonly EnemyType[] = [
+/**
+ * Base stats and visuals for one archetype. Region spawns resolve these into a
+ * full `EnemyType` with their own id, home and optional elite scaling.
+ */
+export type EnemyArchetypeDef = Omit<EnemyType, "id" | "region" | "elite" | "home">;
+
+export const ENEMY_ARCHETYPES: readonly EnemyArchetypeDef[] = [
   {
-    id: "grunt",
+    archetype: "grunt",
     name: "Grunt",
     hp: 60,
     speed: 2.5,
@@ -54,10 +74,9 @@ export const ENEMY_TYPES: readonly EnemyType[] = [
     color: "#7a3aa0",
     radius: 0.3,
     height: 0.9,
-    home: { x: -4, z: 0 },
   },
   {
-    id: "scout",
+    archetype: "scout",
     name: "Scout",
     hp: 35,
     speed: 3.6,
@@ -72,10 +91,9 @@ export const ENEMY_TYPES: readonly EnemyType[] = [
     color: "#3aa0a0",
     radius: 0.25,
     height: 0.8,
-    home: { x: -10, z: -8 },
   },
   {
-    id: "brute",
+    archetype: "brute",
     name: "Brute",
     hp: 140,
     speed: 1.8,
@@ -90,9 +108,171 @@ export const ENEMY_TYPES: readonly EnemyType[] = [
     color: "#b0533a",
     radius: 0.45,
     height: 1.2,
-    home: { x: -16, z: 4 },
   },
 ];
+
+export function archetypeByID(id: EnemyArchetype): EnemyArchetypeDef | undefined {
+  return ENEMY_ARCHETYPES.find((def) => def.archetype === id);
+}
+
+/** One authored spawn inside a region. */
+export type EnemySpawnDef = {
+  /** Unique across every region. */
+  id: string;
+  archetype: EnemyArchetype;
+  /** Optional display name override (e.g. "Cinder Grunt"). */
+  name?: string;
+  x: number;
+  z: number;
+  elite?: boolean;
+};
+
+export type RegionDef = {
+  id: string;
+  name: string;
+  /** Short flavour line shown next to the region name in the HUD. */
+  subtitle: string;
+  center: { x: number; z: number };
+  /** Radius of the region's playable bowl. */
+  radius: number;
+  spawns: readonly EnemySpawnDef[];
+};
+
+/** Elite variants: tougher, slower, worth far more XP. */
+export const ELITE_SCALE = {
+  hp: 2.6,
+  damage: 1.6,
+  xp: 3,
+  respawn: 8,
+  speed: 0.92,
+  radius: 1.18,
+  height: 1.12,
+  aggroRange: 1,
+  leashRange: 2,
+} as const;
+
+/** Gold identity shared by every elite body and ring. */
+export const ELITE_COLOR = "#d8a13a";
+
+export const REGIONS: readonly RegionDef[] = [
+  {
+    id: "ridge",
+    name: "Hollow Ridge",
+    subtitle: "Training clearing",
+    center: { x: 0, z: 0 },
+    radius: 24,
+    spawns: [
+      { id: "grunt", archetype: "grunt", x: -4, z: 0 },
+      { id: "scout", archetype: "scout", x: -10, z: -8 },
+      { id: "brute", archetype: "brute", x: -16, z: 4 },
+    ],
+  },
+  {
+    id: "flats",
+    name: "Ashen Flats",
+    subtitle: "Elite territory",
+    center: { x: 36, z: -28 },
+    radius: 16,
+    spawns: [
+      {
+        id: "cinder-grunt",
+        archetype: "grunt",
+        name: "Cinder Grunt",
+        x: 30,
+        z: -24,
+      },
+      {
+        id: "cinder-scout",
+        archetype: "scout",
+        name: "Cinder Scout",
+        x: 42,
+        z: -32,
+      },
+      {
+        id: "cinder-brute",
+        archetype: "brute",
+        name: "Cinder Brute",
+        x: 34,
+        z: -20,
+      },
+      {
+        id: "elite-scout",
+        archetype: "scout",
+        name: "Elite Stalker",
+        x: 44,
+        z: -26,
+        elite: true,
+      },
+      {
+        id: "elite-brute",
+        archetype: "brute",
+        name: "Elite Warden",
+        x: 30,
+        z: -36,
+        elite: true,
+      },
+    ],
+  },
+];
+
+function resolveSpawn(spawn: EnemySpawnDef, region: RegionDef): EnemyType {
+  const base = archetypeByID(spawn.archetype);
+  if (!base) throw new Error(`Unknown enemy archetype: ${spawn.archetype}`);
+  const elite = spawn.elite === true;
+  const scale = elite ? ELITE_SCALE : null;
+  return {
+    id: spawn.id,
+    archetype: base.archetype,
+    region: region.id,
+    elite,
+    name: spawn.name ?? (elite ? `Elite ${base.name}` : base.name),
+    hp: Math.round(base.hp * (scale?.hp ?? 1)),
+    speed: base.speed * (scale?.speed ?? 1),
+    damage: Math.round(base.damage * (scale?.damage ?? 1)),
+    attackInterval: base.attackInterval,
+    aggroRange: base.aggroRange + (scale?.aggroRange ?? 0),
+    stopRange: base.stopRange,
+    patrolRadius: base.patrolRadius,
+    leashRange: base.leashRange + (scale?.leashRange ?? 0),
+    respawn: scale?.respawn ?? base.respawn,
+    xp: Math.round(base.xp * (scale?.xp ?? 1)),
+    color: elite ? ELITE_COLOR : base.color,
+    radius: base.radius * (scale?.radius ?? 1),
+    height: base.height * (scale?.height ?? 1),
+    home: { x: spawn.x, z: spawn.z },
+  };
+}
+
+/** Every spawn in every region, resolved to full enemy definitions. */
+export const ENEMY_TYPES: readonly EnemyType[] = REGIONS.flatMap((region) =>
+  region.spawns.map((spawn) => resolveSpawn(spawn, region)),
+);
+
+export function regionByID(id: string): RegionDef | undefined {
+  return REGIONS.find((region) => region.id === id);
+}
+
+/**
+ * The region the player is standing in. A containing region always wins;
+ * outside every bowl the nearest centre is used, so the HUD never goes blank.
+ * Non-finite positions fall back to the first region.
+ */
+export function regionAt(pos: { x: number; z: number }): RegionDef {
+  const fallback = REGIONS[0]!;
+  if (!Number.isFinite(pos.x) || !Number.isFinite(pos.z)) return fallback;
+  let best = fallback;
+  let bestScore = Number.POSITIVE_INFINITY;
+  for (const region of REGIONS) {
+    const distance = Math.hypot(region.center.x - pos.x, region.center.z - pos.z);
+    // 0–1 inside a bowl, >1 outside, so containment always beats proximity.
+    const score = distance <= region.radius ? distance / region.radius : 1 + distance / region.radius;
+    if (score < bestScore) {
+      bestScore = score;
+      best = region;
+    }
+  }
+  return best;
+}
 
 /** dt clamp keeps a tab-out frame from teleporting an enemy. */
 export const ENEMY_MAX_DT = 0.05;

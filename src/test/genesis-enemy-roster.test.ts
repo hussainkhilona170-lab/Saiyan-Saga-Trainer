@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { ENEMY_TYPES } from "../genesis/sim/enemies";
 import {
   countAliveEnemies,
+  countEnemiesInRegion,
   createEnemyRoster,
   damageEnemy,
   enemyDefByID,
@@ -34,7 +35,7 @@ function advance(
 }
 
 describe("Genesis enemy roster state", () => {
-  it("spawns one live instance per archetype at its home point", () => {
+  it("spawns one live instance per authored spawn at its home point", () => {
     const roster = createEnemyRoster();
     expect(roster).toHaveLength(ENEMY_TYPES.length);
     expect(roster.map((e) => e.typeId)).toEqual(ENEMY_TYPES.map((e) => e.id));
@@ -50,6 +51,24 @@ describe("Genesis enemy roster state", () => {
       });
     }
     expect(countAliveEnemies(roster)).toBe(ENEMY_TYPES.length);
+  });
+
+  it("keeps duplicate archetypes independent and counts per region", () => {
+    const roster = createEnemyRoster();
+    const ridgeGrunt = enemyDefByID("grunt")!;
+    const cinderGrunt = enemyDefByID("cinder-grunt")!;
+    expect(cinderGrunt.archetype).toBe(ridgeGrunt.archetype);
+
+    const hit = damageEnemy(roster, "cinder-grunt", cinderGrunt.hp / 2);
+    expect(hit.roster.find((e) => e.typeId === "cinder-grunt")!.hp).toBe(cinderGrunt.hp / 2);
+    expect(hit.roster.find((e) => e.typeId === "grunt")!.hp).toBe(ridgeGrunt.hp);
+
+    const ridge = countEnemiesInRegion(roster, "ridge");
+    const flats = countEnemiesInRegion(roster, "flats");
+    expect(ridge).toEqual({ alive: 3, total: 3 });
+    expect(flats).toEqual({ alive: 5, total: 5 });
+    expect(ridge.alive + flats.alive).toBe(ENEMY_TYPES.length);
+    expect(countEnemiesInRegion(roster, "missing")).toEqual({ alive: 0, total: 0 });
   });
 
   it("only the engaged archetype closes in and attacks", () => {

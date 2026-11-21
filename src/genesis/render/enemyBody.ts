@@ -7,12 +7,14 @@
  * no gameplay rules live here.
  */
 import * as THREE from "three";
-import type { EnemyType } from "../sim/enemies";
+import { ELITE_COLOR, type EnemyType } from "../sim/enemies";
 
 export type EnemyBody = {
   group: THREE.Group;
   /** Emissive chest core, pulsed by the attack telegraph. */
   coreMaterial: THREE.MeshStandardMaterial;
+  /** Gold foot ring on elite variants, pulsed by the scene. */
+  eliteRingMaterial: THREE.MeshStandardMaterial | null;
   materials: THREE.Material[];
   geometries: THREE.BufferGeometry[];
 };
@@ -65,8 +67,8 @@ export function createEnemyBody(def: EnemyType): EnemyBody {
   };
 
   const coreMaterial = new THREE.MeshStandardMaterial({
-    color: accent,
-    emissive: accent,
+    color: def.elite ? ELITE_COLOR : accent,
+    emissive: def.elite ? ELITE_COLOR : accent,
     emissiveIntensity: 0.35,
     roughness: 0.35,
   });
@@ -83,16 +85,16 @@ export function createEnemyBody(def: EnemyType): EnemyBody {
   // Torso, belt, shoulders, arms.
   const torsoGeo = new THREE.CapsuleGeometry(r, total * 0.28, 5, 10);
   const torso = part(torsoGeo, mat(base), [0, total * 0.16, 0]);
-  if (def.id === "scout") torso.scale.set(0.82, 1, 0.82);
-  if (def.id === "brute") torso.scale.set(1.18, 1, 1.1);
+  if (def.archetype === "scout") torso.scale.set(0.82, 1, 0.82);
+  if (def.archetype === "brute") torso.scale.set(1.18, 1, 1.1);
 
   part(new THREE.BoxGeometry(r * 2.05, total * 0.055, r * 1.55), mat(dark), [0, total * 0.045, 0]);
 
   const shoulderGeo = new THREE.SphereGeometry(r * 0.62, 8, 6);
   const shoulderScale: [number, number, number] =
-    def.id === "brute"
+    def.archetype === "brute"
       ? [1.55, 0.95, 1.55]
-      : def.id === "scout"
+      : def.archetype === "scout"
         ? [0.8, 0.7, 0.8]
         : [1.1, 0.85, 1.1];
   const armGeo = new THREE.CapsuleGeometry(r * 0.3, total * 0.22, 5, 8);
@@ -111,7 +113,20 @@ export function createEnemyBody(def: EnemyType): EnemyBody {
   const headR = r * 0.92;
   part(new THREE.SphereGeometry(headR, 12, 10), mat(skin), [0, total * 0.37, 0]);
 
-  if (def.id === "scout") {
+  if (def.elite) {
+    // Gold brow crests, so elites read at a glance.
+    const crestGeo = new THREE.ConeGeometry(r * 0.13, total * 0.16, 5);
+    for (const side of [-1, 1] as const) {
+      part(
+        crestGeo,
+        coreMaterial,
+        [side * r * 0.42, total * 0.37 + headR * 0.95, 0],
+        [0, 0, side * 0.3],
+      );
+    }
+  }
+
+  if (def.archetype === "scout") {
     // Wide emissive visor and a swept antenna.
     part(new THREE.BoxGeometry(r * 1.35, r * 0.34, r * 0.16), mat(accent, accent, 1.1), [
       0,
@@ -124,7 +139,7 @@ export function createEnemyBody(def: EnemyType): EnemyBody {
       [0, total * 0.37 + headR * 1.05, -r * 0.15],
       [-0.35, 0, 0],
     );
-  } else if (def.id === "brute") {
+  } else if (def.archetype === "brute") {
     // Horns and a heavy chest plate.
     part(
       new THREE.ConeGeometry(r * 0.2, total * 0.2, 5),
@@ -153,7 +168,7 @@ export function createEnemyBody(def: EnemyType): EnemyBody {
   }
 
   // Eyes (the scout's visor replaces them).
-  if (def.id !== "scout") {
+  if (def.archetype !== "scout") {
     const eyeGeo = new THREE.SphereGeometry(r * 0.13, 8, 8);
     const pupilGeo = new THREE.SphereGeometry(r * 0.06, 6, 6);
     const eyeMat = mat(new THREE.Color("#ffffff"));
@@ -167,7 +182,31 @@ export function createEnemyBody(def: EnemyType): EnemyBody {
   // Chest core — the telegraph light.
   part(new THREE.SphereGeometry(r * 0.28, 10, 8), coreMaterial, [0, total * 0.18, r * 0.93]);
 
-  return { group, coreMaterial, materials, geometries };
+  // Elite gold foot ring. The scene pulses it so elites stay identifiable from
+  // a distance without adding another HUD element.
+  let eliteRingMaterial: THREE.MeshStandardMaterial | null = null;
+  if (def.elite) {
+    eliteRingMaterial = new THREE.MeshStandardMaterial({
+      color: ELITE_COLOR,
+      emissive: ELITE_COLOR,
+      emissiveIntensity: 0.55,
+      roughness: 0.35,
+      transparent: true,
+      opacity: 0.8,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    materials.push(eliteRingMaterial);
+    const ring = part(
+      new THREE.RingGeometry(r * 0.9, r * 1.5, 28),
+      eliteRingMaterial,
+      [0, -half + 0.03, 0],
+      [-Math.PI / 2, 0, 0],
+    );
+    ring.castShadow = false;
+  }
+
+  return { group, coreMaterial, eliteRingMaterial, materials, geometries };
 }
 
 export function disposeEnemyBody(body: EnemyBody): void {

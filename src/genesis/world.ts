@@ -12,4 +12,7 @@ export const OBSTACLES: Obstacle[] = [
   { x: 0, z: -24, w: 3, d: 3, h: 12 },
   { x: -24, z: -4, w: 1.8, d: 1.8, h: 4 },
   { x: 26, z: -8, w: 2.2, d: 2.2, h: 6 },
+  // Ashen Flats — keep in sync with the landmarks in GenesisScene.
+  { x: 34, z: -34, w: 2.2, d: 2.2, h: 6 },
+  { x: 44, z: -20, w: 1.8, d: 1.8, h: 4 },
 ];
