@@ -1,6 +1,6 @@
 # Dragon Ball RPG — Development Plan
 
-**Version:** PRE ALPHA 0.41
+**Version:** PRE ALPHA 0.42
 **Last updated:** 2026-11-21
 **Branch:** main (Lovable-connected — do not rewrite published history)
 
@@ -163,6 +163,9 @@ src/genesis/hud/        GENESIS 3D: HUD reusing Card + design tokens (AGENTS.md 
 ### God Engine in Genesis (`0.34`)
 - **In-page God Engine overlay** on `/genesis`: a `⚙ God Engine` button (bottom of HUD) and Ctrl+Shift+A toggle a modal exposing the GenesisSection controls (character, teleport, heal/XP/enemies) plus a link to the full Trainer God Engine. No tab-switching required.
 
+### Publication note (`0.42`, 2026-11-21)
+- Documentation-only increment after `PRE ALPHA 0.41` was pushed: corrected the checkpoint text to record the successful push, and kept the 403/auth retry in the audit trail. No runtime or test changes; the 307-test verification from 0.41 still applies.
+
 ### Second region — Ashen Flats & elite variants (`0.41`, 2026-11-21)
 - **Two authored regions** — pure `REGIONS` registry in `src/genesis/sim/enemies.ts`: Hollow Ridge (center `0,0`, radius 24: grunt / scout / brute) and Ashen Flats (center `36,-28`, radius 16: cinder grunt / scout / brute + Elite Stalker + Elite Warden). `EnemyType` now carries `archetype`, `region` and `elite`; `id` remains the unique spawn id, so rosters stay keyed by spawn.
 - **Elite scaling** — `ELITE_SCALE` (2.6× HP, 1.6× damage, 3× XP, 8 s respawn, larger body, wider aggro/leash) plus a gold identity (`ELITE_COLOR`, brow crests and a pulsing foot ring). Base silhouettes key off `archetype`, so duplicate archetypes render correctly in the new region.
@@ -171,7 +174,7 @@ src/genesis/hud/        GENESIS 3D: HUD reusing Card + design tokens (AGENTS.md 
 - **Other audit fixes** — boss hits use their own flash ref (the target dummy keeps its own); a transformation no longer survives death or God Engine reset; quest baselines are snapshotted when a quest *activates* (and on reset), not when it completes; dead `spawnPillar` / `clearPillars` commands removed; Master Oren points toward Ashen Flats; scene landmarks kept in sync with `world.ts` collision boxes.
 - **Tests** — new `genesis-regions.test.ts` (6 cases) and `genesis-boss.test.ts` (9 cases); enemy, roster and quest tests extended → **307 tests / 24 files**.
 - **Verified** — `tsc --noEmit` clean, ESLint 0 errors (15 pre-existing warnings), production build OK. Live `/genesis`: `Enemies: 8/8 · 3/3 here`, teleport to `(36,-28)` flips the HUD to `Region: Ashen Flats · Elite territory` / `5/5 here`, 0 console errors. Screenshot capture was blocked by the hidden Review pane in this session, so verification used the live DOM, canvas size and console instead.
-- **Checkpoint** — `PRE ALPHA 0.41` is committed on the local `main` branch attached to `origin/main` (`https://github.com/hussainkhilona170-lab/Saiyan-Saga-Trainer`). The extracted copy had no git metadata, so it was initialized and attached at PRE ALPHA 0.40 and only this round's 19 files were committed on top — no history was rewritten. Publishing needed an account with write access: the first push attempt returned 403 for the cached GitHub account.
+- **Checkpoint** — `PRE ALPHA 0.41` was committed and pushed to `origin/main` (`https://github.com/hussainkhilona170-lab/Saiyan-Saga-Trainer`). The extracted copy had no git metadata, so it was initialized and attached at PRE ALPHA 0.40 and only this round's 19 files were committed on top — no history was rewritten. The first push attempt returned 403 for the cached account; a retry with an authorized account succeeded.
 
 ### First transformation — Ascended (`0.40`, 2026-11-19)
 - **Pure form rules** — new `src/genesis/sim/forms.ts`: `GenesisForm` (aura, damage/speed multipliers, Ki cost, drain, min level), `canEnterForm` (returns the leftover Ki or a typed refusal: level / ki / already / unknown), `drainFormKi` (dt-clamped, collapses at zero), `formDamage`, `formSpeed`.
@@ -434,7 +437,8 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 - PRE ALPHA 0.38 (enemy patrol, leash & attack token)
 - PRE ALPHA 0.39 (NPCs: Master Oren, E dialogue, HUD dialogue card)
 - PRE ALPHA 0.40 (first transformation: Ascended form, aura, damage/speed buff, double-apply fix)
-- PRE ALPHA 0.41 (second region Ashen Flats + elites, pure boss AI, quest/form/flash fixes; committed and pushed to `origin/main` via a clean remote clone)
+- PRE ALPHA 0.41 (second region Ashen Flats + elites, pure boss AI, quest/form/flash fixes; committed and pushed to `origin/main`)
+- PRE ALPHA 0.42 (documentation-only correction recording the successful 0.41 push)
 
 ## 9. Test counts
 

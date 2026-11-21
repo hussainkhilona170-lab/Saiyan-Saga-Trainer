@@ -1,6 +1,6 @@
 # Dragon Ball RPG — PROJECT STATUS
 
-**Last updated:** 2026-11-21 — PRE ALPHA 0.41 (second region, elites and pure boss AI; see `PLAN.md`)
+**Last updated:** 2026-11-21 — PRE ALPHA 0.42 (documentation-only correction after the 0.41 push; see `PLAN.md`)
 **Workspace:** `C:\Users\Administrator\Downloads\Saiyan-Saga-Trainer-main` (extracted copy initialized and attached to `origin/main` at `https://github.com/hussainkhilona170-lab/Saiyan-Saga-Trainer` — see `AGENTS.md`: do not rewrite published history)
 
 > **Status note (2026-11-21):** the TL;DR below is historical and out of date. Current

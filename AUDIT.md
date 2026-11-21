@@ -204,7 +204,14 @@ A fresh full audit after the 2026-11-07 user-feedback round (`e22b983`). Same ru
 
 ## Honest gaps
 
-- The extracted copy had no `.git` metadata; it was initialized and attached to the supplied GitHub remote at PRE ALPHA 0.40 and this round's 19 files were committed on top as `PRE ALPHA 0.41` without rewriting published history. The first push attempt returned 403 because the cached GitHub account lacks write access; the local commit is ready to publish once an authorized account is used.
+- The extracted copy had no `.git` metadata; it was initialized and attached to the supplied GitHub remote at PRE ALPHA 0.40 and this round's 19 files were committed on top as `PRE ALPHA 0.41` without rewriting published history. The first push attempt returned 403 for the cached account; a retry with an authorized account succeeded and `main` now points at the 0.41 commit.
 - The in-app browser throttled to ~1 FPS while hidden; the 100 FPS figure from earlier desktop sessions is not re-measured here. Elite/boss balance has not been human-playtested.
 - Boss and region rules are covered headlessly; the elite glow/ring was implemented in the renderer but only verified indirectly through the live scene + console, not by a pixel screenshot.
 - A hot reload of `FighterRose.tsx` triggered a dev-only R3F/TanStack source-annotation error (`data-tsd-source`); a clean dev-server restart rendered without console errors. No production-build or test impact.
+
+---
+
+# Audit note — 2026-11-21 (PRE ALPHA 0.42)
+
+- Documentation-only commit correcting the 0.41 publication record after the successful push. No source, test, or UI changes; the 307 tests / 24 files, clean `tsc`, 0-error ESLint run and production build from 0.41 remain the verification baseline.
+- Published history was not rewritten: 0.42 is a normal child commit of the pushed 0.41 commit.
